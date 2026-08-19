@@ -10,7 +10,6 @@ import java.nio.file.Path;
 import java.util.Properties;
 
 public record ObsidianConfig(
-        boolean failOnNonVulkan,
         boolean strictConflictCheck,
         boolean experimentalFeatures,
         boolean verboseCapabilityLog) {
@@ -39,7 +38,6 @@ public record ObsidianConfig(
         }
 
         return new ObsidianConfig(
-                bool(props, "failOnNonVulkan", true),
                 bool(props, "strictConflictCheck", true),
                 bool(props, "experimentalFeatures", false),
                 bool(props, "verboseCapabilityLog", true));
@@ -47,7 +45,6 @@ public record ObsidianConfig(
 
     private static Properties defaults() {
         Properties p = new Properties();
-        p.setProperty("failOnNonVulkan", "true");
         p.setProperty("strictConflictCheck", "true");
         p.setProperty("experimentalFeatures", "false");
         p.setProperty("verboseCapabilityLog", "true");

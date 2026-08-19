@@ -24,7 +24,7 @@ public final class ObsidianBootstrap {
             return;
         }
 
-        LOG.log(System.Logger.Level.INFO, "Obsidian 0.0.1-phase0 starting (Minecraft 26.2, Vulkan-only)");
+        LOG.log(System.Logger.Level.INFO, "Obsidian 0.0.2-phase0 starting (Minecraft 26.2, Vulkan-only renderer)");
         config = ObsidianConfig.load();
 
         List<String> conflicts = ConflictDetector.findLoadedConflicts();
@@ -50,19 +50,23 @@ public final class ObsidianBootstrap {
             earlyInitialize();
         }
 
-        bridge = MojangVulkanBridge.attach();
-        GpuCapabilities caps = bridge.capabilities();
+        RendererBridge candidate = MojangVulkanBridge.attach();
+        GpuCapabilities caps = candidate.capabilities();
 
         if (!caps.isVulkan()) {
-            String message = "Obsidian is Vulkan-only, but Minecraft initialized backend '"
-                    + caps.backend()
-                    + "'. In Video Settings, set Graphics API to Vulkan and restart Minecraft.";
-            if (config.failOnNonVulkan()) {
-                throw new IllegalStateException(message);
-            }
-            LOG.log(System.Logger.Level.WARNING, message);
+            bridge = null;
+            LOG.log(System.Logger.Level.WARNING,
+                    "Obsidian is Vulkan-only, but Minecraft initialized backend ''{0}''. Obsidian will remain inactive for this session instead of crashing.",
+                    caps.backend());
+            LOG.log(System.Logger.Level.WARNING,
+                    "Open Video Settings, set Graphics API to 'Prefer Vulkan (Experimental)', then restart Minecraft to activate Obsidian.");
+            LOG.log(System.Logger.Level.INFO,
+                    "Detected GPU while inactive: {0} | {1} ({2}); driver: {3}",
+                    caps.vendor(), caps.deviceName(), caps.deviceType(), caps.driverInfo());
             return;
         }
+
+        bridge = candidate;
 
         LOG.log(System.Logger.Level.INFO, "Attached to Vulkan backend: {0}", caps.backend());
         LOG.log(System.Logger.Level.INFO, "GPU: {0} | {1} ({2})",
@@ -81,10 +85,15 @@ public final class ObsidianBootstrap {
                 "Obsidian Phase 0 ready. RendererBridge established; terrain replacement is intentionally not active yet.");
     }
 
+    public static boolean isRendererBridgeReady() {
+        return bridge != null;
+    }
+
     public static RendererBridge bridge() {
         RendererBridge value = bridge;
         if (value == null) {
-            throw new IllegalStateException("Obsidian renderer bridge requested before device bootstrap completed.");
+            throw new IllegalStateException(
+                    "Obsidian renderer bridge is unavailable. The Vulkan backend must be active and device bootstrap must be complete.");
         }
         return value;
     }

@@ -27,6 +27,8 @@ Phase 0 establishes the boundary the real renderer will build on:
 - Gradle 9.5.1 for local development
 - Vulkan selected under Minecraft's experimental **Graphics API** setting
 
+Minecraft 26.2 currently defaults to OpenGL. If Obsidian starts while OpenGL is active, Phase 0.0.2 and newer stay inactive for that session instead of crashing. Open **Video Settings**, set **Graphics API** to **Prefer Vulkan (Experimental)**, then restart Minecraft. Obsidian only establishes its renderer bridge when the active backend is Vulkan.
+
 ## VS Code
 
 1. Install a Java 25 JDK.

@@ -7,11 +7,11 @@ Last updated: 2026-08-20
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
 - Current released milestone: `v0.0.1-phase0`
-- Phase 0 release commit/tag state was verified identical at publication time.
+- Patch in progress: `0.0.2-phase0` fixes the first real runtime-test startup behavior.
 
 ## Current phase
 
-**Phase 0: bootstrap - implemented and CI-validated.**
+**Phase 0: bootstrap - implemented, CI-validated, and partially runtime-validated.**
 
 Phase 0 does not yet replace terrain rendering and is not expected to improve FPS. Its purpose is to establish the project/toolchain/backend boundary that later phases build on.
 
@@ -44,6 +44,30 @@ Observed successful tasks included:
 
 The successful diagnostic build used Java 25, Gradle 9.5.1, and Fabric Loom 1.17.19 as resolved at that time.
 
+### Real Windows runtime test: v0.0.1-phase0
+
+A real launch was recorded on the reference machine using Prism Launcher 10.0.5, Minecraft 26.2, Fabric Loader 0.19.3, Fabric API 0.158.0+26.2, and Java 25.0.1.
+
+Confirmed working before the failure:
+
+- Fabric loaded Obsidian `0.0.1-phase0`.
+- Obsidian `earlyInitialize()` executed.
+- Minecraft created its GPU backend/device far enough for Obsidian's backend validation hook to run.
+- The AMD Radeon RX 6800 XT was correctly identified by Minecraft.
+- Windows had the Vulkan loader (`vulkan-1.dll`) present.
+
+Observed failure:
+
+- Minecraft 26.2 initialized **OpenGL**, which is currently its default graphics backend.
+- Obsidian 0.0.1 intentionally threw `IllegalStateException` when it detected OpenGL.
+- This happened during game initialization before the player could reach Video Settings, making the error handling self-defeating.
+
+Conclusion:
+
+- The failure is not evidence of missing Vulkan support on the reference system.
+- It is an Obsidian Phase 0 UX/bootstrap bug: non-Vulkan startup must not be fatal before the player can select Vulkan.
+- Patch `0.0.2-phase0` changes non-Vulkan startup into an inactive/warning state and only publishes the renderer bridge when Vulkan is actually active.
+
 ### API truth established
 
 For Minecraft 26.2, relevant device information is exposed through:
@@ -63,28 +87,30 @@ For Minecraft 26.2, relevant device information is exposed through:
 
 ## What is not yet validated
 
-A real Windows 11 Minecraft 26.2 runtime launch on the reference RX 6800 XT system has not yet been recorded in this continuity directory.
+The Vulkan-active runtime path is still unvalidated on the real reference machine.
 
-Before calling Phase 0 runtime-validated, test the GitHub release JAR on the real machine and record:
+Before calling Phase 0 runtime-validated, test the patched release with Minecraft configured to **Video Settings > Graphics API > Prefer Vulkan (Experimental)** and record:
 
-- whether Fabric loads the mod;
-- whether the Minecraft Vulkan backend is detected correctly;
-- GPU/vendor/driver values logged by Obsidian;
-- whether conflict detection behaves as intended;
-- whether the client reaches the title screen/world successfully;
-- any crash report or log anomalies.
+- whether the log reports `Graphics Backend: Vulkan`;
+- whether Obsidian logs `Attached to Vulkan backend`;
+- GPU/vendor/driver/device type values logged by Obsidian;
+- Vulkan extension/feature/limit values logged by Obsidian;
+- whether the client reaches the title screen and a world successfully;
+- any crash report or rendering anomalies.
 
 ## Current architecture boundary
 
 Phase 0 attaches to Minecraft's initialized Blaze3D GPU device and records capability metadata. It intentionally does **not** create a competing Vulkan device or replace terrain drawing yet.
 
+The renderer bridge must only be considered ready when the active backend is Vulkan. OpenGL may be allowed temporarily only so the player can reach settings and restart with Vulkan.
+
 This boundary should be preserved unless Phase 1 research demonstrates a concrete reason to change it.
 
 ## Next concrete milestone
 
-**Phase 1: low-level Vulkan/render infrastructure.**
+**Complete Phase 0 Vulkan runtime validation, then begin Phase 1: low-level Vulkan/render infrastructure.**
 
-Planned areas:
+Planned Phase 1 areas:
 
 1. Determine the safe ownership/interception boundaries around Minecraft 26.2's Vulkan backend.
 2. Frame contexts and resource lifetime tracking.
@@ -103,7 +129,7 @@ The first Phase 1 success criterion should be Obsidian submitting/controlling a 
 
 - Mojang's 26.2 Vulkan backend is experimental; ownership and synchronization assumptions must be verified against actual code/API behavior.
 - The public `GpuDevice` abstraction may not expose all low-level Vulkan handles needed for the final renderer. Do not assume it does or does not; inspect exact 26.2 implementation before designing around this.
-- Real runtime behavior on Windows 11/RDNA2 still needs validation.
+- Vulkan-active behavior on Windows 11/RDNA2 still needs validation.
 - Later direct renderer replacement may require mixins/accessors into implementation details that can move between Minecraft versions.
 - CI proves compile/package compatibility, not rendering correctness or performance.
 
@@ -125,4 +151,4 @@ Performance priorities:
 
 ## Immediate handoff instruction
 
-Before beginning Phase 1, test `v0.0.1-phase0` on the real Windows 11 Minecraft 26.2 environment if that test has not yet been logged. Record the result in `ai/ATTEMPT_LOG.md` and update this file accordingly.
+Finish and validate `0.0.2-phase0`, then test it on the real machine with **Prefer Vulkan (Experimental)** selected. Record the result in `ai/ATTEMPT_LOG.md`. Do not begin deep Phase 1 renderer ownership work until the Vulkan-active Phase 0 path has reached the title screen/world successfully.

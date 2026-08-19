@@ -38,11 +38,10 @@ jobs:
           name: obsidian-${{ github.sha }}
           if-no-files-found: error
           path: |
-            build/libs/Obsidian-0.0.1-phase0.jar
-            build/libs/Obsidian-0.0.1-phase0-sources.jar
+            build/libs/Obsidian-*.jar
 
-  phase0-release:
-    name: Publish Phase 0 release
+  release:
+    name: Publish versioned release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[no-release]')
     needs: build
     runs-on: ubuntu-latest
@@ -50,8 +49,19 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout release notes
+      - name: Checkout release metadata
         uses: actions/checkout@v4
+
+      - name: Resolve project version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(grep '^mod_version=' gradle.properties | cut -d= -f2-)"
+          if [ -z "$VERSION" ]; then
+            echo 'mod_version is missing from gradle.properties' >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -59,25 +69,43 @@ jobs:
           name: obsidian-${{ github.sha }}
           path: release
 
-      - name: Create checksums
+      - name: Validate release files and create checksums
+        shell: bash
         run: |
+          VERSION='${{ steps.version.outputs.version }}'
+          JAR="release/Obsidian-${VERSION}.jar"
+          SOURCES="release/Obsidian-${VERSION}-sources.jar"
+          test -f "$JAR"
+          test -f "$SOURCES"
           cd release
-          sha256sum Obsidian-0.0.1-phase0.jar Obsidian-0.0.1-phase0-sources.jar > SHA256SUMS
+          sha256sum "Obsidian-${VERSION}.jar" "Obsidian-${VERSION}-sources.jar" > SHA256SUMS
 
-      - name: Publish v0.0.1-phase0 once
+      - name: Publish release once
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          TAG='v0.0.1-phase0'
+          VERSION='${{ steps.version.outputs.version }}'
+          TAG="v${VERSION}"
+          JAR="release/Obsidian-${VERSION}.jar"
+          SOURCES="release/Obsidian-${VERSION}-sources.jar"
+          NOTES="docs/releases/${TAG}.md"
+
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "$TAG already exists; leaving the existing release untouched."
             exit 0
           fi
 
-          gh release create "$TAG" \
-            --target "$GITHUB_SHA" \
-            --title 'Obsidian 0.0.1 - Phase 0' \
-            --notes-file docs/releases/v0.0.1-phase0.md \
-            release/Obsidian-0.0.1-phase0.jar \
-            release/Obsidian-0.0.1-phase0-sources.jar \
-            release/SHA256SUMS
+          if [ -f "$NOTES" ]; then
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "Obsidian ${VERSION}" \
+              --notes-file "$NOTES" \
+              "$JAR" "$SOURCES" release/SHA256SUMS
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "Obsidian ${VERSION}" \
+              --generate-notes \
+              "$JAR" "$SOURCES" release/SHA256SUMS
+          fi

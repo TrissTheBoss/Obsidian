@@ -143,6 +143,34 @@ Result vocabulary: `SUCCESS`, `PARTIAL`, `FAILED`, `REVERTED`, `SUPERSEDED`.
 
 ---
 
+## A-0012 - First real Windows 11 runtime test of v0.0.1-phase0
+
+**Date:** 2026-08-20  
+**Objective:** Validate the GitHub-built Phase 0 JAR on the reference Windows 11 / RX 6800 XT system.  
+**Action:** User launched Minecraft 26.2 through Prism Launcher 10.0.5 with Fabric Loader 0.19.3, Fabric API 0.158.0+26.2, Java 25.0.1, and `Obsidian-0.0.1-phase0`.  
+**Result:** `PARTIAL`; runtime reached Obsidian backend validation, then intentionally crashed.  
+**Intended effect:** Confirm Fabric/bootstrap/device detection and reach the title screen using the Vulkan backend.  
+**Actual effect:** Fabric loaded Obsidian and `earlyInitialize()` ran. Minecraft detected the AMD Radeon RX 6800 XT, but initialized the **OpenGL** backend. Obsidian then threw `IllegalStateException` because 0.0.1 treated every non-Vulkan backend as fatal.  
+**Evidence:** User launch log timestamped 2026-08-20 01:36:38-01:36:50. Relevant observations: `obsidian 0.0.1-phase0` loaded; Obsidian early bootstrap logged; Minecraft logged `Using graphics backend OpenGL`; crash message was `Obsidian is Vulkan-only, but Minecraft initialized backend 'OpenGL'`; system details showed Windows 11, Ryzen 5 5600X, Radeon RX 6800 XT with ~16 GB VRAM, Java 25.0.1, and `vulkan-1.dll` loaded.  
+**Why:** Minecraft 26.2 release currently defaults to OpenGL. Obsidian's fatal check ran before the player could reach Video Settings and opt into `Prefer Vulkan (Experimental)`. The GPU/Vulkan loader presence indicates this was a bootstrap UX/control-flow problem, not evidence that the machine lacks Vulkan.  
+**Side effects / lessons:** A Vulkan-only renderer must distinguish "renderer cannot activate this session" from "Minecraft must crash." During bootstrap/configuration, OpenGL should be allowed to reach settings while Obsidian remains inactive. Only Vulkan may publish the renderer bridge as ready.  
+**Next action:** Patch as `0.0.2-phase0`, then retest with `Prefer Vulkan (Experimental)` selected.
+
+---
+
+## A-0013 - Prepare nonfatal backend-mismatch patch and version-aware releases
+
+**Date:** 2026-08-20  
+**Objective:** Fix the 0.0.1 startup dead-end and make patch releases maintainable.  
+**Action:** On branch `fix/non-vulkan-bootstrap`, changed bootstrap flow so it inspects the active device through a temporary candidate bridge, leaves the public bridge unset on non-Vulkan, logs instructions, and returns without crashing. Removed the `failOnNonVulkan` config field so existing 0.0.1 config files cannot preserve fatal behavior. Bumped `mod_version` to `0.0.2-phase0` and made GitHub release automation derive artifact/tag names from `mod_version`.  
+**Result:** `PARTIAL` until hosted CI and the second real runtime test complete.  
+**Intended effect:** Let users reach Video Settings on Minecraft's default OpenGL backend, then activate Obsidian only after restarting with Vulkan.  
+**Actual effect:** Source and documentation prepared; hosted build/runtime evidence still pending at the time of this entry.  
+**Why:** Directly addresses A-0012 without weakening the Vulkan-only renderer architecture.  
+**Next action:** Run GitHub pull-request CI, publish `v0.0.2-phase0` after a clean build, then retest on the reference machine with Vulkan selected.
+
+---
+
 ## Template for the next attempt
 
 Copy this section and replace placeholders. Do not edit previous entries.
