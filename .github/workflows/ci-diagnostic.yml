@@ -25,20 +25,46 @@ jobs:
         with:
           gradle-version: '9.5.1'
 
-      - name: Run build and capture result
+      - name: Resolve Minecraft and inspect 26.2 GPU API
         shell: bash
         run: |
           mkdir -p docs
           set +e
-          gradle build --stacktrace > ci-build.log 2>&1
+          gradle compileClientJava --stacktrace > ci-build.log 2>&1
           code=$?
+
           {
-            echo "Obsidian temporary CI diagnostic"
+            echo "Obsidian temporary CI API diagnostic"
             echo "commit=$GITHUB_SHA"
-            echo "build_exit_code=$code"
+            echo "compile_exit_code=$code"
+            echo
+            echo "--- compiler errors ---"
+            grep -B 2 -A 5 -E 'error:|cannot find symbol|symbol:|location:' ci-build.log || true
+            echo
+            echo "--- resolved GPU API classes ---"
+
+            found=0
+            while IFS= read -r jarfile; do
+              if jar tf "$jarfile" 2>/dev/null | grep -q '^com/mojang/blaze3d/systems/GpuDevice.class$'; then
+                found=1
+                echo
+                echo "JAR=$jarfile"
+                echo "--- GpuDevice ---"
+                javap -classpath "$jarfile" -public com.mojang.blaze3d.systems.GpuDevice 2>&1 || true
+                echo "--- RenderSystem ---"
+                javap -classpath "$jarfile" -public com.mojang.blaze3d.systems.RenderSystem 2>&1 || true
+                if jar tf "$jarfile" 2>/dev/null | grep -q '^net/minecraft/client/gl/GpuDeviceInfo.class$'; then
+                  echo "--- GpuDeviceInfo ---"
+                  javap -classpath "$jarfile" -public net.minecraft.client.gl.GpuDeviceInfo 2>&1 || true
+                fi
+              fi
+            done < <(find "$HOME/.gradle" .gradle -type f -name '*.jar' 2>/dev/null | sort -u)
+
+            echo
+            echo "gpu_jar_found=$found"
             echo
             echo "--- build tail ---"
-            tail -n 160 ci-build.log
+            tail -n 60 ci-build.log
           } > docs/ci-diagnostic.txt
           exit 0
 
@@ -48,5 +74,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- docs/ci-diagnostic.txt
-          git commit -m "chore: record temporary CI diagnostic" || exit 0
+          git commit -m "chore: update temporary CI diagnostic" || exit 0
           git push
