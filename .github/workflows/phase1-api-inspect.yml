@@ -3,6 +3,8 @@ name: Phase 1 API Inspect
 on:
   push:
     branches: [phase1/frame-foundation]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
