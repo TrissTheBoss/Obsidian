@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "obsidian",
+  "version": "${version}",
+  "name": "Obsidian",
+  "description": "A Vulkan-only rendering engine replacement project for Minecraft Java Edition.",
+  "authors": ["TrissTheBoss"],
+  "contact": {
+    "homepage": "https://github.com/TrissTheBoss/Obsidian",
+    "sources": "https://github.com/TrissTheBoss/Obsidian",
+    "issues": "https://github.com/TrissTheBoss/Obsidian/issues"
+  },
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.obsidian.ObsidianClient"
+    ]
+  },
+  "mixins": [
+    "obsidian.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.2",
+    "java": ">=25"
+  },
+  "breaks": {
+    "sodium": "*",
+    "vulkanmod": "*",
+    "iris": "*"
+  }
+}

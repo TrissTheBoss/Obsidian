@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.obsidian.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "MinecraftBootstrapMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,83 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Java 25 / Gradle 9.5.1
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle 9.5.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+
+      - name: Build
+        run: gradle build --stacktrace
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: obsidian-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            build/libs/Obsidian-0.0.1-phase0.jar
+            build/libs/Obsidian-0.0.1-phase0-sources.jar
+
+  phase0-release:
+    name: Publish Phase 0 release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout release notes
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: obsidian-${{ github.sha }}
+          path: release
+
+      - name: Create checksums
+        run: |
+          cd release
+          sha256sum Obsidian-0.0.1-phase0.jar Obsidian-0.0.1-phase0-sources.jar > SHA256SUMS
+
+      - name: Publish v0.0.1-phase0 once
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG='v0.0.1-phase0'
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists; leaving the existing release untouched."
+            exit 0
+          fi
+
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
+            --title 'Obsidian 0.0.1 - Phase 0' \
+            --notes-file docs/releases/v0.0.1-phase0.md \
+            release/Obsidian-0.0.1-phase0.jar \
+            release/Obsidian-0.0.1-phase0-sources.jar \
+            release/SHA256SUMS

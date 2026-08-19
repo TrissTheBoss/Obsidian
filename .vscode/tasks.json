@@ -1,0 +1,18 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Obsidian: build",
+      "type": "shell",
+      "command": "gradle build",
+      "group": "build",
+      "problemMatcher": ["$javac"]
+    },
+    {
+      "label": "Obsidian: run client",
+      "type": "shell",
+      "command": "gradle runClient",
+      "problemMatcher": []
+    }
+  ]
+}
