@@ -1,23 +1,37 @@
 package dev.obsidian.render;
 
-import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 public record GpuCapabilities(
         String backend,
+        String backendDescription,
         String vendor,
-        String renderer,
-        String version,
-        String implementation,
-        List<String> enabledExtensions,
+        String deviceName,
+        String driverInfo,
+        String deviceType,
+        Set<String> underlyingExtensions,
         boolean debuggingEnabled,
         int maxTextureSize,
-        int uniformOffsetAlignment) {
+        int uniformOffsetAlignment,
+        boolean shaderDrawParameters,
+        boolean multiDrawIndirect,
+        boolean drawIndirect,
+        boolean persistentMapping) {
+
+    public GpuCapabilities {
+        underlyingExtensions = Set.copyOf(underlyingExtensions);
+    }
 
     public boolean isVulkan() {
-        return backend != null && backend.toLowerCase(java.util.Locale.ROOT).contains("vulkan");
+        return containsVulkan(backend) || containsVulkan(backendDescription);
     }
 
     public boolean hasExtension(String name) {
-        return enabledExtensions.stream().anyMatch(name::equalsIgnoreCase);
+        return underlyingExtensions.stream().anyMatch(name::equalsIgnoreCase);
+    }
+
+    private static boolean containsVulkan(String value) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains("vulkan");
     }
 }
