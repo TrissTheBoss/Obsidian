@@ -5,6 +5,8 @@ import dev.obsidian.config.ObsidianConfig;
 import dev.obsidian.render.GpuCapabilities;
 import dev.obsidian.render.MojangVulkanBridge;
 import dev.obsidian.render.RendererBridge;
+import dev.obsidian.render.frame.FrameCoordinator;
+import net.fabricmc.loader.api.FabricLoader;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -16,6 +18,7 @@ public final class ObsidianBootstrap {
 
     private static volatile ObsidianConfig config;
     private static volatile RendererBridge bridge;
+    private static volatile FrameCoordinator frameCoordinator;
 
     private ObsidianBootstrap() {}
 
@@ -24,7 +27,8 @@ public final class ObsidianBootstrap {
             return;
         }
 
-        LOG.log(System.Logger.Level.INFO, "Obsidian 0.0.2-phase0 starting (Minecraft 26.2, Vulkan-only renderer)");
+        LOG.log(System.Logger.Level.INFO,
+                "Obsidian {0} starting (Minecraft 26.2, Vulkan-only renderer)", version());
         config = ObsidianConfig.load();
 
         List<String> conflicts = ConflictDetector.findLoadedConflicts();
@@ -39,7 +43,7 @@ public final class ObsidianBootstrap {
         }
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 0 early bootstrap complete; waiting for Minecraft GpuDevice initialization.");
+                "Early bootstrap complete; waiting for Minecraft GpuDevice initialization.");
     }
 
     public static void onMinecraftReady() {
@@ -54,7 +58,9 @@ public final class ObsidianBootstrap {
         GpuCapabilities caps = candidate.capabilities();
 
         if (!caps.isVulkan()) {
+            candidate.close();
             bridge = null;
+            frameCoordinator = null;
             LOG.log(System.Logger.Level.WARNING,
                     "Obsidian is Vulkan-only, but Minecraft initialized backend ''{0}''. Obsidian will remain inactive for this session instead of crashing.",
                     caps.backend());
@@ -67,6 +73,7 @@ public final class ObsidianBootstrap {
         }
 
         bridge = candidate;
+        frameCoordinator = new FrameCoordinator(candidate.nativeDeviceHandle());
 
         LOG.log(System.Logger.Level.INFO, "Attached to Vulkan backend: {0}", caps.backend());
         LOG.log(System.Logger.Level.INFO, "GPU: {0} | {1} ({2})",
@@ -82,7 +89,35 @@ public final class ObsidianBootstrap {
         }
 
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 0 ready. RendererBridge established; terrain replacement is intentionally not active yet.");
+                "Obsidian Phase 1 frame foundation armed. Terrain replacement is still intentionally inactive.");
+    }
+
+    public static void onFrameStart() {
+        FrameCoordinator coordinator = frameCoordinator;
+        if (coordinator != null) {
+            coordinator.beginFrame();
+        }
+    }
+
+    public static void onFrameEnd() {
+        FrameCoordinator coordinator = frameCoordinator;
+        if (coordinator != null) {
+            coordinator.endFrame();
+        }
+    }
+
+    public static void shutdown() {
+        FrameCoordinator coordinator = frameCoordinator;
+        frameCoordinator = null;
+        if (coordinator != null) {
+            coordinator.close();
+        }
+
+        RendererBridge rendererBridge = bridge;
+        bridge = null;
+        if (rendererBridge != null) {
+            rendererBridge.close();
+        }
     }
 
     public static boolean isRendererBridgeReady() {
@@ -96,5 +131,21 @@ public final class ObsidianBootstrap {
                     "Obsidian renderer bridge is unavailable. The Vulkan backend must be active and device bootstrap must be complete.");
         }
         return value;
+    }
+
+    public static FrameCoordinator frameCoordinator() {
+        FrameCoordinator value = frameCoordinator;
+        if (value == null) {
+            throw new IllegalStateException(
+                    "Obsidian frame coordinator is unavailable until Vulkan bootstrap has completed.");
+        }
+        return value;
+    }
+
+    private static String version() {
+        return FabricLoader.getInstance()
+                .getModContainer("obsidian")
+                .map(container -> container.getMetadata().getVersion().getFriendlyString())
+                .orElse("development");
     }
 }
