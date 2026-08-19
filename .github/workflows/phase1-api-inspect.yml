@@ -47,6 +47,9 @@ jobs:
             com.mojang.blaze3d.systems.RenderSystem
             com.mojang.blaze3d.systems.GpuDevice
             com.mojang.blaze3d.systems.GpuQueryPool
+            com.mojang.blaze3d.systems.GpuFence
+            com.mojang.blaze3d.systems.GpuQuery
+            com.mojang.blaze3d.systems.TimerQuery
             com.mojang.blaze3d.systems.CommandEncoder
           )
 
