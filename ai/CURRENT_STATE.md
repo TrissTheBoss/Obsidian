@@ -6,142 +6,175 @@ Last updated: 2026-08-20
 
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
-- Current released milestone: `v0.0.2-phase0`
-- Release source: merged PR #1, `Fix Phase 0 OpenGL startup dead-end`.
+- Current public release: `v0.0.2-phase0`
+- Active development branch: `phase1/frame-foundation`
+- Active draft PR: #3, `Phase 1: frame and GPU foundation`
+- Current Phase 1 development version: `0.1.0-phase1-dev1`
 
-## Current phase
+## Phase status
 
-**Phase 0: bootstrap - implemented, CI-validated, and partially runtime-validated.**
+### Phase 0 - COMPLETE and runtime validated
 
-Phase 0 does not yet replace terrain rendering and is not expected to improve FPS. Its purpose is to establish the project/toolchain/backend boundary that later phases build on.
+Phase 0 is no longer pending runtime validation. The user tested `v0.0.2-phase0` on the reference Windows 11 / Radeon RX 6800 XT machine with Minecraft configured to Vulkan.
 
-Implemented Phase 0 responsibilities:
+Validated real runtime path:
 
-- Fabric client bootstrap.
-- Renderer-conflict detection.
-- Vulkan-only backend validation.
-- Minecraft 26.2 `RenderSystem` / `GpuDevice` attachment seam.
-- GPU capability capture through Minecraft 26.2 `DeviceInfo`, `DeviceLimits`, and `DeviceFeatures`.
-- `RendererBridge` abstraction for future ownership of rendering work.
-- Configuration scaffolding.
-- VS Code task/extension setup.
-- GitHub Actions build and version-aware release workflow.
-- Phase 0 release notes and changelog.
+- Prism Launcher 10.0.5.
+- Minecraft 26.2.
+- Fabric Loader 0.19.3.
+- Fabric API 0.158.0+26.2.
+- Java 25.0.1.
+- AMD Radeon RX 6800 XT detected as a discrete GPU.
+- Minecraft selected the Vulkan backend.
+- Driver string: `1.4.315 AMD proprietary driver 26.7.1 (AMD proprietary shader compiler)`.
+- Obsidian attached to the Vulkan `GpuDevice` successfully.
+- Obsidian capability reporting completed.
+- The client loaded resources, started an integrated server, created/entered a world, rendered/ran normally, saved, shut down, and exited with code 0.
 
-## What is validated
+Observed Vulkan extensions exposed by Minecraft in that run included:
 
-### Hosted compile/build validation
+- `VK_KHR_synchronization2`
+- `VK_KHR_swapchain`
+- `VK_KHR_surface`
+- `VK_KHR_win32_surface`
+- `VK_KHR_dynamic_rendering`
+- `VK_KHR_push_descriptor`
+- `VK_EXT_debug_utils`
+- `VK_EXT_vertex_attribute_divisor`
+- `VK_AMD_buffer_marker`
 
-GitHub Actions completed a clean pull-request build for the `0.0.2-phase0` patch against the real Minecraft 26.2 project dependencies. Workflow run `32314279287` completed with conclusion `success` before merge.
+Minecraft/DeviceInfo also reported indirect drawing, multi-draw indirect, and persistent mapping support.
 
-The patch was then squash-merged to `main` as commit `5ffac551e921eb7c90eacf2236071f92027aaef5`, and the version-aware release workflow created tag/release `v0.0.2-phase0`.
+Phase 0 therefore proved the real boundary:
 
-### Real Windows runtime test: v0.0.1-phase0
+`Fabric -> Obsidian bootstrap -> Minecraft 26.2 GpuDevice -> Vulkan backend -> RX 6800 XT`
 
-A real launch was recorded on the reference machine using Prism Launcher 10.0.5, Minecraft 26.2, Fabric Loader 0.19.3, Fabric API 0.158.0+26.2, and Java 25.0.1.
+## Phase 1 - ACTIVE
 
-Confirmed working before the failure:
+Phase 1 has started on `phase1/frame-foundation`.
 
-- Fabric loaded Obsidian `0.0.1-phase0`.
-- Obsidian `earlyInitialize()` executed.
-- Minecraft created its GPU backend/device far enough for Obsidian's backend validation hook to run.
-- The AMD Radeon RX 6800 XT was correctly identified by Minecraft.
-- Windows had the Vulkan loader (`vulkan-1.dll`) present.
+The first Phase 1 objective is intentionally narrow: establish a real render-frame lifecycle root and prove that Obsidian can submit non-visual GPU commands through Minecraft's active Vulkan device without yet replacing terrain or changing the rendered image.
 
-Observed failure:
+### Exact 26.2 API findings
 
-- Minecraft 26.2 initialized **OpenGL**, which is currently its default graphics backend.
-- Obsidian 0.0.1 intentionally threw `IllegalStateException` when it detected OpenGL.
-- This happened during game initialization before the player could reach Video Settings.
+A temporary GitHub Actions API-inspection workflow interrogated the exact Loom-resolved Minecraft 26.2 client JAR with `javap`. The temporary workflow was removed after the interfaces were established.
 
-Patch outcome in 0.0.2:
+Relevant confirmed APIs:
 
-- Non-Vulkan startup is now nonfatal.
-- Obsidian remains inactive for that session and logs instructions to select **Prefer Vulkan (Experimental)**.
-- The public renderer bridge remains unavailable unless Vulkan is actually active.
-- The obsolete `failOnNonVulkan` property is ignored/removed from the active config model, so an old 0.0.1 config cannot preserve fatal startup behavior.
+- `Minecraft.renderFrame(boolean)` is available as a whole-frame lifecycle seam.
+- `GpuDevice.createCommandEncoder()`.
+- `GpuDevice.createTimestampQueryPool(int)`.
+- `CommandEncoder.writeTimestamp(GpuQueryPool, int)`.
+- `CommandEncoder.submit()`.
+- `GpuQueryPool.getValue(int)` returns `OptionalLong` so results can be polled without an explicit blocking wait.
+- `GpuQueryPool.close()`.
 
-### API truth established
+Important constraint discovered: timestamp writes live on a command encoder and submission is explicit. Creating start/end timestamp encoders every frame would add extra GPU submissions and could itself damage frame pacing. Do not implement GPU frame timing that way.
 
-For Minecraft 26.2, relevant device information is exposed through:
+### Implemented Phase 1 frame foundation
 
-- `GpuDevice.getDeviceInfo()`
-- `DeviceInfo.backendName()`
-- `DeviceInfo.vendorName()`
-- `DeviceInfo.name()`
-- `DeviceInfo.driverInfo()`
-- `DeviceInfo.underlyingExtensions()`
-- `DeviceInfo.features()`
-- `DeviceInfo.limits()`
-- `DeviceLimits.maxTextureSize()`
-- `DeviceLimits.minUniformOffsetAlignment()`
+Current branch code adds:
 
-`GpuDevice` itself does not expose the older direct getters that were initially assumed.
+- `render/frame/FrameCoordinator`
+  - one render-thread lifecycle root for future frame contexts, deferred resource retirement, uploads, render-graph work, and profiling;
+  - begin/end hooks around `Minecraft.renderFrame(boolean)`;
+  - fixed-allocation CPU frame timing collection.
 
-## What is not yet validated
+- `render/frame/FrameTimings`
+  - primitive `long[]` ring;
+  - 2048 samples by default;
+  - no per-frame allocations from the ring itself;
+  - records whole-frame CPU wall time for later percentile analysis.
 
-The Vulkan-active runtime path is still unvalidated on the real reference machine.
+- `render/frame/GpuSubmissionProbe`
+  - one-shot only;
+  - creates a two-entry timestamp query pool;
+  - writes two timestamp commands to one command encoder;
+  - performs exactly one extra `submit()` for the entire probe;
+  - polls query results asynchronously on subsequent frames;
+  - logs completion/failure without crashing Minecraft;
+  - releases the query pool after completion or shutdown.
 
-Before calling Phase 0 runtime-validated, test `v0.0.2-phase0` with Minecraft configured to **Video Settings > Graphics API > Prefer Vulkan (Experimental)** and record:
+- `MinecraftFrameMixin`
+  - injects at `Minecraft.renderFrame` HEAD and RETURN;
+  - calls the Phase 1 frame coordinator;
+  - invokes Obsidian shutdown from `Minecraft.close`.
 
-- whether the log reports `Graphics Backend: Vulkan`;
-- whether Obsidian logs `Attached to Vulkan backend`;
-- GPU/vendor/driver/device type values logged by Obsidian;
-- Vulkan extension/feature/limit values logged by Obsidian;
-- whether the client reaches the title screen and a world successfully;
-- any crash report or rendering anomalies.
+- Bootstrap lifecycle now creates the frame coordinator only after Vulkan has been confirmed active and closes Phase 1 resources during shutdown.
 
-## Current architecture boundary
+### Compile validation
 
-Phase 0 attaches to Minecraft's initialized Blaze3D GPU device and records capability metadata. It intentionally does **not** create a competing Vulkan device or replace terrain drawing yet.
+The implementation compiled successfully against the exact Minecraft 26.2/Fabric dependency set in GitHub Actions.
 
-The renderer bridge must only be considered ready when the active backend is Vulkan. OpenGL may be allowed temporarily only so the player can reach settings and restart with Vulkan.
+Clean branch head before continuity-doc updates:
 
-This boundary should be preserved unless Phase 1 research demonstrates a concrete reason to change it.
+- commit: `10a6e979a2cbfd5b8531ac98fb6cf3f00907d7aa`
+- workflow run: `32315268985`
+- result: `success`
+- build artifact upload: successful
 
-## Next concrete milestone
+The earlier implementation head `5add40c578325642b2c15eb66540b50e74725b15` also passed the build before the temporary API-inspection workflow was removed.
 
-**Complete Phase 0 Vulkan runtime validation, then begin Phase 1: low-level Vulkan/render infrastructure.**
+## What Phase 1 has NOT proven yet
 
-Planned Phase 1 areas:
+The new Phase 1 code has not yet been run on the reference Windows/Vulkan machine.
 
-1. Determine the safe ownership/interception boundaries around Minecraft 26.2's Vulkan backend.
-2. Frame contexts and resource lifetime tracking.
-3. Synchronization strategy (fences/timeline semantics available through the actual backend).
-4. Device-local arena allocation strategy.
-5. Staging/upload ring strategy.
-6. Deferred destruction/reclamation.
-7. Shader/pipeline management.
-8. Render graph/pass dependency model.
-9. GPU timestamp profiling.
-10. Validation/debug instrumentation.
+Before merging or releasing this milestone, validate `0.1.0-phase1-dev1` on the real machine and confirm:
 
-The first Phase 1 success criterion should be Obsidian submitting/controlling a small piece of GPU work inside Minecraft's real frame lifecycle without breaking vanilla rendering.
+1. Minecraft selects Vulkan.
+2. Obsidian logs that the Phase 1 frame coordinator is active.
+3. The one-shot GPU probe logs `submitted` once.
+4. The timestamp query later logs `completed` without blocking/crashing.
+5. The player can reach the title screen and enter a world.
+6. Shutdown logs that the frame coordinator closed cleanly.
+7. No visible rendering difference is introduced.
+8. No repeated GPU probe submissions occur.
 
-## Major risks / open questions
+## Architecture boundary after this milestone
 
-- Mojang's 26.2 Vulkan backend is experimental; ownership and synchronization assumptions must be verified against actual code/API behavior.
-- The public `GpuDevice` abstraction may not expose all low-level Vulkan handles needed for the final renderer. Do not assume it does or does not; inspect exact 26.2 implementation before designing around this.
-- Vulkan-active behavior on Windows 11/RDNA2 still needs validation.
-- Later direct renderer replacement may require mixins/accessors into implementation details that can move between Minecraft versions.
-- CI proves compile/package compatibility, not rendering correctness or performance.
+Obsidian still does not own terrain rendering and does not create a second Vulkan device.
+
+Current boundary:
+
+`Minecraft 26.2 Vulkan device -> Obsidian RendererBridge -> FrameCoordinator`
+
+Obsidian can now observe the render-frame lifecycle and has a minimal path for controlled GPU command submission through Minecraft's device abstraction.
+
+This is the intended foundation for the next pieces:
+
+- frame-context rotation;
+- explicit resource retirement/deferred destruction;
+- upload/staging ownership;
+- profiler snapshots and percentiles;
+- render-graph scheduling;
+- eventually Obsidian-owned terrain commands.
+
+## Major technical lesson from the first Phase 1 probe
+
+Do not implement per-frame GPU profiling by creating additional command submissions at both frame boundaries. That would contaminate the thing being measured.
+
+Future GPU profiling should either:
+
+- integrate timestamps into command streams Obsidian already owns, or
+- hook an existing Minecraft submission/encoder path after exact backend ownership has been understood.
 
 ## Reference hardware and priorities
 
-Primary user/reference system:
+Primary reference system:
 
 - Windows 11
-- AMD Radeon RX 6800 XT (16 GB VRAM)
+- AMD Radeon RX 6800 XT, 16 GB VRAM
 - AMD Ryzen 5 5600X
 - 16 GB DDR4-2666
 
-Performance priorities:
+Priority order remains:
 
-1. 1% / 0.1% lows
-2. smooth chunk loading
-3. high render distances
-4. average FPS
+1. 1% / 0.1% lows and frame pacing.
+2. Smooth chunk loading/streaming.
+3. Very large render-distance scaling.
+4. Average FPS.
+5. Sensible RAM/VRAM use.
 
-## Immediate handoff instruction
+## Immediate next action
 
-Test `v0.0.2-phase0` on the real machine with **Prefer Vulkan (Experimental)** selected. Record the result in `ai/ATTEMPT_LOG.md`. Do not begin deep Phase 1 renderer ownership work until the Vulkan-active Phase 0 path has reached the title screen/world successfully.
+Build/download the clean `0.1.0-phase1-dev1` PR artifact and run it on the same Vulkan test instance used for Phase 0. Record the log result in `ai/ATTEMPT_LOG.md` before deciding whether this frame-foundation milestone is ready to merge.
