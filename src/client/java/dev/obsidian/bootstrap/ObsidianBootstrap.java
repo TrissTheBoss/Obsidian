@@ -65,15 +65,16 @@ public final class ObsidianBootstrap {
         }
 
         LOG.log(System.Logger.Level.INFO, "Attached to Vulkan backend: {0}", caps.backend());
-        LOG.log(System.Logger.Level.INFO, "GPU: {0} | {1}", caps.vendor(), caps.renderer());
-        LOG.log(System.Logger.Level.INFO, "Driver/API: {0}", caps.version());
+        LOG.log(System.Logger.Level.INFO, "GPU: {0} | {1} ({2})",
+                caps.vendor(), caps.deviceName(), caps.deviceType());
+        LOG.log(System.Logger.Level.INFO, "Driver: {0}", caps.driverInfo());
 
         if (config.verboseCapabilityLog()) {
             LOG.log(System.Logger.Level.INFO,
-                    "Vulkan capabilities: extensions={0}, maxTextureSize={1}, uniformAlignment={2}, debug={3}",
-                    caps.enabledExtensions().size(), caps.maxTextureSize(),
-                    caps.uniformOffsetAlignment(), caps.debuggingEnabled());
-            LOG.log(System.Logger.Level.DEBUG, "Implementation: {0}", caps.implementation());
+                    "Vulkan capabilities: extensions={0}, maxTextureSize={1}, uniformAlignment={2}, debug={3}, indirect={4}, multiDrawIndirect={5}, persistentMapping={6}",
+                    caps.underlyingExtensions().size(), caps.maxTextureSize(), caps.uniformOffsetAlignment(),
+                    caps.debuggingEnabled(), caps.drawIndirect(), caps.multiDrawIndirect(), caps.persistentMapping());
+            LOG.log(System.Logger.Level.DEBUG, "Backend description: {0}", caps.backendDescription());
         }
 
         LOG.log(System.Logger.Level.INFO,
