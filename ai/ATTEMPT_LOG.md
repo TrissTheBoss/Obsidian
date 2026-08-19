@@ -171,6 +171,21 @@ Result vocabulary: `SUCCESS`, `PARTIAL`, `FAILED`, `REVERTED`, `SUPERSEDED`.
 
 ---
 
+## A-0014 - Validate, merge, and release v0.0.2-phase0
+
+**Date:** 2026-08-20  
+**Objective:** Prove the nonfatal backend patch compiles against the real Minecraft 26.2 dependency set and publish it as the next canonical Phase 0 test build.  
+**Action:** Opened PR #1 from `fix/non-vulkan-bootstrap`, ran the repository's Java 25 / Gradle 9.5.1 GitHub Actions workflow, promoted the PR from draft after CI, squash-merged it to `main`, and allowed the new version-aware release job to publish the version from `gradle.properties`.  
+**Result:** `SUCCESS` for hosted build/merge/release; real Vulkan runtime validation remains pending.  
+**Intended effect:** Replace the 0.0.1 startup dead-end with a testable 0.0.2 release while preserving Vulkan-only renderer activation.  
+**Actual effect:** Pull-request workflow run `32314279287` completed with conclusion `success`. PR #1 merged as commit `5ffac551e921eb7c90eacf2236071f92027aaef5`. Tag/release ref `v0.0.2-phase0` resolves to the patched repository state.  
+**Evidence:** PR #1 `Fix Phase 0 OpenGL startup dead-end`; CI run `32314279287`; merge commit `5ffac551e921eb7c90eacf2236071f92027aaef5`; tag `v0.0.2-phase0`.  
+**Why it worked:** The patch only changes bootstrap control flow/config/release automation and compiles cleanly against the already-verified 26.2 `DeviceInfo` API.  
+**Side effects / lessons:** Release automation should remain version-derived; do not hardcode artifact/tag names for subsequent phases. Backend mismatch is a recoverable configuration state until Obsidian actually owns Vulkan-only renderer work.  
+**Next action:** User should run `v0.0.2-phase0`, set Minecraft to **Prefer Vulkan (Experimental)**, restart, and provide the resulting log. Phase 1 should not begin until that Vulkan-active path reaches the title screen/world successfully.
+
+---
+
 ## Template for the next attempt
 
 Copy this section and replace placeholders. Do not edit previous entries.
