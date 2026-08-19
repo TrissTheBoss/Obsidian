@@ -6,8 +6,8 @@ Last updated: 2026-08-20
 
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
-- Current released milestone: `v0.0.1-phase0`
-- Patch in progress: `0.0.2-phase0` fixes the first real runtime-test startup behavior.
+- Current released milestone: `v0.0.2-phase0`
+- Release source: merged PR #1, `Fix Phase 0 OpenGL startup dead-end`.
 
 ## Current phase
 
@@ -25,24 +25,16 @@ Implemented Phase 0 responsibilities:
 - `RendererBridge` abstraction for future ownership of rendering work.
 - Configuration scaffolding.
 - VS Code task/extension setup.
-- GitHub Actions build and release workflow.
+- GitHub Actions build and version-aware release workflow.
 - Phase 0 release notes and changelog.
 
 ## What is validated
 
 ### Hosted compile/build validation
 
-GitHub Actions completed a clean full build successfully with the real project dependencies after the Minecraft 26.2 GPU API fix.
+GitHub Actions completed a clean pull-request build for the `0.0.2-phase0` patch against the real Minecraft 26.2 project dependencies. Workflow run `32314279287` completed with conclusion `success` before merge.
 
-Observed successful tasks included:
-
-- `compileClientJava`
-- resource processing
-- JAR creation
-- sources JAR creation
-- assemble/build
-
-The successful diagnostic build used Java 25, Gradle 9.5.1, and Fabric Loom 1.17.19 as resolved at that time.
+The patch was then squash-merged to `main` as commit `5ffac551e921eb7c90eacf2236071f92027aaef5`, and the version-aware release workflow created tag/release `v0.0.2-phase0`.
 
 ### Real Windows runtime test: v0.0.1-phase0
 
@@ -60,13 +52,14 @@ Observed failure:
 
 - Minecraft 26.2 initialized **OpenGL**, which is currently its default graphics backend.
 - Obsidian 0.0.1 intentionally threw `IllegalStateException` when it detected OpenGL.
-- This happened during game initialization before the player could reach Video Settings, making the error handling self-defeating.
+- This happened during game initialization before the player could reach Video Settings.
 
-Conclusion:
+Patch outcome in 0.0.2:
 
-- The failure is not evidence of missing Vulkan support on the reference system.
-- It is an Obsidian Phase 0 UX/bootstrap bug: non-Vulkan startup must not be fatal before the player can select Vulkan.
-- Patch `0.0.2-phase0` changes non-Vulkan startup into an inactive/warning state and only publishes the renderer bridge when Vulkan is actually active.
+- Non-Vulkan startup is now nonfatal.
+- Obsidian remains inactive for that session and logs instructions to select **Prefer Vulkan (Experimental)**.
+- The public renderer bridge remains unavailable unless Vulkan is actually active.
+- The obsolete `failOnNonVulkan` property is ignored/removed from the active config model, so an old 0.0.1 config cannot preserve fatal startup behavior.
 
 ### API truth established
 
@@ -89,7 +82,7 @@ For Minecraft 26.2, relevant device information is exposed through:
 
 The Vulkan-active runtime path is still unvalidated on the real reference machine.
 
-Before calling Phase 0 runtime-validated, test the patched release with Minecraft configured to **Video Settings > Graphics API > Prefer Vulkan (Experimental)** and record:
+Before calling Phase 0 runtime-validated, test `v0.0.2-phase0` with Minecraft configured to **Video Settings > Graphics API > Prefer Vulkan (Experimental)** and record:
 
 - whether the log reports `Graphics Backend: Vulkan`;
 - whether Obsidian logs `Attached to Vulkan backend`;
@@ -151,4 +144,4 @@ Performance priorities:
 
 ## Immediate handoff instruction
 
-Finish and validate `0.0.2-phase0`, then test it on the real machine with **Prefer Vulkan (Experimental)** selected. Record the result in `ai/ATTEMPT_LOG.md`. Do not begin deep Phase 1 renderer ownership work until the Vulkan-active Phase 0 path has reached the title screen/world successfully.
+Test `v0.0.2-phase0` on the real machine with **Prefer Vulkan (Experimental)** selected. Record the result in `ai/ATTEMPT_LOG.md`. Do not begin deep Phase 1 renderer ownership work until the Vulkan-active Phase 0 path has reached the title screen/world successfully.
