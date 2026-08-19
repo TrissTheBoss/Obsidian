@@ -25,41 +25,20 @@ jobs:
         with:
           gradle-version: '9.5.1'
 
-      - name: Inspect Minecraft 26.2 device metadata API
+      - name: Run full build and capture result
         shell: bash
         run: |
           mkdir -p docs
           set +e
-          gradle compileClientJava --stacktrace > ci-build.log 2>&1
+          gradle build --stacktrace > ci-build.log 2>&1
           code=$?
-
           {
-            echo "Obsidian temporary CI device-info diagnostic"
+            echo "Obsidian temporary full-build diagnostic"
             echo "commit=$GITHUB_SHA"
-            echo "compile_exit_code=$code"
+            echo "build_exit_code=$code"
             echo
-            echo "--- Minecraft 26.2 device API ---"
-
-            while IFS= read -r jarfile; do
-              if jar tf "$jarfile" 2>/dev/null | grep -q '^com/mojang/blaze3d/systems/GpuDevice.class$'; then
-                echo
-                echo "JAR=$jarfile"
-                for cls in \
-                  com.mojang.blaze3d.systems.DeviceInfo \
-                  com.mojang.blaze3d.systems.DeviceLimits \
-                  com.mojang.blaze3d.systems.DeviceFeatures \
-                  com.mojang.blaze3d.systems.DeviceType \
-                  com.mojang.blaze3d.systems.GpuDeviceBackend; do
-                  echo "--- $cls ---"
-                  javap -classpath "$jarfile" -public "$cls" 2>&1 || true
-                done
-                break
-              fi
-            done < <(find "$HOME/.gradle" .gradle -type f -name '*.jar' 2>/dev/null | sort -u)
-
-            echo
-            echo "--- compile errors ---"
-            grep -B 1 -A 4 -E 'error:|cannot find symbol|symbol:|location:' ci-build.log || true
+            echo "--- build tail ---"
+            tail -n 180 ci-build.log
           } > docs/ci-diagnostic.txt
           exit 0
 
@@ -69,5 +48,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- docs/ci-diagnostic.txt
-          git commit -m "chore: inspect 26.2 device metadata API" || exit 0
+          git commit -m "chore: record Phase 0 CI result [no-release]" || exit 0
           git push
