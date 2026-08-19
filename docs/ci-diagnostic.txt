@@ -1,227 +1,39 @@
-Obsidian temporary CI device-info diagnostic
-commit=24bbe55b91adce8960f7eb2a3484b648b85737ab
-compile_exit_code=1
+Obsidian temporary full-build diagnostic
+commit=c688520cb8229753582fd30e9f107e758e9a3e02
+build_exit_code=0
 
---- Minecraft 26.2 device API ---
+--- build tail ---
+Starting a Gradle Daemon (subsequent builds will be faster)
 
-JAR=/home/runner/.gradle/caches/fabric-loom/26.2/minecraft-client-only.jar
---- com.mojang.blaze3d.systems.DeviceInfo ---
-Compiled from "DeviceInfo.java"
-public final class com.mojang.blaze3d.systems.DeviceInfo extends java.lang.Record {
-  public com.mojang.blaze3d.systems.DeviceInfo(java.lang.String, java.lang.String, java.lang.String, boolean, java.lang.String, float, com.mojang.blaze3d.systems.DeviceLimits, com.mojang.blaze3d.systems.DeviceFeatures, java.util.Set<java.lang.String>, com.mojang.blaze3d.systems.HintsAndWorkarounds, com.mojang.blaze3d.systems.DeviceType);
-  public final java.lang.String toString();
-  public final int hashCode();
-  public final boolean equals(java.lang.Object);
-  public java.lang.String name();
-  public java.lang.String vendorName();
-  public java.lang.String driverInfo();
-  public boolean isZZeroToOne();
-  public java.lang.String backendName();
-  public float timestampPeriod();
-  public com.mojang.blaze3d.systems.DeviceLimits limits();
-  public com.mojang.blaze3d.systems.DeviceFeatures features();
-  public java.util.Set<java.lang.String> underlyingExtensions();
-  public com.mojang.blaze3d.systems.HintsAndWorkarounds hintsAndWorkarounds();
-  public com.mojang.blaze3d.systems.DeviceType type();
-}
---- com.mojang.blaze3d.systems.DeviceLimits ---
-Compiled from "DeviceLimits.java"
-public final class com.mojang.blaze3d.systems.DeviceLimits extends java.lang.Record {
-  public com.mojang.blaze3d.systems.DeviceLimits(int, int, int, long, int, int);
-  public int maxTextureSizeForFormat(com.mojang.blaze3d.GpuFormat);
-  public final java.lang.String toString();
-  public final int hashCode();
-  public final boolean equals(java.lang.Object);
-  public int maxAnisotropy();
-  public int minUniformOffsetAlignment();
-  public int maxTextureSize();
-  public long maxMemoryAllocationSize();
-  public int maxMultiDrawDirectInterleavedDrawCount();
-  public int maxColorAttachments();
-}
---- com.mojang.blaze3d.systems.DeviceFeatures ---
-Compiled from "DeviceFeatures.java"
-public final class com.mojang.blaze3d.systems.DeviceFeatures extends java.lang.Record {
-  public com.mojang.blaze3d.systems.DeviceFeatures(boolean, boolean, boolean, boolean, boolean, boolean, boolean);
-  public final java.lang.String toString();
-  public final int hashCode();
-  public final boolean equals(java.lang.Object);
-  public boolean shaderDrawParameters();
-  public boolean multiDrawDirectInterleaved();
-  public boolean multiDrawDirectSeparate();
-  public boolean multiDrawIndirect();
-  public boolean drawIndirect();
-  public boolean nonZeroFirstInstance();
-  public boolean persistentMapping();
-}
---- com.mojang.blaze3d.systems.DeviceType ---
-Compiled from "DeviceType.java"
-public final class com.mojang.blaze3d.systems.DeviceType extends java.lang.Enum<com.mojang.blaze3d.systems.DeviceType> {
-  public static final com.mojang.blaze3d.systems.DeviceType OTHER;
-  public static final com.mojang.blaze3d.systems.DeviceType INTEGRATED;
-  public static final com.mojang.blaze3d.systems.DeviceType DISCRETE;
-  public static final com.mojang.blaze3d.systems.DeviceType VIRTUAL;
-  public static final com.mojang.blaze3d.systems.DeviceType CPU;
-  public static com.mojang.blaze3d.systems.DeviceType[] values();
-  public static com.mojang.blaze3d.systems.DeviceType valueOf(java.lang.String);
-}
---- com.mojang.blaze3d.systems.GpuDeviceBackend ---
-Compiled from "GpuDeviceBackend.java"
-public interface com.mojang.blaze3d.systems.GpuDeviceBackend {
-  public abstract com.mojang.blaze3d.systems.GpuSurfaceBackend createSurface(long);
-  public abstract com.mojang.blaze3d.systems.CommandEncoderBackend createCommandEncoder();
-  public abstract com.mojang.blaze3d.textures.GpuSampler createSampler(com.mojang.blaze3d.textures.AddressMode, com.mojang.blaze3d.textures.AddressMode, com.mojang.blaze3d.textures.FilterMode, com.mojang.blaze3d.textures.FilterMode, int, java.util.OptionalDouble);
-  public abstract com.mojang.blaze3d.textures.GpuTexture createTexture(java.util.function.Supplier<java.lang.String>, int, com.mojang.blaze3d.GpuFormat, int, int, int, int);
-  public abstract com.mojang.blaze3d.textures.GpuTexture createTexture(java.lang.String, int, com.mojang.blaze3d.GpuFormat, int, int, int, int);
-  public abstract com.mojang.blaze3d.textures.GpuTextureView createTextureView(com.mojang.blaze3d.textures.GpuTexture);
-  public abstract com.mojang.blaze3d.textures.GpuTextureView createTextureView(com.mojang.blaze3d.textures.GpuTexture, int, int);
-  public abstract com.mojang.blaze3d.buffers.GpuBuffer createBuffer(java.util.function.Supplier<java.lang.String>, int, long);
-  public abstract com.mojang.blaze3d.buffers.GpuBuffer createBuffer(java.util.function.Supplier<java.lang.String>, int, java.nio.ByteBuffer);
-  public abstract java.util.List<java.lang.String> getLastDebugMessages();
-  public abstract boolean isDebuggingEnabled();
-  public abstract com.mojang.blaze3d.pipeline.CompiledRenderPipeline precompilePipeline(com.mojang.blaze3d.pipeline.RenderPipeline, com.mojang.blaze3d.shaders.ShaderSource);
-  public abstract void clearPipelineCache();
-  public abstract void close();
-  public abstract com.mojang.blaze3d.systems.GpuQueryPool createTimestampQueryPool(int);
-  public abstract long getTimestampNow();
-  public abstract com.mojang.blaze3d.systems.DeviceInfo getDeviceInfo();
-}
+> Configure project :
+Fabric Loom: 1.17.19
 
---- compile errors ---
-> Task :compileClientJava FAILED
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:25: error: cannot find symbol
-                device.getBackendName(),
-                      ^
-  symbol:   method getBackendName()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:26: error: cannot find symbol
-                device.getVendor(),
-                      ^
-  symbol:   method getVendor()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:27: error: cannot find symbol
-                device.getRenderer(),
-                      ^
-  symbol:   method getRenderer()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:28: error: cannot find symbol
-                device.getVersion(),
-                      ^
-  symbol:   method getVersion()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:29: error: cannot find symbol
-                device.getImplementationInformation(),
-                      ^
-  symbol:   method getImplementationInformation()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:30: error: cannot find symbol
-                List.copyOf(device.getEnabledExtensions()),
-                                  ^
-  symbol:   method getEnabledExtensions()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:32: error: cannot find symbol
-                device.getMaxTextureSize(),
-                      ^
-  symbol:   method getMaxTextureSize()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:33: error: cannot find symbol
-                device.getUniformOffsetAlignment());
-                      ^
-  symbol:   method getUniformOffsetAlignment()
-  location: variable device of type GpuDevice
-8 errors
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1787181972185.json
+> Task :compileJava NO-SOURCE
+> Task :processResources
+> Task :classes
+> Task :compileClientJava
+> Task :processClientResources NO-SOURCE
+> Task :processIncludeJars
+> Task :jar
+> Task :sourcesJar
+> Task :assemble
+> Task :clientClasses
+> Task :compileTestJava NO-SOURCE
+> Task :processTestResources NO-SOURCE
+> Task :testClasses UP-TO-DATE
+> Task :test NO-SOURCE
+> Task :validateAccessWidener NO-SOURCE
+> Task :check UP-TO-DATE
+> Task :build
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1787182073749.json
 
 [Incubating] Problems report is available at: file:///home/runner/work/Obsidian/Obsidian/build/reports/problems/problems-report.html
---
-> Compilation failed; see the compiler output below.
-  /home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:25: error: cannot find symbol
-                  device.getBackendName(),
-                        ^
-    symbol:   method getBackendName()
-    location: variable device of type GpuDevice
-  /home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:26: error: cannot find symbol
-                  device.getVendor(),
-                        ^
-    symbol:   method getVendor()
-    location: variable device of type GpuDevice
-  /home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:27: error: cannot find symbol
-                  device.getRenderer(),
-                        ^
-    symbol:   method getRenderer()
-    location: variable device of type GpuDevice
-  /home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:28: error: cannot find symbol
-                  device.getVersion(),
-                        ^
-    symbol:   method getVersion()
-    location: variable device of type GpuDevice
-  /home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:29: error: cannot find symbol
-                  device.getImplementationInformation(),
-                        ^
-    symbol:   method getImplementationInformation()
-    location: variable device of type GpuDevice
-  /home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:30: error: cannot find symbol
-                  List.copyOf(device.getEnabledExtensions()),
-                                    ^
-    symbol:   method getEnabledExtensions()
-    location: variable device of type GpuDevice
-  /home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:32: error: cannot find symbol
-                  device.getMaxTextureSize(),
-                        ^
-    symbol:   method getMaxTextureSize()
-    location: variable device of type GpuDevice
-  /home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:33: error: cannot find symbol
-                  device.getUniformOffsetAlignment());
-                        ^
-    symbol:   method getUniformOffsetAlignment()
-    location: variable device of type GpuDevice
-  8 errors
 
-* Try:
-> Check your code and dependencies to fix the compilation error(s)
---
-Caused by: org.gradle.api.internal.tasks.compile.CompilationFailedException: Compilation failed; see the compiler output below.
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:25: error: cannot find symbol
-                device.getBackendName(),
-                      ^
-  symbol:   method getBackendName()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:26: error: cannot find symbol
-                device.getVendor(),
-                      ^
-  symbol:   method getVendor()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:27: error: cannot find symbol
-                device.getRenderer(),
-                      ^
-  symbol:   method getRenderer()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:28: error: cannot find symbol
-                device.getVersion(),
-                      ^
-  symbol:   method getVersion()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:29: error: cannot find symbol
-                device.getImplementationInformation(),
-                      ^
-  symbol:   method getImplementationInformation()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:30: error: cannot find symbol
-                List.copyOf(device.getEnabledExtensions()),
-                                  ^
-  symbol:   method getEnabledExtensions()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:32: error: cannot find symbol
-                device.getMaxTextureSize(),
-                      ^
-  symbol:   method getMaxTextureSize()
-  location: variable device of type GpuDevice
-/home/runner/work/Obsidian/Obsidian/src/client/java/dev/obsidian/render/MojangVulkanBridge.java:33: error: cannot find symbol
-                device.getUniformOffsetAlignment());
-                      ^
-  symbol:   method getUniformOffsetAlignment()
-  location: variable device of type GpuDevice
-8 errors
-	at org.gradle.api.internal.tasks.compile.JdkJavaCompiler.execute(JdkJavaCompiler.java:89)
-	at org.gradle.api.internal.tasks.compile.JdkJavaCompiler.execute(JdkJavaCompiler.java:50)
-	at org.gradle.api.internal.tasks.compile.NormalizingJavaCompiler.delegateAndHandleErrors(NormalizingJavaCompiler.java:98)
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.5.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 12s
+5 actionable tasks: 5 executed
