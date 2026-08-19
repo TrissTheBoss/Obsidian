@@ -91,3 +91,10 @@ This file records durable decisions. Do not delete old decisions when they chang
 **Decision:** The `ai/` directory is the persistent handoff/operating memory for future agents.  
 **Why:** Chat context is not a durable project artifact and different agents/models must be able to continue from repository truth.  
 **Effect:** Every meaningful experiment is logged; current truth and durable decisions are kept synchronized with code changes.
+
+## D-0014 - Profiling must not create routine extra GPU submissions
+
+**Status:** ACTIVE  
+**Decision:** Obsidian must not implement normal per-frame GPU profiling by creating dedicated command encoders/submissions at both frame boundaries.  
+**Why:** Exact Minecraft 26.2 inspection showed timestamp writes are encoded through `CommandEncoder` and become GPU work through explicit `submit()`. Adding profiler-only submissions every frame could damage frame pacing and contaminate the measurement itself.  
+**Effect:** The initial Phase 1 validation uses one one-shot timestamp submission only. Long-term GPU timestamps must be integrated into command streams Obsidian already owns or into an existing submission path whose ownership/synchronization has been verified.
