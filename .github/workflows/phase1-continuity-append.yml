@@ -1,17 +1,18 @@
 name: Phase 1 Continuity Append
 
 on:
-  push:
-    branches: [phase1/frame-foundation]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
 
 jobs:
   append:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'phase1/frame-foundation'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout branch
         uses: actions/checkout@v4
         with:
           ref: phase1/frame-foundation
@@ -19,7 +20,10 @@ jobs:
       - name: Append continuity entries and remove helper
         shell: bash
         run: |
-          cat >> ai/ATTEMPT_LOG.md <<'EOF'
+          if grep -q '^## A-0015 ' ai/ATTEMPT_LOG.md; then
+            echo 'Entries already present; only removing helper.'
+          else
+            cat >> ai/ATTEMPT_LOG.md <<'EOF'
 
 ---
 
@@ -66,6 +70,7 @@ jobs:
 **Side effects / lessons:** CPU frame history uses a fixed primitive ring (2048 samples) so the timing foundation does not allocate per frame. GPU query polling is only for the one-shot development probe.  
 **Next action:** Build the final documented branch head and test `0.1.0-phase1-dev1` on the real Vulkan machine. Confirm exactly one probe submission, asynchronous completion, world entry, and clean shutdown before merging Phase 1 foundation.
 EOF
+          fi
 
           git rm -- .github/workflows/phase1-continuity-append.yml
           git config user.name "github-actions[bot]"
