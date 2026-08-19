@@ -1,9 +1,10 @@
 package dev.obsidian.render;
 
+import com.mojang.blaze3d.systems.DeviceFeatures;
+import com.mojang.blaze3d.systems.DeviceInfo;
+import com.mojang.blaze3d.systems.DeviceLimits;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
-
-import java.util.List;
 
 public final class MojangVulkanBridge implements RendererBridge {
     private final GpuDevice device;
@@ -21,16 +22,25 @@ public final class MojangVulkanBridge implements RendererBridge {
                     "Obsidian could not attach to Minecraft 26.2's GpuDevice because it was not initialized.");
         }
 
+        DeviceInfo info = device.getDeviceInfo();
+        DeviceLimits limits = info.limits();
+        DeviceFeatures features = info.features();
+
         GpuCapabilities caps = new GpuCapabilities(
-                device.getBackendName(),
-                device.getVendor(),
-                device.getRenderer(),
-                device.getVersion(),
-                device.getImplementationInformation(),
-                List.copyOf(device.getEnabledExtensions()),
+                info.backendName(),
+                RenderSystem.getBackendDescription(),
+                info.vendorName(),
+                info.name(),
+                info.driverInfo(),
+                info.type().name(),
+                info.underlyingExtensions(),
                 device.isDebuggingEnabled(),
-                device.getMaxTextureSize(),
-                device.getUniformOffsetAlignment());
+                limits.maxTextureSize(),
+                limits.minUniformOffsetAlignment(),
+                features.shaderDrawParameters(),
+                features.multiDrawIndirect(),
+                features.drawIndirect(),
+                features.persistentMapping());
 
         return new MojangVulkanBridge(device, caps);
     }
