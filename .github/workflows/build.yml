@@ -43,7 +43,7 @@ jobs:
 
   phase0-release:
     name: Publish Phase 0 release
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[no-release]')
     needs: build
     runs-on: ubuntu-latest
     permissions:
