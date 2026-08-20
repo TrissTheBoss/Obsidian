@@ -3,6 +3,8 @@ name: Phase 1 First Draw API Inspect
 on:
   push:
     branches: [phase1/first-draw]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
