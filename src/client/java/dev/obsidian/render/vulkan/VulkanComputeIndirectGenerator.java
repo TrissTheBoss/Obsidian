@@ -9,7 +9,6 @@ import com.mojang.blaze3d.vulkan.VulkanCommandEncoder;
 import com.mojang.blaze3d.vulkan.VulkanDevice;
 import dev.obsidian.mixin.CommandEncoderAccessor;
 import dev.obsidian.mixin.GpuDeviceAccessor;
-import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.util.shaderc.Shaderc;
 import org.lwjgl.vulkan.VkCommandBuffer;
@@ -140,7 +139,7 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
                         .sType$Default()
                         .descriptorPool(createdDescriptorPool)
                         .pSetLayouts(stack.longs(createdDescriptorSetLayout));
-                PointerBuffer pSet = stack.callocPointer(1);
+                LongBuffer pSet = stack.callocLong(1);
                 requireSuccess(vkAllocateDescriptorSets(device.vkDevice(), setInfo, pSet),
                         "vkAllocateDescriptorSets");
                 createdDescriptorSet = pSet.get(0);
@@ -269,10 +268,8 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
             ended = true;
             encoder.execute(commandBuffer);
         } catch (RuntimeException e) {
-            // A transient command buffer that was never executed is reclaimed with
-            // Minecraft's command pool reset; never submit malformed partial work.
             if (!ended) {
-                // No safe public reset/free operation is exposed for this one buffer.
+                // Transient command memory is reclaimed with Minecraft's command pool reset.
             }
             throw e;
         }
