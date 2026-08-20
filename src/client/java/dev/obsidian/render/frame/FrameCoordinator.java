@@ -2,7 +2,7 @@ package dev.obsidian.render.frame;
 
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
-import dev.obsidian.render.graph.FrameGraphProbe;
+import dev.obsidian.render.draw.FirstDrawProbe;
 import dev.obsidian.render.memory.DeviceGeometryArena;
 import dev.obsidian.render.resource.DeferredReleaseQueue;
 import dev.obsidian.render.upload.StagingUploadArena;
@@ -18,7 +18,7 @@ public final class FrameCoordinator implements AutoCloseable {
     private final DeferredReleaseQueue deferredReleases = new DeferredReleaseQueue();
     private final StagingUploadArena stagingUploads;
     private final DeviceGeometryArena deviceArena;
-    private final FrameGraphProbe frameGraphProbe;
+    private final FirstDrawProbe firstDrawProbe;
 
     private FrameContext activeFrame;
     private long frameIndex;
@@ -28,7 +28,7 @@ public final class FrameCoordinator implements AutoCloseable {
     public FrameCoordinator(GpuDevice device) {
         StagingUploadArena staging = null;
         DeviceGeometryArena arena = null;
-        FrameGraphProbe probe = null;
+        FirstDrawProbe probe = null;
         try {
             staging = new StagingUploadArena(
                     device,
@@ -38,7 +38,7 @@ public final class FrameCoordinator implements AutoCloseable {
                     device,
                     () -> "Obsidian Phase 1 device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
-            probe = new FrameGraphProbe(device, staging);
+            probe = new FirstDrawProbe(device, staging);
         } catch (RuntimeException e) {
             if (probe != null) {
                 try {
@@ -62,12 +62,12 @@ public final class FrameCoordinator implements AutoCloseable {
                 }
             }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 1 frame-graph/profiler initialization failed; Minecraft will continue for diagnosis.",
+                    "Phase 1 first-draw initialization failed; Minecraft will continue for diagnosis.",
                     e);
         }
         stagingUploads = staging;
         deviceArena = arena;
-        frameGraphProbe = probe;
+        firstDrawProbe = probe;
     }
 
     public void beginFrame() {
@@ -82,16 +82,16 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 1 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, stagingCapacity={2}, deviceArenaCapacity={3}, graphPasses={4}; GPU safety/reuse are completion-gated and profiler-only submissions are forbidden.",
+                    "Phase 1 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, stagingCapacity={2}, deviceArenaCapacity={3}, graphPasses={4}; first draw is offscreen, GPU safety/reuse are completion-gated, profiler-only submissions are forbidden.",
                     frameContexts.size(),
                     cpuFrameTimings.capacity(),
                     stagingUploads == null ? 0 : stagingUploads.capacityBytes(),
                     deviceArena == null ? 0L : deviceArena.capacityBytes(),
-                    frameGraphProbe == null ? 0 : frameGraphProbe.graph().passCount());
+                    firstDrawProbe == null ? 0 : firstDrawProbe.graph().passCount());
         }
 
-        if (frameGraphProbe != null) {
-            frameGraphProbe.submit(frameIndex);
+        if (firstDrawProbe != null) {
+            firstDrawProbe.submit(frameIndex);
         }
     }
 
@@ -117,8 +117,8 @@ public final class FrameCoordinator implements AutoCloseable {
         if (deviceArena != null) {
             deviceArena.pollRetirements();
         }
-        if (frameGraphProbe != null) {
-            frameGraphProbe.poll(frameIndex);
+        if (firstDrawProbe != null) {
+            firstDrawProbe.poll(frameIndex);
         }
     }
 
@@ -146,8 +146,8 @@ public final class FrameCoordinator implements AutoCloseable {
         return deviceArena == null ? 0 : deviceArena.pendingRetirementBatches();
     }
 
-    public FrameGraphProbe.State frameGraphProbeState() {
-        return frameGraphProbe == null ? FrameGraphProbe.State.FAILED : frameGraphProbe.state();
+    public FirstDrawProbe.State firstDrawProbeState() {
+        return firstDrawProbe == null ? FirstDrawProbe.State.FAILED : firstDrawProbe.state();
     }
 
     @Override
@@ -158,18 +158,18 @@ public final class FrameCoordinator implements AutoCloseable {
         }
         closed = true;
 
-        FrameGraphProbe.State graphStateBeforeClose =
-                frameGraphProbe == null ? FrameGraphProbe.State.FAILED : frameGraphProbe.state();
+        FirstDrawProbe.State drawStateBeforeClose =
+                firstDrawProbe == null ? FirstDrawProbe.State.FAILED : firstDrawProbe.state();
 
         // Staging owns the useful submission fence. Closing it first either
         // completes/reclaims safely or explicitly abandons in-flight memory to
         // Minecraft device shutdown. The probe can then make the same choice
-        // for its destination/query resources.
+        // for its offscreen target/buffers/query pool.
         if (stagingUploads != null) {
             stagingUploads.close();
         }
-        if (frameGraphProbe != null) {
-            frameGraphProbe.close();
+        if (firstDrawProbe != null) {
+            firstDrawProbe.close();
         }
         if (deviceArena != null) {
             deviceArena.close();
@@ -177,13 +177,16 @@ public final class FrameCoordinator implements AutoCloseable {
         deferredReleases.close();
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 1 frame coordinator closed after {0} frame(s): graphResult={1}, graphPasses={2}, usefulSubmissions={3}, profilerOnlySubmissions=0, queryPolls={4}, unavailableQueryPolls={5}, stagingSubmittedBytes={6}, stagingReclaimedBytes={7}, stagingHighWater={8}, stagingBackpressureEvents={9}, pendingUploadBatches={10}, arenaUsedBytes={11}, arenaHighWater={12}, arenaAllocations={13}, arenaAllocationFailures={14}, arenaRetired={15}, arenaReclaimed={16}, arenaStaleHandleRejections={17}, arenaFreeSpans={18}, arenaLargestFree={19}, arenaFragmentationPermille={20}, pendingArenaRetirementBatches={21}, retiredResources={22}, releasedResources={23}, pendingRetirements={24}.",
+                "Phase 1 frame coordinator closed after {0} frame(s): firstDrawResult={1}, graphPasses={2}, usefulSubmissions={3}, profilerOnlySubmissions=0, drawCalls={4}, triangles={5}, pipelineValid={6}, queryPolls={7}, unavailableQueryPolls={8}, stagingSubmittedBytes={9}, stagingReclaimedBytes={10}, stagingHighWater={11}, stagingBackpressureEvents={12}, pendingUploadBatches={13}, arenaUsedBytes={14}, arenaHighWater={15}, arenaAllocations={16}, arenaAllocationFailures={17}, arenaRetired={18}, arenaReclaimed={19}, arenaStaleHandleRejections={20}, arenaFreeSpans={21}, arenaLargestFree={22}, arenaFragmentationPermille={23}, pendingArenaRetirementBatches={24}, retiredResources={25}, releasedResources={26}, pendingRetirements={27}.",
                 frameIndex,
-                graphStateBeforeClose,
-                frameGraphProbe == null ? 0 : frameGraphProbe.graph().passCount(),
-                frameGraphProbe == null ? 0L : frameGraphProbe.stream().submissionCount(),
-                frameGraphProbe == null ? 0L : frameGraphProbe.profiler().pollCount(),
-                frameGraphProbe == null ? 0L : frameGraphProbe.profiler().unavailablePolls(),
+                drawStateBeforeClose,
+                firstDrawProbe == null ? 0 : firstDrawProbe.graph().passCount(),
+                firstDrawProbe == null ? 0L : firstDrawProbe.stream().submissionCount(),
+                firstDrawProbe == null ? 0L : firstDrawProbe.drawCalls(),
+                firstDrawProbe == null ? 0L : firstDrawProbe.triangles(),
+                firstDrawProbe != null && firstDrawProbe.pipelineValid(),
+                firstDrawProbe == null ? 0L : firstDrawProbe.profiler().pollCount(),
+                firstDrawProbe == null ? 0L : firstDrawProbe.profiler().unavailablePolls(),
                 stagingUploads == null ? 0L : stagingUploads.submittedBytes(),
                 stagingUploads == null ? 0L : stagingUploads.reclaimedBytes(),
                 stagingUploads == null ? 0L : stagingUploads.highWaterBytes(),
