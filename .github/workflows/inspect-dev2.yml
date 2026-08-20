@@ -65,17 +65,31 @@ jobs:
               net.minecraft.client.Camera \
               net.minecraft.client.renderer.GameRenderer \
               net.minecraft.client.renderer.LevelRenderer \
-              net.minecraft.client.renderer.LightTexture \
+              net.minecraft.client.renderer.DynamicUniforms \
+              net.minecraft.client.renderer.ProjectionMatrixBuffer \
+              net.minecraft.client.renderer.state.GameRenderState \
+              net.minecraft.client.renderer.state.level.CameraRenderState \
+              net.minecraft.client.renderer.state.level.LevelRenderState \
               net.minecraft.client.renderer.RenderType \
               net.minecraft.client.renderer.block.BlockRenderDispatcher \
-              net.minecraft.client.renderer.block.BlockModelShaper \
+              net.minecraft.client.renderer.block.BlockStateModelSet \
+              net.minecraft.client.renderer.block.BlockModelSet \
+              net.minecraft.client.renderer.block.dispatch.BlockStateModel \
+              net.minecraft.client.renderer.block.dispatch.BlockStateModelPart \
               net.minecraft.client.renderer.texture.TextureAtlasSprite \
               net.minecraft.client.resources.model.ModelManager \
+              net.minecraft.client.resources.model.geometry.BakedQuad \
+              'net.minecraft.client.resources.model.sprite.Material$Baked' \
+              net.minecraft.client.resources.model.sprite.Material \
               com.mojang.blaze3d.systems.RenderSystem \
               com.mojang.blaze3d.systems.GpuDevice \
               com.mojang.blaze3d.systems.CommandEncoder \
               com.mojang.blaze3d.systems.RenderPass \
+              com.mojang.blaze3d.pipeline.RenderTarget \
+              com.mojang.blaze3d.pipeline.TextureTarget \
+              com.mojang.blaze3d.pipeline.DepthStencilState \
               com.mojang.blaze3d.pipeline.RenderPipeline \
+              'com.mojang.blaze3d.pipeline.RenderPipeline$Builder' \
               com.mojang.blaze3d.vertex.DefaultVertexFormat; do
               echo
               echo "=== javap -public $CLASS ==="
@@ -86,14 +100,13 @@ jobs:
           {
             echo '=== TARGETED BYTECODE / PRIVATE MEMBERS ==='
             for CLASS in \
-              net.minecraft.client.Minecraft \
               net.minecraft.client.renderer.GameRenderer \
               net.minecraft.client.renderer.LevelRenderer \
-              net.minecraft.client.renderer.block.BlockRenderDispatcher \
-              net.minecraft.client.renderer.block.BlockModelShaper \
-              net.minecraft.client.renderer.LightTexture \
+              net.minecraft.client.renderer.DynamicUniforms \
+              net.minecraft.client.renderer.state.level.CameraRenderState \
               com.mojang.blaze3d.systems.RenderSystem \
-              com.mojang.blaze3d.systems.RenderPass; do
+              com.mojang.blaze3d.systems.RenderPass \
+              com.mojang.blaze3d.pipeline.RenderTarget; do
               echo
               echo "=== javap -c -p $CLASS ==="
               javap -classpath "$CP" -c -p "$CLASS" || true
@@ -105,7 +118,7 @@ jobs:
             tr ':' '\n' < /tmp/client-cp-line.txt | while IFS= read -r JAR; do
               case "$JAR" in
                 *.jar)
-                  jar tf "$JAR" 2>/dev/null | grep -E '^(net/minecraft/client/(Camera|Minecraft)|net/minecraft/client/renderer/(GameRenderer|LevelRenderer|LightTexture|RenderType|block/|texture/)|net/minecraft/client/resources/model/|com/mojang/blaze3d/(systems|pipeline|vertex)/)' || true
+                  jar tf "$JAR" 2>/dev/null | grep -E '^(net/minecraft/client/(Camera|Minecraft)|net/minecraft/client/renderer/|net/minecraft/client/resources/model/|com/mojang/blaze3d/(systems|pipeline|vertex)/)' || true
                   ;;
               esac
             done | sort -u
