@@ -7,10 +7,10 @@ Last updated: 2026-08-20
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
 - Current public release: `v0.0.2-phase0`
-- Current merged development baseline: Phase 1 dev2, merge commit `3d2366a5c07f819a264f5f02dd2f3df9c5ec6fc0`
-- Active development branch: `phase1/staging-upload`
-- Active PR: #5, `Phase 1: bounded staging and upload infrastructure`
-- Current development version: `0.1.0-phase1-dev3`
+- Current merged development baseline: Phase 1 dev3, merge commit `de45e80f96c841372c8263deafd0506545f814cc`
+- Active development branch: `phase1/device-arena`
+- Active draft PR: #6, `Phase 1: device-local geometry arena and suballocator`
+- Current development version: `0.1.0-phase1-dev4`
 
 ## Reference runtime
 
@@ -41,67 +41,142 @@ Validated the `Minecraft.renderFrame(boolean)` lifecycle seam, fixed-allocation 
 
 Validated three-slot frame contexts, real `GpuFence` completion tracking, zero-timeout steady-state polling, deferred GPU destruction, bounded shutdown cleanup, and clean real-machine accounting (`retiredResources=1`, `releasedResources=1`, `pending=0`).
 
-### Phase 1 dev3 - VALIDATED; pending merge through PR #5
+### Phase 1 dev3 - VALIDATED and merged through PR #5
 
-Goal: establish bounded staging/upload ownership before terrain starts producing geometry.
+Validated bounded CPU-to-GPU staging and upload ownership:
 
-Exact Minecraft 26.2 inspection confirmed:
+- fixed 256 KiB persistently mapped `MAP_WRITE | COPY_SRC` staging arena;
+- 16-byte aligned monotonic ring cursors;
+- one controlled batch containing two real GPU copies;
+- explicit backpressure instead of fallback allocation or waits;
+- zero-timeout fence polling and completion-gated ring reclamation;
+- deterministic destination readback verification;
+- real-machine result `stagingSubmittedBytes=256`, `stagingReclaimedBytes=256`, `stagingHighWater=256`, `stagingBackpressureEvents=1`, `pendingUploadBatches=0`, exit code 0.
 
-- `GpuBuffer` supports map-read/map-write and copy source/destination usages.
-- persistent write mapping is available through `GpuBufferSlice.MappedView`.
-- `CommandEncoder.copyToBuffer(sourceSlice, destinationSlice)` is source-first.
-- `CommandEncoder.createFence()` supplies batch completion tracking.
-- the reference RX 6800 XT reports persistent mapping support.
-- Mojang's `StagingBuffer.PersistentlyMapped` ultimately uses `MappableRingBuffer`, whose wrap path can call `GpuFence.awaitCompletion(Long.MAX_VALUE)` when cycling to a busy buffer. Obsidian therefore owns its own nonblocking staging admission/reclamation policy above Minecraft's lower-level GPU abstractions.
+Dev3 was squash-merged as `de45e80f96c841372c8263deafd0506545f814cc` with `[no-release]`. Runtime evidence is in `ai/attempts/A-0026-dev3-runtime-success.md`.
 
-Implemented `StagingUploadArena`:
+## Phase 1 dev4 - ACTIVE; compile validated, runtime pending
 
-- one fixed-capacity persistently mapped staging buffer;
-- validation capacity 256 KiB;
-- `MAP_WRITE | COPY_SRC` usage;
-- 16-byte aligned monotonic virtual write/reclaim cursors;
-- wrap padding counted as occupied space;
-- fixed 64-entry in-flight batch table;
-- no fallback allocation when safe space is unavailable;
-- explicit backpressure metrics;
-- zero-timeout steady-state fence polling;
-- completion-gated ring-space reclamation;
-- bounded shutdown behavior.
+Goal: establish a reusable device-preferred GPU geometry arena/suballocator before real chunk meshes use the upload path.
 
-Implemented `GpuUploadProbe`:
+### Exact Minecraft 26.2 findings
 
-- stages two deterministic 128-byte payloads;
-- encodes both copies into one submission;
-- deliberately requests an impossible full-capacity allocation while 256 bytes are occupied to prove explicit backpressure;
-- fences the batch;
-- reclaims staging only after completion;
-- maps the destination for read and verifies every copied byte.
+Exact Loom-resolved bytecode/API inspection confirmed:
 
-Compile validation:
+- `GpuBuffer` usage flags include `COPY_DST`, `COPY_SRC`, `VERTEX`, and `INDEX`.
+- `GpuBufferSlice` supports offset/length sub-slicing for arena allocations.
+- `CommandEncoder.copyToBuffer(sourceSlice, destinationSlice)` and `createFence()` provide the copy/completion primitives required for uploads, readback, and safe retirement.
+- the Vulkan backend class is `VulkanGpuBuffer.Direct`.
+- its VMA allocation setup starts on the automatic device-preferred path and only adds host-visible/coherent requirements when mapping usage is requested; host-mapped/client-storage paths select the host-preferred mode.
 
-- exact documented dev3 head `9a4fa580b8fdaed0030b2242b491789aa7c37a11` passed GitHub Actions run `32367096172` on Java 25 / Gradle 9.5.1;
-- build and artifact upload succeeded.
+Portable terminology is therefore **device-preferred**, not a promise that every implementation physically uses discrete VRAM. On the RX 6800 XT this is the expected route to device-local memory; unified-memory GPUs may legitimately select shared memory.
 
-Real-machine runtime validation on 2026-08-20: `SUCCESS`.
+The first backend inspection guessed an obsolete class name (`VulkanBuffer`). A jar class listing exposed the actual `VulkanGpuBuffer.Direct` name and a corrected inspection pass succeeded. The temporary inspection workflow has been removed.
 
-Observed:
+### Implemented `DeviceGeometryArena`
 
-1. `obsidian 0.1.0-phase1-dev3` loaded on Minecraft 26.2 Vulkan / RX 6800 XT.
-2. Staging capacity reported `262144` bytes.
-3. One batch contained exactly two copies totaling 256 payload bytes.
-4. High-water use was 256 bytes.
-5. Exactly one deliberate backpressure event occurred.
-6. The batch completed through nonblocking fence polling.
-7. Reclaimed bytes reached 256 and pending batches reached 0.
-8. Deterministic destination readback verified successfully.
-9. The user entered a single-player world normally.
-10. Shutdown after 3037 frames reported `stagingSubmittedBytes=256`, `stagingReclaimedBytes=256`, `stagingHighWater=256`, `stagingBackpressureEvents=1`, `pendingUploadBatches=0`, `retiredResources=0`, `releasedResources=0`, `pendingRetirements=0`; process exit code was 0.
+Validation backing capacity: 512 KiB (`524288` bytes).
 
-Evidence is preserved in `ai/attempts/A-0026-dev3-runtime-success.md`.
+Backing buffer usage:
+
+- `COPY_DST | COPY_SRC | VERTEX | INDEX`;
+- no `MAP_READ` or `MAP_WRITE` flags;
+- CPU writes therefore arrive through the already-validated `StagingUploadArena`.
+
+Allocator/lifetime foundation:
+
+- 4096 preallocated allocation metadata slots;
+- packed 64-bit allocation handles containing `(slot, generation)`;
+- stale or reused handles are rejected before a `GpuBufferSlice` is returned;
+- best-fit aligned suballocation over sorted free spans;
+- bounded allocation failure instead of fallback arena growth;
+- adjacent free-span coalescing;
+- fixed 64 retirement batches with up to 64 allocations per batch;
+- one completion fence may guard multiple frees;
+- an allocation becomes unavailable immediately when retired, but its span remains occupied until the real fence completes;
+- zero-timeout steady-state retirement polling;
+- retirement validation/state transition is allocation-free after removal of an early temporary `int[]` implementation;
+- bounded shutdown behavior leaves unsafe live/in-flight arena resources for Minecraft device shutdown rather than closing them prematurely.
+
+Metrics:
+
+- capacity / used / free / high-water bytes;
+- allocation count and bounded allocation failures;
+- live and pending-free counts;
+- successful/cancelled/retired/reclaimed allocation totals;
+- retirement backpressure events;
+- stale-handle rejection count;
+- free-span count;
+- largest free block;
+- external-fragmentation estimate in permille;
+- pending retirement batches.
+
+### Implemented `DeviceArenaProbe`
+
+One-shot non-visual validation sequence:
+
+`allocate A/B/C -> deliberately fail oversized pressure allocation -> stage/upload A/B/C -> wait for upload completion -> copy/readback B while retiring B behind that fence -> reclaim B -> allocate D into B's freed span -> require same offset and slot with a newer generation -> deliberately reject stale B handle -> upload D -> copy/readback A/C/D while retiring them behind one fence -> reclaim -> verify bytes -> require one full coalesced free span`
+
+Validation allocation sizes:
+
+- A = 64 KiB (`65536` bytes)
+- B = 96 KiB (`98304` bytes)
+- C = 48 KiB (`49152` bytes)
+- D = 80 KiB (`81920` bytes)
+- alignment = 256 bytes
+- deterministic validation payload per allocation = 256 bytes
+
+Expected allocator values if runtime behaves as designed:
+
+- initial A+B+C used/high-water = `212992` bytes;
+- exactly one deliberate arena allocation failure;
+- B begins at offset `65536`;
+- D should reuse B's offset and metadata slot but advance that slot's generation;
+- after D replaces B, used bytes = `196608`, free spans = 2, fragmentation estimate = `50` permille;
+- stale old-B handle must be rejected exactly once;
+- total successful allocations = 4 (A/B/C/D);
+- total retired/reclaimed allocations = 4;
+- after final reclamation: used = 0, free spans = 1, largest free block = `524288`, fragmentation = 0.
+
+Expected staging totals:
+
+- first upload batch: A/B/C patterns = 768 bytes;
+- second upload batch: D pattern = 256 bytes;
+- total staging submitted/reclaimed = 1024 bytes;
+- expected staging high-water = 768 bytes;
+- no deliberate staging pressure in dev4, so expected staging backpressure events = 0.
+
+### Compile validation
+
+- initial clean dev4 implementation compiled successfully in GitHub Actions run `32368743417`.
+- review found one avoidable temporary `int[]` allocation inside arena retirement; it was removed.
+- corrected implementation head `8c71b5eebed87ed66f98aaafb8af14b3b906cee6` passed GitHub Actions run `32368901978` on Java 25 / Gradle 9.5.1 with build and artifact upload successful.
+- AI continuity and terminology-only commits followed; a final exact-head CI run is required before distributing the dev4 JAR.
+
+Evidence is preserved in:
+
+- `ai/attempts/A-0027-device-arena-api-inspection.md`
+- `ai/attempts/A-0028-dev4-device-arena-implementation.md`
+- decisions D-0019 and D-0020 in `ai/DECISIONS.md`.
+
+## Dev4 real-machine success criteria
+
+On the Windows 11 / RX 6800 XT Vulkan test instance, confirm:
+
+1. `obsidian 0.1.0-phase1-dev4` loads and arms the device-preferred geometry arena foundation.
+2. Frame coordinator reports staging capacity `262144` and arena capacity `524288`.
+3. Initial arena upload reports 3 allocations, `usedBytes=212992`, `highWater=212992`, exactly one allocation failure, staging payload 768 bytes.
+4. B readback/retirement creates one pending free/retirement batch.
+5. After the B fence completes, D reuses B's exact offset `65536` and slot with an advanced generation.
+6. Reuse log reports `usedBytes=196608`, `freeSpans=2`, `fragmentationPermille=50`, and `staleHandleRejections=1`.
+7. Final readback/retirement batches A/C/D together and all deterministic contents verify correctly.
+8. Final verification reports allocations=4, allocationFailures=1, retired=4, reclaimed=4, staleHandleRejections=1, usedBytes=0, freeSpans=1, largestFree=524288, fragmentationPermille=0.
+9. User can enter a world and render/move normally.
+10. Shutdown ideally reports stagingSubmittedBytes=1024, stagingReclaimedBytes=1024, stagingHighWater=768, stagingBackpressureEvents=0, pendingUploadBatches=0, arenaUsedBytes=0, arenaHighWater=212992, arenaAllocations=4, arenaAllocationFailures=1, arenaRetired=4, arenaReclaimed=4, arenaStaleHandleRejections=1, arenaFreeSpans=1, arenaLargestFree=524288, arenaFragmentationPermille=0, pendingArenaRetirementBatches=0, and no generic pending retirements; process exit code 0.
 
 ## Proven architecture boundary
 
-`Minecraft 26.2 Vulkan device -> Obsidian RendererBridge -> FrameCoordinator -> frame contexts -> controlled submissions -> fence-gated resource lifetime -> bounded persistently mapped staging -> batched copies -> explicit backpressure -> completion-gated reclamation`
+`Minecraft 26.2 Vulkan device -> Obsidian RendererBridge -> FrameCoordinator -> frame contexts -> controlled submissions -> completion-gated lifetime -> bounded persistent staging -> batched copies/backpressure -> device-preferred geometry arena -> generation-safe suballocation -> completion-gated span reuse`
 
 Obsidian still does not:
 
@@ -110,27 +185,8 @@ Obsidian still does not:
 - infer GPU completion from frame count;
 - perform routine device-wide waits;
 - upload actual chunk meshes;
-- own a reusable device-local geometry arena.
+- claim the current O(free-span-count) best-fit allocator is the final high-scale production allocator.
 
-## Next Phase 1 milestone: dev4 device-local arena/suballocator
+## Immediate next action
 
-After merging PR #5 with `[no-release]`, create a fresh branch from merged `main` and implement a reusable Obsidian-owned device-local geometry arena before terrain uses it.
-
-Required dev4 pieces:
-
-1. Inspect exact Minecraft 26.2 buffer usage/slice/copy behavior needed for large geometry buffers and readback validation.
-2. Create one fixed-size GPU arena suitable for future vertex/index/metadata allocations without host mapping in the normal path.
-3. Implement aligned suballocation with stable allocation handles carrying slot/generation identity so stale handles cannot silently reference reused memory.
-4. Support freeing allocations only after their last-use completion signal is safe; never reuse freed spans merely because CPU frames advanced.
-5. Coalesce adjacent free spans and expose used/free/high-water/largest-free-block/fragmentation metrics.
-6. Define bounded failure behavior when no suitable span exists; do not grow or allocate fallback arena buffers during the validation milestone.
-7. Use the validated staging arena to upload deterministic data into multiple arena allocations in one or few controlled batches.
-8. Free allocations in a nontrivial order after completion, allocate replacement data, and prove safe span reuse/generation changes.
-9. Copy selected arena ranges to a readback buffer and verify deterministic contents after reuse.
-10. Enter a world and shut down with zero pending upload batches, zero unsafe frees, and clean arena accounting.
-
-Suggested validation sequence:
-
-`allocate A/B/C -> stage/upload A/B/C -> fence -> verify completion -> free B -> allocate D into reusable space -> upload D -> fence -> read back A/C/D -> verify -> free all -> coalesce to one full free span`
-
-Terrain replacement remains intentionally inactive until this arena/lifetime layer is proven.
+Run final CI on the exact documented dev4 head, distribute the CI-built `0.1.0-phase1-dev4` JAR, and runtime-test the full allocation/upload/retire/reuse/readback/coalescing sequence on the reference machine. Keep PR #6 draft until that validation passes. If dev4 succeeds, merge it with `[no-release]` and continue Phase 1 toward production-sized arena policy, profiler snapshots, render-graph ownership, and eventually the first Obsidian-owned terrain geometry.
