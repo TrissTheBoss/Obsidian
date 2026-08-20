@@ -123,6 +123,21 @@ public final class FrameGraphCommandStream {
     }
 
     /**
+     * Returns the currently recording public encoder only for an isolated,
+     * evidence-justified backend interop seam.
+     *
+     * <p>Minecraft 26.2 exposes no public compute pipeline/dispatch/storage-buffer
+     * API, so dev8 needs to insert one Vulkan compute command buffer into this
+     * same owned submission. Callers must not submit, end, replace, or retain the
+     * encoder and must return control before the next graph operation.</p>
+     */
+    public CommandEncoder backendInteropEncoder() {
+        RenderSystem.assertOnRenderThread();
+        ensureRecording();
+        return encoder;
+    }
+
+    /**
      * Creates another lightweight completion handle for the submission being recorded.
      *
      * <p>Exact Minecraft 26.2 Vulkan inspection shows each handle captures the

@@ -4,6 +4,8 @@
   "package": "dev.obsidian.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
+    "CommandEncoderAccessor",
+    "GpuDeviceAccessor",
     "MinecraftBootstrapMixin",
     "MinecraftFrameMixin"
   ],
