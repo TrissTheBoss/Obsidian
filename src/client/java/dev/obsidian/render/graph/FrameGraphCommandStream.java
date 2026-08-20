@@ -124,16 +124,20 @@ public final class FrameGraphCommandStream {
     /**
      * Submits exactly once through the staging arena, which owns the resulting
      * completion fence and staging-range reclamation.
+     *
+     * <p>All fallible software bookkeeping is completed before queue submission
+     * so a post-submit exception cannot incorrectly route the caller through a
+     * cleanup path that assumes resources are no longer in flight.</p>
      */
     public void submit() {
         RenderSystem.assertOnRenderThread();
         ensureRecording();
         try {
             graph.endExecution();
+            profiler.markSubmitted(graph.passCount());
             staging.submitBatch(encoder);
             submissionCount++;
             submittedBatchOrdinal = staging.submittedBatches();
-            profiler.markSubmitted(graph.passCount());
             recording = false;
             encoder = null;
         } catch (RuntimeException e) {
