@@ -1,6 +1,5 @@
 package dev.obsidian.render.vulkan;
 
-import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.vulkan.VulkanDevice;
 import com.mojang.blaze3d.vulkan.VulkanGpuBuffer;
@@ -13,29 +12,35 @@ import org.lwjgl.vulkan.VkBufferCreateInfo;
 import java.nio.LongBuffer;
 
 import static org.lwjgl.util.vma.Vma.VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-import static org.lwjgl.vulkan.VK10.VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-import static org.lwjgl.vulkan.VK10.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 import static org.lwjgl.vulkan.VK10.VK_SHARING_MODE_EXCLUSIVE;
 import static org.lwjgl.vulkan.VK10.VK_SUCCESS;
 
 /**
- * Narrow Vulkan-only buffer for the capability public Blaze3D 26.2 cannot express:
- * one device-preferred buffer that is both compute-storage writable and indirect-readable.
+ * Small generic wrapper for the isolated Vulkan interop seam.
  *
- * <p>The wrapper remains a {@link VulkanGpuBuffer}, so normal public
- * {@code RenderPass.drawIndexedIndirect} can consume it. It is never mapped.</p>
+ * <p>The native usage flags describe the real Vulkan consumers/producers while
+ * the public usage flags let already-validated Blaze3D copy/draw operations use
+ * the same buffer. The storage remains device-preferred and non-mappable.</p>
  */
-public final class VulkanStorageIndirectBuffer extends VulkanGpuBuffer {
+public final class VulkanInteropBuffer extends VulkanGpuBuffer {
     private final VulkanDevice device;
     private final long allocation;
     private boolean closed;
 
-    public VulkanStorageIndirectBuffer(VulkanDevice device, long sizeBytes) {
-        this(device, sizeBytes, allocate(device, sizeBytes));
+    public VulkanInteropBuffer(
+            VulkanDevice device,
+            long sizeBytes,
+            int publicUsage,
+            int nativeUsage) {
+        this(device, sizeBytes, publicUsage, allocate(device, sizeBytes, nativeUsage));
     }
 
-    private VulkanStorageIndirectBuffer(VulkanDevice device, long sizeBytes, Allocation created) {
-        super(created.buffer(), GpuBuffer.USAGE_INDIRECT_PARAMETERS, sizeBytes);
+    private VulkanInteropBuffer(
+            VulkanDevice device,
+            long sizeBytes,
+            int publicUsage,
+            Allocation created) {
+        super(created.buffer(), publicUsage, sizeBytes);
         this.device = device;
         this.allocation = created.allocation();
     }
@@ -47,7 +52,7 @@ public final class VulkanStorageIndirectBuffer extends VulkanGpuBuffer {
 
     @Override
     public GpuBufferSlice.MappedView map(long offset, long length, boolean read, boolean write) {
-        throw new UnsupportedOperationException("Obsidian storage/indirect buffer is device-preferred and non-mappable");
+        throw new UnsupportedOperationException("Obsidian Vulkan interop buffers are device-preferred and non-mappable");
     }
 
     @Override
@@ -64,16 +69,19 @@ public final class VulkanStorageIndirectBuffer extends VulkanGpuBuffer {
         Vma.vmaDestroyBuffer(device.vma(), vkBuffer(), allocation);
     }
 
-    private static Allocation allocate(VulkanDevice device, long sizeBytes) {
+    private static Allocation allocate(VulkanDevice device, long sizeBytes, int nativeUsage) {
         if (sizeBytes <= 0L) {
-            throw new IllegalArgumentException("Storage/indirect buffer size must be positive");
+            throw new IllegalArgumentException("Interop buffer size must be positive");
+        }
+        if (nativeUsage == 0) {
+            throw new IllegalArgumentException("Interop buffer native usage must be non-zero");
         }
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkBufferCreateInfo bufferInfo = VkBufferCreateInfo.calloc(stack)
                     .sType$Default()
                     .size(sizeBytes)
-                    .usage(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT)
+                    .usage(nativeUsage)
                     .sharingMode(VK_SHARING_MODE_EXCLUSIVE);
 
             VmaAllocationCreateInfo allocationInfo = VmaAllocationCreateInfo.calloc(stack)
@@ -89,7 +97,7 @@ public final class VulkanStorageIndirectBuffer extends VulkanGpuBuffer {
                     pAllocation,
                     null);
             if (result != VK_SUCCESS) {
-                throw new IllegalStateException("vmaCreateBuffer(storage+indirect) failed with VkResult " + result);
+                throw new IllegalStateException("vmaCreateBuffer(interop) failed with VkResult " + result);
             }
             return new Allocation(pBuffer.get(0), pAllocation.get(0));
         }

@@ -1,5 +1,6 @@
 package dev.obsidian.render.vulkan;
 
+import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.CommandEncoderBackend;
@@ -23,7 +24,6 @@ import org.lwjgl.vulkan.VkDescriptorSetLayoutCreateInfo;
 import org.lwjgl.vulkan.VkMemoryBarrier2;
 import org.lwjgl.vulkan.VkPipelineLayoutCreateInfo;
 import org.lwjgl.vulkan.VkPipelineShaderStageCreateInfo;
-import org.lwjgl.vulkan.VkPushConstantRange;
 import org.lwjgl.vulkan.VkShaderModuleCreateInfo;
 import org.lwjgl.vulkan.VkWriteDescriptorSet;
 
@@ -37,20 +37,34 @@ import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK13.*;
 
 /**
- * Minimal Vulkan seam used because Minecraft 26.2 public Blaze3D exposes no
- * compute pipeline, dispatch, or storage-buffer API.
+ * Dev9 GPU visibility/compaction bridge.
  *
- * <p>It deliberately reuses Minecraft's VulkanDevice, graphics command pool and
- * VulkanCommandEncoder submission. Graphics drawing remains on public Blaze3D.</p>
+ * <p>Four fixed candidate scene records are uploaded through the normal bounded
+ * staging system. Compute evaluates their centers against a deliberately small
+ * validation frustum, atomically compacts visible draw commands to the front of
+ * a storage+indirect buffer, writes a visible count and leaves the unused tail
+ * zeroed. Graphics remains public Blaze3D.</p>
  */
-public final class VulkanComputeIndirectGenerator implements AutoCloseable {
+public final class VulkanVisibilityCompactor implements AutoCloseable {
+    public static final int CANDIDATE_COUNT = 4;
+    public static final int VISIBLE_COUNT_EXPECTED = 2;
+    public static final int CANDIDATE_BYTES = 16;
     public static final int COMMAND_BYTES = 20;
-    public static final int COMMAND_COUNT = 2;
-    public static final int BUFFER_BYTES = COMMAND_BYTES * COMMAND_COUNT;
+    public static final int INDIRECT_BYTES = CANDIDATE_COUNT * COMMAND_BYTES;
+    public static final int COUNT_OFFSET = INDIRECT_BYTES;
+    public static final int OUTPUT_BYTES = INDIRECT_BYTES + Integer.BYTES;
+    public static final int CANDIDATE_BUFFER_BYTES = CANDIDATE_COUNT * CANDIDATE_BYTES;
 
     private static final String COMPUTE_SHADER = """
             #version 450
-            layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+            layout(local_size_x = 4, local_size_y = 1, local_size_z = 1) in;
+
+            struct Candidate {
+                uint firstIndex;
+                float centerX;
+                float centerY;
+                uint reserved;
+            };
 
             struct DrawCommand {
                 uint indexCount;
@@ -60,31 +74,56 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
                 uint firstInstance;
             };
 
-            layout(std430, set = 0, binding = 0) buffer Commands {
-                DrawCommand commands[];
-            };
+            layout(std430, set = 0, binding = 0) readonly buffer Candidates {
+                Candidate candidates[];
+            } scene;
 
-            layout(push_constant) uniform Params {
-                uint firstIndex;
-            } params;
+            layout(std430, set = 0, binding = 1) buffer Output {
+                DrawCommand commands[4];
+                uint visibleCount;
+            } outputData;
+
+            void clearCommand(uint slot) {
+                outputData.commands[slot].indexCount = 0u;
+                outputData.commands[slot].instanceCount = 0u;
+                outputData.commands[slot].firstIndex = 0u;
+                outputData.commands[slot].vertexOffset = 0;
+                outputData.commands[slot].firstInstance = 0u;
+            }
 
             void main() {
-                commands[0].indexCount = 3u;
-                commands[0].instanceCount = 1u;
-                commands[0].firstIndex = params.firstIndex;
-                commands[0].vertexOffset = 0;
-                commands[0].firstInstance = 0u;
+                uint id = gl_LocalInvocationID.x;
 
-                commands[1].indexCount = 3u;
-                commands[1].instanceCount = 1u;
-                commands[1].firstIndex = params.firstIndex + 3u;
-                commands[1].vertexOffset = 0;
-                commands[1].firstInstance = 0u;
+                if (id == 0u) {
+                    outputData.visibleCount = 0u;
+                    clearCommand(0u);
+                    clearCommand(1u);
+                    clearCommand(2u);
+                    clearCommand(3u);
+                }
+
+                memoryBarrierBuffer();
+                barrier();
+
+                Candidate candidate = scene.candidates[id];
+                bool visible = abs(candidate.centerX) <= 0.50
+                        && abs(candidate.centerY) <= 0.80;
+                if (!visible) {
+                    return;
+                }
+
+                uint slot = atomicAdd(outputData.visibleCount, 1u);
+                outputData.commands[slot].indexCount = 3u;
+                outputData.commands[slot].instanceCount = 1u;
+                outputData.commands[slot].firstIndex = candidate.firstIndex;
+                outputData.commands[slot].vertexOffset = 0;
+                outputData.commands[slot].firstInstance = 0u;
             }
             """;
 
     private final VulkanDevice device;
-    private final VulkanStorageIndirectBuffer commands;
+    private final VulkanInteropBuffer candidates;
+    private final VulkanInteropBuffer output;
     private final long descriptorSetLayout;
     private final long descriptorPool;
     private final long descriptorSet;
@@ -93,13 +132,22 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
     private final long pipeline;
     private boolean closed;
 
-    public VulkanComputeIndirectGenerator(GpuDevice publicDevice) {
+    public VulkanVisibilityCompactor(GpuDevice publicDevice) {
         GpuDeviceBackend backend = ((GpuDeviceAccessor) (Object) publicDevice).obsidian$getBackend();
         if (!(backend instanceof VulkanDevice vulkanDevice)) {
-            throw new IllegalStateException("Obsidian compute-indirect seam requires Minecraft's Vulkan backend");
+            throw new IllegalStateException("Obsidian visibility compaction requires Minecraft's Vulkan backend");
         }
         this.device = vulkanDevice;
-        this.commands = new VulkanStorageIndirectBuffer(device, BUFFER_BYTES);
+        this.candidates = new VulkanInteropBuffer(
+                device,
+                CANDIDATE_BUFFER_BYTES,
+                GpuBuffer.USAGE_COPY_DST,
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+        this.output = new VulkanInteropBuffer(
+                device,
+                OUTPUT_BYTES,
+                GpuBuffer.USAGE_INDIRECT_PARAMETERS | GpuBuffer.USAGE_COPY_SRC,
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
 
         long createdDescriptorSetLayout = 0L;
         long createdDescriptorPool = 0L;
@@ -107,11 +155,17 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
         long createdPipelineLayout = 0L;
         long createdShaderModule = 0L;
         long createdPipeline = 0L;
+
         try {
             try (MemoryStack stack = MemoryStack.stackPush()) {
-                VkDescriptorSetLayoutBinding.Buffer bindings = VkDescriptorSetLayoutBinding.calloc(1, stack);
+                VkDescriptorSetLayoutBinding.Buffer bindings = VkDescriptorSetLayoutBinding.calloc(2, stack);
                 bindings.get(0)
                         .binding(0)
+                        .descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                        .descriptorCount(1)
+                        .stageFlags(VK_SHADER_STAGE_COMPUTE_BIT);
+                bindings.get(1)
+                        .binding(1)
                         .descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
                         .descriptorCount(1)
                         .stageFlags(VK_SHADER_STAGE_COMPUTE_BIT);
@@ -125,7 +179,7 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
                 createdDescriptorSetLayout = pLayout.get(0);
 
                 VkDescriptorPoolSize.Buffer poolSizes = VkDescriptorPoolSize.calloc(1, stack);
-                poolSizes.get(0).type(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER).descriptorCount(1);
+                poolSizes.get(0).type(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER).descriptorCount(2);
                 VkDescriptorPoolCreateInfo poolInfo = VkDescriptorPoolCreateInfo.calloc(stack)
                         .sType$Default()
                         .maxSets(1)
@@ -144,30 +198,36 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
                         "vkAllocateDescriptorSets");
                 createdDescriptorSet = pSet.get(0);
 
-                VkDescriptorBufferInfo.Buffer bufferInfos = VkDescriptorBufferInfo.calloc(1, stack);
+                VkDescriptorBufferInfo.Buffer bufferInfos = VkDescriptorBufferInfo.calloc(2, stack);
                 bufferInfos.get(0)
-                        .buffer(commands.vkBuffer())
+                        .buffer(candidates.vkBuffer())
                         .offset(0L)
-                        .range(BUFFER_BYTES);
-                VkWriteDescriptorSet.Buffer writes = VkWriteDescriptorSet.calloc(1, stack);
+                        .range(CANDIDATE_BUFFER_BYTES);
+                bufferInfos.get(1)
+                        .buffer(output.vkBuffer())
+                        .offset(0L)
+                        .range(OUTPUT_BYTES);
+
+                VkWriteDescriptorSet.Buffer writes = VkWriteDescriptorSet.calloc(2, stack);
                 writes.get(0)
                         .sType$Default()
                         .dstSet(createdDescriptorSet)
                         .dstBinding(0)
                         .descriptorCount(1)
                         .descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
-                        .pBufferInfo(bufferInfos);
+                        .pBufferInfo(VkDescriptorBufferInfo.create(bufferInfos.get(0).address(), 1));
+                writes.get(1)
+                        .sType$Default()
+                        .dstSet(createdDescriptorSet)
+                        .dstBinding(1)
+                        .descriptorCount(1)
+                        .descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                        .pBufferInfo(VkDescriptorBufferInfo.create(bufferInfos.get(1).address(), 1));
                 vkUpdateDescriptorSets(device.vkDevice(), writes, null);
 
-                VkPushConstantRange.Buffer pushRanges = VkPushConstantRange.calloc(1, stack);
-                pushRanges.get(0)
-                        .stageFlags(VK_SHADER_STAGE_COMPUTE_BIT)
-                        .offset(0)
-                        .size(Integer.BYTES);
                 VkPipelineLayoutCreateInfo pipelineLayoutInfo = VkPipelineLayoutCreateInfo.calloc(stack)
                         .sType$Default()
-                        .pSetLayouts(stack.longs(createdDescriptorSetLayout))
-                        .pPushConstantRanges(pushRanges);
+                        .pSetLayouts(stack.longs(createdDescriptorSetLayout));
                 LongBuffer pPipelineLayout = stack.callocLong(1);
                 requireSuccess(vkCreatePipelineLayout(device.vkDevice(), pipelineLayoutInfo, null, pPipelineLayout),
                         "vkCreatePipelineLayout");
@@ -182,7 +242,6 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
                         .stage(VK_SHADER_STAGE_COMPUTE_BIT)
                         .module(createdShaderModule)
                         .pName(stack.UTF8("main"));
-
                 VkComputePipelineCreateInfo.Buffer pipelineInfos = VkComputePipelineCreateInfo.calloc(1, stack);
                 pipelineInfos.get(0)
                         .sType$Default()
@@ -205,7 +264,8 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
                     createdPipelineLayout,
                     createdDescriptorPool,
                     createdDescriptorSetLayout);
-            commands.close();
+            output.close();
+            candidates.close();
             throw e;
         }
 
@@ -217,70 +277,72 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
         pipeline = createdPipeline;
     }
 
-    /** Records one compute dispatch and an explicit compute-write -> indirect-read Sync2 barrier. */
-    public void dispatch(CommandEncoder publicEncoder, int firstIndex) {
+    /** Records upload-read ordering, one visibility dispatch and output visibility barriers. */
+    public void dispatch(CommandEncoder publicEncoder) {
         if (closed) {
-            throw new IllegalStateException("Compute indirect generator is closed");
+            throw new IllegalStateException("Visibility compactor is closed");
         }
         CommandEncoderBackend backend = ((CommandEncoderAccessor) (Object) publicEncoder).obsidian$getBackend();
         if (!(backend instanceof VulkanCommandEncoder encoder)) {
-            throw new IllegalStateException("Obsidian compute-indirect dispatch requires VulkanCommandEncoder");
+            throw new IllegalStateException("Obsidian visibility dispatch requires VulkanCommandEncoder");
         }
 
         VkCommandBuffer commandBuffer = encoder.allocateAndBeginTransientCommandBuffer();
-        boolean ended = false;
-        try {
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                vkCmdBindDescriptorSets(
-                        commandBuffer,
-                        VK_PIPELINE_BIND_POINT_COMPUTE,
-                        pipelineLayout,
-                        0,
-                        stack.longs(descriptorSet),
-                        null);
-                ByteBuffer push = stack.malloc(Integer.BYTES);
-                push.putInt(0, firstIndex);
-                vkCmdPushConstants(
-                        commandBuffer,
-                        pipelineLayout,
-                        VK_SHADER_STAGE_COMPUTE_BIT,
-                        0,
-                        push);
-            }
-            vkCmdDispatch(commandBuffer, 1, 1, 1);
 
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                VkMemoryBarrier2.Buffer barrier = VkMemoryBarrier2.calloc(1, stack);
-                barrier.get(0)
-                        .sType$Default()
-                        .srcStageMask(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT)
-                        .srcAccessMask(VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)
-                        .dstStageMask(VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT)
-                        .dstAccessMask(VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT);
-                VkDependencyInfo dependency = VkDependencyInfo.calloc(stack)
-                        .sType$Default()
-                        .pMemoryBarriers(barrier);
-                vkCmdPipelineBarrier2KHR(commandBuffer, dependency);
-            }
-
-            requireSuccess(vkEndCommandBuffer(commandBuffer), "vkEndCommandBuffer(compute)");
-            ended = true;
-            encoder.execute(commandBuffer);
-        } catch (RuntimeException e) {
-            if (!ended) {
-                // Transient command memory is reclaimed with Minecraft's command pool reset.
-            }
-            throw e;
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            VkMemoryBarrier2.Buffer uploadBarrier = VkMemoryBarrier2.calloc(1, stack);
+            uploadBarrier.get(0)
+                    .sType$Default()
+                    .srcStageMask(VK_PIPELINE_STAGE_2_TRANSFER_BIT)
+                    .srcAccessMask(VK_ACCESS_2_TRANSFER_WRITE_BIT)
+                    .dstStageMask(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT)
+                    .dstAccessMask(VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+            VkDependencyInfo uploadDependency = VkDependencyInfo.calloc(stack)
+                    .sType$Default()
+                    .pMemoryBarriers(uploadBarrier);
+            vkCmdPipelineBarrier2KHR(commandBuffer, uploadDependency);
         }
+
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            vkCmdBindDescriptorSets(
+                    commandBuffer,
+                    VK_PIPELINE_BIND_POINT_COMPUTE,
+                    pipelineLayout,
+                    0,
+                    stack.longs(descriptorSet),
+                    null);
+        }
+        vkCmdDispatch(commandBuffer, 1, 1, 1);
+
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            VkMemoryBarrier2.Buffer outputBarrier = VkMemoryBarrier2.calloc(1, stack);
+            outputBarrier.get(0)
+                    .sType$Default()
+                    .srcStageMask(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT)
+                    .srcAccessMask(VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)
+                    .dstStageMask(VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT)
+                    .dstAccessMask(VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_2_TRANSFER_READ_BIT);
+            VkDependencyInfo outputDependency = VkDependencyInfo.calloc(stack)
+                    .sType$Default()
+                    .pMemoryBarriers(outputBarrier);
+            vkCmdPipelineBarrier2KHR(commandBuffer, outputDependency);
+        }
+
+        requireSuccess(vkEndCommandBuffer(commandBuffer), "vkEndCommandBuffer(visibility)");
+        encoder.execute(commandBuffer);
+    }
+
+    public GpuBuffer candidateBuffer() {
+        return candidates;
     }
 
     public GpuBufferSlice indirectSlice() {
-        return commands.slice(0L, BUFFER_BYTES);
+        return output.slice(0L, INDIRECT_BYTES);
     }
 
-    public VulkanStorageIndirectBuffer buffer() {
-        return commands;
+    public GpuBufferSlice outputSlice() {
+        return output.slice(0L, OUTPUT_BYTES);
     }
 
     @Override
@@ -294,7 +356,8 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
         vkDestroyPipelineLayout(device.vkDevice(), pipelineLayout, null);
         vkDestroyDescriptorPool(device.vkDevice(), descriptorPool, null);
         vkDestroyDescriptorSetLayout(device.vkDevice(), descriptorSetLayout, null);
-        commands.close();
+        output.close();
+        candidates.close();
     }
 
     private long compileShaderModule(String source) {
@@ -308,7 +371,7 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
                     compiler,
                     source,
                     shaderc_compute_shader,
-                    "obsidian_compute_indirect.comp",
+                    "obsidian_visibility_compact.comp",
                     "main",
                     0L);
             if (result == 0L) {
@@ -317,11 +380,11 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
             int status = Shaderc.shaderc_result_get_compilation_status(result);
             if (status != shaderc_compilation_status_success) {
                 throw new IllegalStateException(
-                        "Compute shader compilation failed: " + Shaderc.shaderc_result_get_error_message(result));
+                        "Visibility compute shader compilation failed: " + Shaderc.shaderc_result_get_error_message(result));
             }
             ByteBuffer spirv = Shaderc.shaderc_result_get_bytes(result);
             if (spirv == null || !spirv.hasRemaining()) {
-                throw new IllegalStateException("Compute shader compilation produced no SPIR-V");
+                throw new IllegalStateException("Visibility compute shader produced no SPIR-V");
             }
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 VkShaderModuleCreateInfo info = VkShaderModuleCreateInfo.calloc(stack)
@@ -329,7 +392,7 @@ public final class VulkanComputeIndirectGenerator implements AutoCloseable {
                         .pCode(spirv);
                 LongBuffer pModule = stack.callocLong(1);
                 requireSuccess(vkCreateShaderModule(device.vkDevice(), info, null, pModule),
-                        "vkCreateShaderModule(compute)");
+                        "vkCreateShaderModule(visibility)");
                 return pModule.get(0);
             }
         } finally {

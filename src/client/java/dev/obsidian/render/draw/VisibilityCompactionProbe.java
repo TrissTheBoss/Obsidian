@@ -22,7 +22,7 @@ import dev.obsidian.render.graph.FrameGraphCommandStream;
 import dev.obsidian.render.graph.GpuTimestampProfiler;
 import dev.obsidian.render.memory.DeviceGeometryArena;
 import dev.obsidian.render.upload.StagingUploadArena;
-import dev.obsidian.render.vulkan.VulkanComputeIndirectGenerator;
+import dev.obsidian.render.vulkan.VulkanVisibilityCompactor;
 import org.joml.Vector4f;
 
 import java.nio.ByteBuffer;
@@ -31,36 +31,42 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
- * One-shot validation that GPU compute can generate native indexed-indirect
- * commands which a following public Blaze3D graphics pass consumes in the same
- * useful submission.
+ * One-shot dev9 oracle for GPU scene visibility and indirect compaction.
+ *
+ * <p>Four on-screen triangles are represented by GPU candidate records. Compute
+ * keeps only the two whose centers fall inside the validation frustum, compacts
+ * their commands to the front, writes count=2 and leaves two zero commands in
+ * the tail. Public Blaze3D draws all four command slots; zero-tail semantics
+ * keep the culled triangles invisible without widening the native graphics seam.</p>
  */
-public final class ComputeIndirectDrawProbe implements AutoCloseable {
-    private static final System.Logger LOG = System.getLogger("Obsidian/ComputeIndirectDrawProbe");
+public final class VisibilityCompactionProbe implements AutoCloseable {
+    private static final System.Logger LOG = System.getLogger("Obsidian/VisibilityCompactionProbe");
 
-    private static final Supplier<String> TARGET_LABEL = () -> "Obsidian Phase 1 compute indirect target";
-    private static final Supplier<String> READBACK_LABEL = () -> "Obsidian Phase 1 compute indirect readback";
-    private static final Supplier<String> PASS_LABEL = () -> "Obsidian Phase 1 compute indirect render pass";
+    private static final Supplier<String> TARGET_LABEL = () -> "Obsidian Phase 1 visibility target";
+    private static final Supplier<String> PIXEL_READBACK_LABEL = () -> "Obsidian Phase 1 visibility pixel readback";
+    private static final Supplier<String> OUTPUT_READBACK_LABEL = () -> "Obsidian Phase 1 compacted command readback";
+    private static final Supplier<String> PASS_LABEL = () -> "Obsidian Phase 1 visibility render pass";
     private static final Runnable NOOP_COMPLETION = () -> {};
 
     private static final int PASS_UPLOAD = 0;
-    private static final int PASS_COMPUTE = 1;
+    private static final int PASS_VISIBILITY = 1;
     private static final int PASS_INDIRECT_DRAW = 2;
     private static final int PASS_READBACK = 3;
 
-    private static final int TARGET_WIDTH = 16;
-    private static final int TARGET_HEIGHT = 16;
+    private static final int TARGET_WIDTH = 32;
+    private static final int TARGET_HEIGHT = 32;
     private static final int BYTES_PER_PIXEL = 4;
-    private static final int READBACK_BYTES = TARGET_WIDTH * TARGET_HEIGHT * BYTES_PER_PIXEL;
+    private static final int PIXEL_READBACK_BYTES = TARGET_WIDTH * TARGET_HEIGHT * BYTES_PER_PIXEL;
 
-    private static final int VERTEX_COUNT = 6;
-    private static final int INDEX_COUNT = 6;
-    private static final int INDIRECT_COMMAND_COUNT = VulkanComputeIndirectGenerator.COMMAND_COUNT;
-    private static final int TRIANGLE_COUNT = 2;
+    private static final int TRIANGLE_COUNT = VulkanVisibilityCompactor.CANDIDATE_COUNT;
+    private static final int VERTEX_COUNT = TRIANGLE_COUNT * 3;
+    private static final int INDEX_COUNT = TRIANGLE_COUNT * 3;
     private static final int VERTEX_BYTES = VERTEX_COUNT * 3 * Float.BYTES;
     private static final int INDEX_BYTES = INDEX_COUNT * Short.BYTES;
-    private static final int STAGING_PAYLOAD_BYTES = VERTEX_BYTES + INDEX_BYTES;
+    private static final int SCENE_BYTES = VulkanVisibilityCompactor.CANDIDATE_BUFFER_BYTES;
+    private static final int STAGING_PAYLOAD_BYTES = VERTEX_BYTES + INDEX_BYTES + SCENE_BYTES;
 
+    private static final float[] CENTERS_X = {-0.75f, -0.25f, 0.25f, 0.75f};
     private static final Vector4f CLEAR_COLOR = new Vector4f(0.0f, 0.0f, 0.0f, 1.0f);
 
     private static final String VERTEX_SHADER = """
@@ -86,7 +92,7 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
         if (type == ShaderType.FRAGMENT) {
             return FRAGMENT_SHADER;
         }
-        throw new IllegalArgumentException("Unsupported compute-indirect graphics shader type: " + type);
+        throw new IllegalArgumentException("Unsupported visibility graphics shader type: " + type);
     };
 
     public enum State {
@@ -105,10 +111,11 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
     private final RenderPipeline pipeline;
     private final long[] retirementHandles = new long[2];
 
-    private VulkanComputeIndirectGenerator generator;
+    private VulkanVisibilityCompactor compactor;
     private GpuTexture target;
     private GpuTextureView targetView;
-    private GpuBuffer readbackBuffer;
+    private GpuBuffer pixelReadback;
+    private GpuBuffer outputReadback;
     private GpuFence pendingArenaFence;
 
     private long vertexHandle = DeviceGeometryArena.INVALID_HANDLE;
@@ -122,38 +129,39 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
     private long verifiedFrame = -1L;
     private long computeDispatches;
     private long indirectCalls;
-    private long indirectCommandsExecuted;
-    private long triangles;
+    private long publicIndirectSlots;
+    private int visibleCount;
+    private int culledCount;
     private long retirementBackpressureEvents;
     private long retirementRegistrationFailures;
     private boolean pipelineValid;
     private boolean submitted;
 
-    public ComputeIndirectDrawProbe(GpuDevice device, StagingUploadArena staging, DeviceGeometryArena arena) {
+    public VisibilityCompactionProbe(GpuDevice device, StagingUploadArena staging, DeviceGeometryArena arena) {
         RenderSystem.assertOnRenderThread();
         this.device = device;
         this.arena = arena;
 
         if (!device.getDeviceInfo().features().drawIndirect()) {
-            throw new IllegalStateException("Dev8 requires indexed indirect drawing");
+            throw new IllegalStateException("Dev9 requires indexed indirect drawing");
         }
         if (!device.getDeviceInfo().features().multiDrawIndirect()) {
-            throw new IllegalStateException("Dev8 validation requires multi-draw indirect support");
+            throw new IllegalStateException("Dev9 validation requires multi-draw indirect support");
         }
 
-        graph.definePass(PASS_UPLOAD, "compute-indirect-upload", 0L);
-        graph.definePass(PASS_COMPUTE, "compute-indirect-generate", 1L << PASS_UPLOAD);
-        graph.definePass(PASS_INDIRECT_DRAW, "compute-indirect-draw", 1L << PASS_COMPUTE);
-        graph.definePass(PASS_READBACK, "compute-indirect-readback", 1L << PASS_INDIRECT_DRAW);
+        graph.definePass(PASS_UPLOAD, "visibility-scene-upload", 0L);
+        graph.definePass(PASS_VISIBILITY, "visibility-compact", 1L << PASS_UPLOAD);
+        graph.definePass(PASS_INDIRECT_DRAW, "visibility-indirect-draw", 1L << PASS_VISIBILITY);
+        graph.definePass(PASS_READBACK, "visibility-readback", 1L << PASS_INDIRECT_DRAW);
 
         profiler = new GpuTimestampProfiler(device, graph.passCount());
         stream = new FrameGraphCommandStream(device, staging, graph, profiler);
-        generator = new VulkanComputeIndirectGenerator(device);
+        compactor = new VulkanVisibilityCompactor(device);
 
         pipeline = RenderPipeline.builder()
-                .withLocation("obsidian_compute_indirect_draw")
-                .withVertexShader("obsidian_compute_indirect_draw")
-                .withFragmentShader("obsidian_compute_indirect_draw")
+                .withLocation("obsidian_visibility_compaction")
+                .withVertexShader("obsidian_visibility_compaction")
+                .withFragmentShader("obsidian_visibility_compaction")
                 .withCull(false)
                 .withColorTargetState(new ColorTargetState(
                         Optional.empty(),
@@ -166,9 +174,9 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
         CompiledRenderPipeline compiled = device.precompilePipeline(pipeline, SHADER_SOURCE);
         pipelineValid = compiled.isValid();
         if (!pipelineValid) {
-            generator.close();
-            generator = null;
-            throw new IllegalStateException("Obsidian compute-indirect graphics pipeline failed to compile");
+            compactor.close();
+            compactor = null;
+            throw new IllegalStateException("Obsidian visibility graphics pipeline failed to compile");
         }
     }
 
@@ -190,30 +198,31 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
 
             stream.beginPass(PASS_UPLOAD);
             if (!stream.stageCopy(vertexData(), vertexSlice)
-                    || !stream.stageCopy(indexData(), indexSlice)) {
-                throw new IllegalStateException("Dev8 geometry upload hit staging backpressure");
+                    || !stream.stageCopy(indexData(), indexSlice)
+                    || !stream.stageCopy(sceneData(firstIndex), compactor.candidateBuffer(), 0L)) {
+                throw new IllegalStateException("Dev9 geometry/scene upload hit staging backpressure");
             }
             stream.endPass(PASS_UPLOAD);
 
-            stream.beginPass(PASS_COMPUTE);
-            generator.dispatch(stream.backendInteropEncoder(), firstIndex);
+            stream.beginPass(PASS_VISIBILITY);
+            compactor.dispatch(stream.backendInteropEncoder());
             computeDispatches++;
-            stream.endPass(PASS_COMPUTE);
+            stream.endPass(PASS_VISIBILITY);
 
             stream.beginPass(PASS_INDIRECT_DRAW);
             try (RenderPass pass = stream.createRenderPass(PASS_LABEL, targetView, Optional.of(CLEAR_COLOR))) {
                 pass.setPipeline(pipeline);
                 pass.setVertexBuffer(0, vertexSlice);
                 pass.setIndexBuffer(indexSlice.buffer(), IndexType.SHORT);
-                pass.drawIndexedIndirect(generator.indirectSlice(), INDIRECT_COMMAND_COUNT);
+                pass.drawIndexedIndirect(compactor.indirectSlice(), VulkanVisibilityCompactor.CANDIDATE_COUNT);
                 indirectCalls++;
-                indirectCommandsExecuted += INDIRECT_COMMAND_COUNT;
-                triangles += TRIANGLE_COUNT;
+                publicIndirectSlots += VulkanVisibilityCompactor.CANDIDATE_COUNT;
             }
             stream.endPass(PASS_INDIRECT_DRAW);
 
             stream.beginPass(PASS_READBACK);
-            stream.copyTextureToBuffer(target, readbackBuffer, 0L, NOOP_COMPLETION, 0);
+            stream.copyTextureToBuffer(target, pixelReadback, 0L, NOOP_COMPLETION, 0);
+            stream.copy(compactor.outputSlice(), outputReadback.slice(0L, VulkanVisibilityCompactor.OUTPUT_BYTES));
             stream.endPass(PASS_READBACK);
 
             arenaFence = stream.createCompletionFence();
@@ -234,7 +243,7 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
             closeLocalResourcesIfSafe();
             state = State.FAILED;
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 1 compute-indirect submission failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 1 visibility-compaction submission failed; Minecraft will continue for diagnosis.", e);
             return;
         }
 
@@ -244,28 +253,30 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
         tryRegisterArenaRetirement();
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 1 compute-generated indirect draw submitted on frame {0}: graphPasses={1}, usefulSubmissions={2}, profilerOnlySubmissions=0, computeDispatches={3}, indirectCalls={4}, indirectCommands={5}, triangles={6}, nativeComputeSeam=true, nativeGraphicsSeam=false, pipelineValid={7}, vertexArenaOffset={8}, indexArenaOffset={9}, firstIndex={10}, vertexBytes={11}, indexBytes={12}, gpuGeneratedIndirectBytes={13}, stagingPayloadBytes={14}, arenaUsedBytes={15}.",
+                "Phase 1 visibility compaction submitted on frame {0}: graphPasses={1}, usefulSubmissions={2}, profilerOnlySubmissions=0, computeDispatches={3}, candidates={4}, expectedVisible={5}, indirectCalls={6}, publicIndirectSlots={7}, nativeComputeSeam=true, nativeGraphicsSeam=false, indirectCountConsumed=false, pipelineValid={8}, vertexArenaOffset={9}, indexArenaOffset={10}, firstIndex={11}, vertexBytes={12}, indexBytes={13}, sceneBytes={14}, gpuOutputBytes={15}, stagingPayloadBytes={16}, arenaUsedBytes={17}.",
                 frameSerial,
                 graph.passCount(),
                 stream.submissionCount(),
                 computeDispatches,
+                VulkanVisibilityCompactor.CANDIDATE_COUNT,
+                VulkanVisibilityCompactor.VISIBLE_COUNT_EXPECTED,
                 indirectCalls,
-                indirectCommandsExecuted,
-                triangles,
+                publicIndirectSlots,
                 pipelineValid,
                 vertexOffset,
                 indexOffset,
                 firstIndex,
                 VERTEX_BYTES,
                 INDEX_BYTES,
-                VulkanComputeIndirectGenerator.BUFFER_BYTES,
+                SCENE_BYTES,
+                VulkanVisibilityCompactor.OUTPUT_BYTES,
                 STAGING_PAYLOAD_BYTES,
                 arena.usedBytes());
     }
 
     public void poll(long frameSerial) {
         RenderSystem.assertOnRenderThread();
-        if (state != State.SUBMITTED || readbackBuffer == null) {
+        if (state != State.SUBMITTED || pixelReadback == null || outputReadback == null) {
             return;
         }
 
@@ -284,21 +295,22 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
 
         try {
             verifyPixels();
+            verifyCompactedOutput();
             verifiedFrame = frameSerial;
             state = State.VERIFIED;
             closeLocalResourcesIfSafe();
 
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 1 compute-generated indirect draw verified on frame {0} after {1} frame(s): executedMask={2}, uploadCpuNs={3}, computeCpuNs={4}, drawCpuNs={5}, readbackCpuNs={6}, uploadGpuNs={7}, computeGpuNs={8}, drawGpuNs={9}, readbackGpuNs={10}, totalGpuNs={11}, queryPolls={12}, unavailablePolls={13}, usefulSubmissions={14}, profilerOnlySubmissions=0, computeDispatches={15}, indirectCalls={16}, indirectCommands={17}, triangles={18}, nativeComputeSeam=true, nativeGraphicsSeam=false, leftRGBA=255/0/255/255, rightRGBA=255/0/255/255, cornerRGBA=0/0/0/255, pixelsVerified=3, arenaRetired={19}, arenaReclaimed={20}, arenaUsedBytes={21}, arenaFreeSpans={22}, arenaFragmentationPermille={23}.",
+                    "Phase 1 visibility compaction verified on frame {0} after {1} frame(s): executedMask={2}, uploadCpuNs={3}, visibilityCpuNs={4}, drawCpuNs={5}, readbackCpuNs={6}, uploadGpuNs={7}, visibilityGpuNs={8}, drawGpuNs={9}, readbackGpuNs={10}, totalGpuNs={11}, queryPolls={12}, unavailablePolls={13}, usefulSubmissions={14}, profilerOnlySubmissions=0, computeDispatches={15}, candidates={16}, visibleCount={17}, culledCount={18}, indirectCalls={19}, publicIndirectSlots={20}, nativeComputeSeam=true, nativeGraphicsSeam=false, indirectCountConsumed=false, visibleLeftRGBA=255/0/255/255, visibleRightRGBA=255/0/255/255, culledLeftRGBA=0/0/0/255, culledRightRGBA=0/0/0/255, cornerRGBA=0/0/0/255, pixelsVerified=5, compactedCommandsVerified=4, arenaRetired={21}, arenaReclaimed={22}, arenaUsedBytes={23}, arenaFreeSpans={24}, arenaFragmentationPermille={25}.",
                     verifiedFrame,
                     verifiedFrame - submittedFrame,
                     Long.toUnsignedString(graph.executedMask()),
                     graph.lastCpuNs(PASS_UPLOAD),
-                    graph.lastCpuNs(PASS_COMPUTE),
+                    graph.lastCpuNs(PASS_VISIBILITY),
                     graph.lastCpuNs(PASS_INDIRECT_DRAW),
                     graph.lastCpuNs(PASS_READBACK),
                     profiler.passGpuNs(PASS_UPLOAD),
-                    profiler.passGpuNs(PASS_COMPUTE),
+                    profiler.passGpuNs(PASS_VISIBILITY),
                     profiler.passGpuNs(PASS_INDIRECT_DRAW),
                     profiler.passGpuNs(PASS_READBACK),
                     profiler.totalGpuNs(),
@@ -306,9 +318,11 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
                     profiler.unavailablePolls(),
                     stream.submissionCount(),
                     computeDispatches,
+                    VulkanVisibilityCompactor.CANDIDATE_COUNT,
+                    visibleCount,
+                    culledCount,
                     indirectCalls,
-                    indirectCommandsExecuted,
-                    triangles,
+                    publicIndirectSlots,
                     arena.retiredAllocations(),
                     arena.reclaimedAllocations(),
                     arena.usedBytes(),
@@ -318,7 +332,7 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
             state = State.FAILED;
             closeLocalResourcesIfSafe();
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 1 compute-indirect completed but pixel/timestamp verification failed.", e);
+                    "Phase 1 visibility compaction completed but verification failed.", e);
         }
     }
 
@@ -346,12 +360,16 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
         return indirectCalls;
     }
 
-    public long indirectCommandsExecuted() {
-        return indirectCommandsExecuted;
+    public long publicIndirectSlots() {
+        return publicIndirectSlots;
     }
 
-    public long triangles() {
-        return triangles;
+    public int visibleCount() {
+        return visibleCount;
+    }
+
+    public int culledCount() {
+        return culledCount;
     }
 
     public boolean pipelineValid() {
@@ -375,7 +393,7 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
 
         if (submitted && !stream.isSubmissionComplete()) {
             LOG.log(System.Logger.Level.WARNING,
-                    "Dev8 compute/indirect resources are still referenced by GPU work; abandoning raw Vulkan validation resources rather than destroying them in flight.");
+                    "Dev9 visibility resources are still referenced by GPU work; abandoning validation resources for Minecraft device shutdown rather than destroying them in flight.");
             abandonLocalResources();
             if (pendingArenaFence != null) {
                 pendingArenaFence.close();
@@ -416,7 +434,7 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
         } catch (RuntimeException e) {
             retirementRegistrationFailures++;
             LOG.log(System.Logger.Level.ERROR,
-                    "Arena retirement registration failed after the useful dev8 submission; keeping the timeline handle and allocations alive for safe retry/diagnosis.", e);
+                    "Arena retirement registration failed after the useful dev9 submission; keeping the timeline handle and allocations alive for safe retry/diagnosis.", e);
             return false;
         }
     }
@@ -428,13 +446,13 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
 
         vertexHandle = arena.allocate(VERTEX_BYTES, 16);
         if (vertexHandle == DeviceGeometryArena.INVALID_HANDLE) {
-            throw new IllegalStateException("Unable to allocate dev8 vertex span from device geometry arena");
+            throw new IllegalStateException("Unable to allocate dev9 vertex span from device geometry arena");
         }
         indexHandle = arena.allocate(INDEX_BYTES, 4);
         if (indexHandle == DeviceGeometryArena.INVALID_HANDLE) {
             arena.cancelUnsubmitted(vertexHandle);
             vertexHandle = DeviceGeometryArena.INVALID_HANDLE;
-            throw new IllegalStateException("Unable to allocate dev8 index span from device geometry arena");
+            throw new IllegalStateException("Unable to allocate dev9 index span from device geometry arena");
         }
 
         GpuBufferSlice vertexSlice = arena.slice(vertexHandle);
@@ -442,7 +460,7 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
         vertexOffset = vertexSlice.offset();
         indexOffset = indexSlice.offset();
         if ((indexOffset & 1L) != 0L || indexOffset / Short.BYTES > Integer.MAX_VALUE) {
-            throw new IllegalStateException("Dev8 index arena offset cannot be represented as firstIndex");
+            throw new IllegalStateException("Dev9 index arena offset cannot be represented as firstIndex");
         }
         firstIndex = (int) (indexOffset / Short.BYTES);
 
@@ -455,40 +473,104 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
                 1,
                 1);
         targetView = device.createTextureView(target);
-        readbackBuffer = device.createBuffer(
-                READBACK_LABEL,
+        pixelReadback = device.createBuffer(
+                PIXEL_READBACK_LABEL,
                 GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST,
-                READBACK_BYTES);
+                PIXEL_READBACK_BYTES);
+        outputReadback = device.createBuffer(
+                OUTPUT_READBACK_LABEL,
+                GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST,
+                VulkanVisibilityCompactor.OUTPUT_BYTES);
     }
 
     private void verifyPixels() {
-        try (GpuBufferSlice.MappedView mapped = readbackBuffer.map(true, false)) {
+        try (GpuBufferSlice.MappedView mapped = pixelReadback.map(true, false)) {
             ByteBuffer data = mapped.data();
-            requirePixel(data, 4, 8, 255, 0, 255, 255, "left");
-            requirePixel(data, 11, 8, 255, 0, 255, 255, "right");
+            requirePixel(data, 12, 16, 255, 0, 255, 255, "visible-left");
+            requirePixel(data, 20, 16, 255, 0, 255, 255, "visible-right");
+            requirePixel(data, 4, 16, 0, 0, 0, 255, "culled-left");
+            requirePixel(data, 28, 16, 0, 0, 0, 255, "culled-right");
             requirePixel(data, 0, 0, 0, 0, 0, 255, "corner");
+        }
+    }
+
+    private void verifyCompactedOutput() {
+        try (GpuBufferSlice.MappedView mapped = outputReadback.map(true, false)) {
+            ByteBuffer data = mapped.data().order(ByteOrder.nativeOrder());
+            visibleCount = data.getInt(VulkanVisibilityCompactor.COUNT_OFFSET);
+            culledCount = VulkanVisibilityCompactor.CANDIDATE_COUNT - visibleCount;
+            if (visibleCount != VulkanVisibilityCompactor.VISIBLE_COUNT_EXPECTED) {
+                throw new IllegalStateException(
+                        "Visibility count mismatch: expected=" + VulkanVisibilityCompactor.VISIBLE_COUNT_EXPECTED
+                                + ", actual=" + visibleCount);
+            }
+
+            int expectedA = firstIndex + 3;
+            int expectedB = firstIndex + 6;
+            boolean seenA = false;
+            boolean seenB = false;
+
+            for (int slot = 0; slot < VulkanVisibilityCompactor.CANDIDATE_COUNT; slot++) {
+                int base = slot * VulkanVisibilityCompactor.COMMAND_BYTES;
+                int indexCount = data.getInt(base);
+                int instanceCount = data.getInt(base + 4);
+                int commandFirstIndex = data.getInt(base + 8);
+                int vertexOffsetValue = data.getInt(base + 12);
+                int firstInstance = data.getInt(base + 16);
+
+                if (slot < visibleCount) {
+                    if (indexCount != 3 || instanceCount != 1 || vertexOffsetValue != 0 || firstInstance != 0) {
+                        throw new IllegalStateException("Malformed compacted command in slot " + slot);
+                    }
+                    if (commandFirstIndex == expectedA && !seenA) {
+                        seenA = true;
+                    } else if (commandFirstIndex == expectedB && !seenB) {
+                        seenB = true;
+                    } else {
+                        throw new IllegalStateException(
+                                "Unexpected/duplicate compacted firstIndex " + commandFirstIndex + " in slot " + slot);
+                    }
+                } else if (indexCount != 0
+                        || instanceCount != 0
+                        || commandFirstIndex != 0
+                        || vertexOffsetValue != 0
+                        || firstInstance != 0) {
+                    throw new IllegalStateException("Unused indirect tail slot " + slot + " was not fully zeroed");
+                }
+            }
+
+            if (!seenA || !seenB) {
+                throw new IllegalStateException("Compacted command set did not contain both expected visible candidates");
+            }
         }
     }
 
     private static ByteBuffer vertexData() {
         ByteBuffer data = ByteBuffer.allocateDirect(VERTEX_BYTES).order(ByteOrder.nativeOrder());
-        putVertex(data, -0.95f, -0.75f, 0.0f);
-        putVertex(data, -0.05f, -0.75f, 0.0f);
-        putVertex(data, -0.50f, 0.75f, 0.0f);
-        putVertex(data, 0.05f, -0.75f, 0.0f);
-        putVertex(data, 0.95f, -0.75f, 0.0f);
-        putVertex(data, 0.50f, 0.75f, 0.0f);
+        for (float centerX : CENTERS_X) {
+            putVertex(data, centerX - 0.16f, -0.30f, 0.0f);
+            putVertex(data, centerX + 0.16f, -0.30f, 0.0f);
+            putVertex(data, centerX, 0.30f, 0.0f);
+        }
         return data.flip();
     }
 
     private static ByteBuffer indexData() {
         ByteBuffer data = ByteBuffer.allocateDirect(INDEX_BYTES).order(ByteOrder.nativeOrder());
-        data.putShort((short) 0);
-        data.putShort((short) 1);
-        data.putShort((short) 2);
-        data.putShort((short) 3);
-        data.putShort((short) 4);
-        data.putShort((short) 5);
+        for (short i = 0; i < INDEX_COUNT; i++) {
+            data.putShort(i);
+        }
+        return data.flip();
+    }
+
+    private static ByteBuffer sceneData(int baseFirstIndex) {
+        ByteBuffer data = ByteBuffer.allocateDirect(SCENE_BYTES).order(ByteOrder.nativeOrder());
+        for (int i = 0; i < VulkanVisibilityCompactor.CANDIDATE_COUNT; i++) {
+            data.putInt(baseFirstIndex + i * 3);
+            data.putFloat(CENTERS_X[i]);
+            data.putFloat(0.0f);
+            data.putInt(0);
+        }
         return data.flip();
     }
 
@@ -514,7 +596,7 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
         int a = data.get(offset + 3) & 0xFF;
         if (r != expectedR || g != expectedG || b != expectedB || a != expectedA) {
             throw new IllegalStateException(
-                    "Compute indirect " + label + " pixel mismatch at (" + x + "," + y + "): expected="
+                    "Visibility " + label + " pixel mismatch at (" + x + "," + y + "): expected="
                             + expectedR + "/" + expectedG + "/" + expectedB + "/" + expectedA
                             + ", actual=" + r + "/" + g + "/" + b + "/" + a);
         }
@@ -525,14 +607,14 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
             try {
                 arena.cancelUnsubmitted(vertexHandle);
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "Failed to cancel unsubmitted dev8 vertex allocation.", e);
+                LOG.log(System.Logger.Level.WARNING, "Failed to cancel unsubmitted dev9 vertex allocation.", e);
             }
         }
         if (indexHandle != DeviceGeometryArena.INVALID_HANDLE && arena.isLive(indexHandle)) {
             try {
                 arena.cancelUnsubmitted(indexHandle);
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "Failed to cancel unsubmitted dev8 index allocation.", e);
+                LOG.log(System.Logger.Level.WARNING, "Failed to cancel unsubmitted dev9 index allocation.", e);
             }
         }
         vertexHandle = DeviceGeometryArena.INVALID_HANDLE;
@@ -544,7 +626,7 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
             try {
                 targetView.close();
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "Failed to close dev8 target view.", e);
+                LOG.log(System.Logger.Level.WARNING, "Failed to close dev9 target view.", e);
             }
             targetView = null;
         }
@@ -552,32 +634,41 @@ public final class ComputeIndirectDrawProbe implements AutoCloseable {
             try {
                 target.close();
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "Failed to close dev8 target texture.", e);
+                LOG.log(System.Logger.Level.WARNING, "Failed to close dev9 target texture.", e);
             }
             target = null;
         }
-        if (readbackBuffer != null) {
+        if (pixelReadback != null) {
             try {
-                readbackBuffer.close();
+                pixelReadback.close();
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "Failed to close dev8 readback buffer.", e);
+                LOG.log(System.Logger.Level.WARNING, "Failed to close dev9 pixel readback.", e);
             }
-            readbackBuffer = null;
+            pixelReadback = null;
         }
-        if (generator != null) {
+        if (outputReadback != null) {
             try {
-                generator.close();
+                outputReadback.close();
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "Failed to close dev8 compute generator.", e);
+                LOG.log(System.Logger.Level.WARNING, "Failed to close dev9 output readback.", e);
             }
-            generator = null;
+            outputReadback = null;
+        }
+        if (compactor != null) {
+            try {
+                compactor.close();
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "Failed to close dev9 visibility compactor.", e);
+            }
+            compactor = null;
         }
     }
 
     private void abandonLocalResources() {
         targetView = null;
         target = null;
-        readbackBuffer = null;
-        generator = null;
+        pixelReadback = null;
+        outputReadback = null;
+        compactor = null;
     }
 }

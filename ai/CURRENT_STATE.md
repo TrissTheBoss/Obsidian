@@ -7,11 +7,11 @@ Last updated: 2026-08-20
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
 - Current public release: `v0.0.2-phase0`
-- Current merged development baseline: Phase 1 dev7, merge commit `fa0379887a945e2bf2adc722270a064915477fce`
-- Active development branch: `phase1/compute-indirect`
-- Active draft PR: #10, `Phase 1: compute-generated indexed-indirect commands`
-- Current development version: `0.1.0-phase1-dev8`
-- Dev8 status: **runtime validated on the reference RX 6800 XT; exact runtime-evidence head `f761ee70f7e8c5e5ce4ccf661357058d71cd6266` pending final CI + merge with `[no-release]`**
+- Current merged development baseline: Phase 1 dev8, merge commit `68e9710ff964a44165122c5d85c0d559e4698b11`
+- Active development branch: `phase1/visibility-compaction`
+- Active PR: #11, `Phase 1: GPU visibility and indirect compaction`
+- Current development version: `0.1.0-phase1-dev9`
+- Dev9 status: **runtime validated on the reference RX 6800 XT; final runtime-evidence CI + merge pending**
 
 ## Reference runtime
 
@@ -26,105 +26,84 @@ Last updated: 2026-08-20
 - 16 GB DDR4-2666
 - Vulkan driver observed: `1.4.315 AMD proprietary driver 26.7.1 (AMD proprietary shader compiler)`
 
-## Completed milestones
+## Phase 1 status
 
-Phase 0 and Phase 1 dev1-dev7 are runtime validated and merged with development `[no-release]` semantics.
+Phase 0 and Phase 1 dev1-dev8 are runtime validated and merged with `[no-release]` development semantics.
 
-### Phase 1 dev7 - VALIDATED / merged PR #9
+Phase 1 dev9 is now also runtime validated and is the intended Phase 1 closing milestone.
 
-Runtime proved public Blaze3D true indexed-indirect drawing from shared device-arena geometry, including two independent commands/triangles, completion-gated arena reclamation and deterministic readback.
+### Dev9 runtime result - SUCCESS
 
-Runtime evidence: `ai/attempts/A-0043-dev7-runtime-success.md`.
-Merge commit: `fa0379887a945e2bf2adc722270a064915477fce`.
+Exact tested build:
 
-## Phase 1 dev8 - RUNTIME VALIDATED / pending merge through PR #10
+- version `0.1.0-phase1-dev9`;
+- packaged/final branch head before runtime evidence `185bffe2e0b98459adb4ca726b16f240949b567b`;
+- main JAR SHA-256 `c133229502f4969aa1f894aa09c404d20c06d833ceb11ba26312cf3e6f6ce6de`.
 
-Goal: prove GPU compute can generate indexed-indirect command data that a following graphics pass consumes, while retaining Minecraft ownership of device, graphics queue/submission and presentation.
+Runtime proved:
 
-### Exact Minecraft 26.2 capability finding
-
-Public Blaze3D has no compute/storage-buffer surface:
-
-- no ComputePass;
-- no ComputePipeline / CompiledComputePipeline;
-- ShaderType exposes only VERTEX and FRAGMENT;
-- public GpuBuffer has no STORAGE_BUFFER usage;
-- public CommandEncoder has no dispatch method.
-
-The Vulkan backend exposes a narrow interop surface sufficient to fill only that gap:
-
-- `VulkanDevice.vkDevice()` and `vma()`;
-- `VulkanCommandEncoder.allocateAndBeginTransientCommandBuffer()` and `execute(...)`;
-- public `VulkanGpuBuffer` can wrap an Obsidian-created storage+indirect VkBuffer and still be consumed by public `RenderPass.drawIndexedIndirect`.
-
-Evidence: `ai/attempts/A-0044-dev8-compute-api-inspection.md`.
-
-### Dev8 implementation and compile result
-
-- Mixins expose only the existing `GpuDeviceBackend` and `CommandEncoderBackend` objects for the isolated interop layer;
-- `VulkanStorageIndirectBuffer`: device-preferred VMA buffer with native STORAGE_BUFFER | INDIRECT_BUFFER usages, non-mapped;
-- `VulkanComputeIndirectGenerator`: shaderc-compiled compute shader, one storage descriptor, one 4-byte `firstIndex` push constant, one dispatch;
-- compute writes exactly two native 20-byte indexed-indirect commands;
-- explicit Sync2 barrier: COMPUTE_SHADER / SHADER_STORAGE_WRITE -> DRAW_INDIRECT / INDIRECT_COMMAND_READ;
-- compute command buffer is inserted into Minecraft's existing `VulkanCommandEncoder` submission;
-- graphics remains public Blaze3D `RenderPass.drawIndexedIndirect`;
-- graph has four passes: geometry upload -> compute indirect generation -> indirect draw -> readback;
-- CPU staging payload is only 84 bytes (72 vertex + 12 index); indirect command bytes are generated entirely on GPU;
-- expected staging high-water is 92 bytes from `[0,72)` + `[80,92)` aligned reservations.
-
-First compile attempt found one exact LWJGL handle-type mismatch (`vkAllocateDescriptorSets` requires `LongBuffer`, not `PointerBuffer`); corrected implementation then compiled successfully. Evidence: `ai/attempts/A-0045-dev8-compute-indirect-implementation.md`.
-
-Final package evidence before runtime: `ai/attempts/A-0046-dev8-final-package-verification.md`.
-
-### Real RX 6800 XT runtime result - SUCCESS
-
-- correct `0.1.0-phase1-dev8` loaded on Vulkan;
-- `VK_KHR_synchronization2` available;
-- `indirect=true`, `multiDrawIndirect=true`, `persistentMapping=true`;
+- Vulkan on RX 6800 XT with Synchronization2 and indirect/multi-draw support;
 - graphPasses=4, executedMask=15;
 - usefulSubmissions=1, profilerOnlySubmissions=0;
 - computeDispatches=1;
-- indirectCalls=1, indirectCommands=2, triangles=2;
-- nativeComputeSeam=true, nativeGraphicsSeam=false;
-- pipelineValid=true;
-- GPU generated 40 bytes of native indexed-indirect commands;
-- CPU staging submitted/reclaimed=84/84 bytes, high-water=92, backpressure=0;
-- left and right triangle pixels both verified magenta, clear corner verified black, pixelsVerified=3;
-- arena allocations=2, high-water=84, retired/reclaimed=2/2, used=0 after completion;
-- freeSpans=1, largestFree=524288, fragmentation=0, no pending arena retirements;
-- all four GPU timestamp ranges resolved nonblockingly;
+- 4 GPU scene candidates, visibleCount=2, culledCount=2;
+- one public fixed-count indexed-indirect call with 4 slots;
+- GPU compacted the two visible commands to the front and zeroed both unused tail commands;
+- `compactedCommandsVerified=4`;
+- visible-left/right pixels magenta, culled-left/right + corner black, `pixelsVerified=5`;
+- `nativeComputeSeam=true`, `nativeGraphicsSeam=false`, `indirectCountConsumed=false`;
+- staging submitted/reclaimed=232/232 bytes, high-water=240, no backpressure;
+- arena high-water=168, allocations=2, retired/reclaimed=2/2, used=0, fully coalesced;
 - world entry succeeded;
-- shutdown after 1810 frames had no pending work;
+- shutdown after 1913 frames had no pending GPU work;
 - process exited with code 0.
 
-Runtime evidence: `ai/attempts/A-0047-dev8-runtime-success.md`.
+Runtime evidence: `ai/attempts/A-0052-dev9-runtime-success.md`.
 
-## Proven architecture boundary
+## Proven Phase 1 architecture
 
-`Minecraft Vulkan device/queue/presentation -> FrameCoordinator -> bounded staging -> generation-safe device geometry arena -> FixedFrameGraph -> one Minecraft-owned submission -> [narrow native Vulkan compute/storage seam] -> explicit compute-to-indirect Sync2 barrier -> public Blaze3D indexed-indirect graphics -> deterministic readback -> completion-gated reclamation`
+`Minecraft Vulkan device/queue/presentation -> FrameCoordinator -> bounded persistent staging -> generation-safe device geometry arena -> fixed frame graph -> one Minecraft-owned useful submission -> narrow native Vulkan compute/storage seam -> GPU scene visibility -> atomic indirect-command compaction + GPU visible count -> explicit Sync2 hazards -> public Blaze3D indexed-indirect graphics -> deterministic readback -> completion-gated reclamation`
 
-Native Vulkan access is justified only for the capability public Blaze3D 26.2 cannot express. Obsidian still does not create a second device, queue, swapchain or native graphics renderer.
+The Phase 1 infrastructure required before real terrain is now proven on the reference hardware.
 
-## Terrain meshing roadmap
+## Phase 2 direction - first real Minecraft section
 
-Greedy meshing remains required under D-0024. Research: `ai/attempts/A-0038-greedy-meshing-roadmap-research.md`.
+Phase 2 should begin only after PR #11 is final-CI gated and merged.
 
-- **Phase 2:** one real section correctly; immutable snapshot + neighbor halo + simple reference mesher/differential oracle.
-- **Phase 3:** production worker-local binary/bitmask greedy meshing with reusable scratch and render-correct merge keys covering material/layer/tint/light/AO/UV/special state.
-- **Phase 4+:** GPU visibility/compaction consumes those reduced section meshes and generates/compacts indirect work.
+The first Phase 2 milestone is a correctness-first real-section path:
 
-Block ID alone is never a valid greedy merge key. Keep the simple reference mesher after the optimized mesher lands so greedy output can be differential-tested and fuzzed.
+1. identify and capture one real loaded Minecraft section on the client/render thread;
+2. copy it into an immutable compact section snapshot;
+3. include a one-block neighbor halo/padding needed for face visibility and later AO/light correctness without worker-thread world reads;
+4. build a deliberately simple reference mesh from the snapshot;
+5. initially constrain supported block/render cases if needed so the output can be proven correct rather than pretending broad compatibility;
+6. upload the mesh through the validated staging + `DeviceGeometryArena` path;
+7. create a GPU scene record for that section and render it through the validated visibility/indirect path;
+8. preserve vanilla terrain during the first milestone as the comparison/reference path; do not globally replace terrain until the Obsidian section output is validated;
+9. instrument snapshot time, mesh time, input block count, exposed-face count, vertex/index bytes, staging latency and GPU allocation bytes.
+
+The simple Phase 2 mesher is a permanent differential oracle, not throwaway code.
+
+## Greedy meshing roadmap
+
+D-0024 remains active.
+
+- **Phase 2:** immutable real-section snapshot + halo + simple reference mesher/differential oracle.
+- **Phase 3:** production worker-local binary/bitmask greedy mesher with reusable scratch and render-correct merge keys covering material/sprite, render layer, tint, light, AO corners/diagonal, UV behavior and special/fluid state.
+- **Phase 4+:** scale the dev9 GPU visibility/compaction architecture over the reduced production meshes; revisit native indirect-count consumption only if profiling justifies it.
+
+Research: `ai/attempts/A-0038-greedy-meshing-roadmap-research.md`.
 
 ## Immediate next action
 
-1. Final-CI the exact dev8 runtime-evidence head of PR #10.
-2. Promote and squash-merge PR #10 with `[no-release]`.
-3. Start Phase 1 dev9 from the resulting `main` merge commit.
-4. Establish the GPU visibility/compaction bridge before real terrain: GPU scene/candidate records -> compute visibility decision -> compacted indexed-indirect records -> graphics consumption -> deterministic offscreen verification.
-5. Inspect exact Vulkan 1.3 / Minecraft backend support for `vkCmdDrawIndexedIndirectCount` and draw-count storage. Prefer a GPU-produced draw count if this can be integrated without taking over normal graphics ownership; otherwise validate fixed-count compaction first and record the exact limitation.
-6. Preserve one useful submission, zero profiler-only submissions, explicit synchronization and completion-gated reclamation.
-7. Terrain replacement remains inactive until the visibility/compaction infrastructure is runtime validated.
+1. Update PR #11 to record runtime SUCCESS.
+2. Run final CI on the exact runtime-evidence head.
+3. Promote and squash-merge PR #11 with `[no-release]`.
+4. Mark Phase 1 complete on `main`.
+5. Create Phase 2 branch from the exact dev9 merge commit.
+6. Inspect Minecraft 26.2 client-world/chunk-section/block-state/light/render-model APIs needed for immutable snapshot extraction and a narrow reference mesher.
+7. Implement the first Phase 2 snapshot/reference-mesh milestone; keep vanilla terrain active until real-section correctness is proven.
 
 ## Relevant durable decisions
 
-D-0014 through D-0026 remain active. D-0024 keeps binary/bitmask greedy meshing as the Phase 3 production CPU mesher target; D-0025/D-0026 constrain the native compute seam and synchronization requirements.
+D-0014 through D-0027 remain active. D-0024 governs the production greedy mesher; D-0025/D-0026 constrain native compute interop and synchronization; D-0027 preserves public fixed-count graphics as the baseline GPU visibility path.

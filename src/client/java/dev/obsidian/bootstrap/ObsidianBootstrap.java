@@ -89,7 +89,7 @@ public final class ObsidianBootstrap {
         }
 
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 1 compute-generated indexed-indirect foundation armed. Native Vulkan is used only for the missing compute/storage-buffer seam; graphics and presentation remain Minecraft-owned. Terrain replacement is still intentionally inactive.");
+                "Obsidian Phase 1 GPU visibility/indirect-compaction foundation armed. Native Vulkan remains compute/storage-only; graphics uses public Blaze3D fixed-count indirect drawing with GPU-zeroed tail commands. Terrain replacement is still intentionally inactive.");
     }
 
     public static void onFrameStart() {
