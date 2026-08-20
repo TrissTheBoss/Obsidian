@@ -12,11 +12,12 @@ Last updated: 2026-08-21
 - Phase 1 closing merge: `61df7b8e2abc09ce387e09c9e4d6811a9ef6c40f`
 - Phase 2 P2.1: **COMPLETE / runtime validated and merged**
 - P2.1 closing merge: `a714e19ce871bf73136d52f85a1780109aa851dd`
-- Active branch: `phase2/drawable-real-section`
-- Active PR: #14, `Phase 2 dev2: first drawable real section`
-- Current version: `0.2.0-phase2-dev2`
-- Active roadmap item: **P2.2 - first drawable real section**
-- P2.2 status: **RUNTIME + HUMAN VISUAL VALIDATED on the reference RX 6800 XT; final exact-head CI and merge pending**
+- Phase 2 P2.2: **COMPLETE / runtime + human visual validated and merged**
+- P2.2 closing merge: `f9c64267c5becb3bd80897efdb09ed65a6ce8697`
+- Last validated development version: `0.2.0-phase2-dev2`
+- Current product phase: **Phase 2 - real-section correctness and renderer semantics**
+- Next planned milestone: **P2.3 - correct textures/material identity**
+- No P2.3 implementation branch/version has been started at this status-sync point.
 
 ## Continuity model
 
@@ -76,77 +77,51 @@ P2.1 permanently established:
 
 `ReferenceFaceMesh` is permanent and must remain independent of the future optimized/greedy mesher.
 
-## P2.2 / dev2 implementation truth
+## P2.2 closing truth - COMPLETE
 
-Planning/API/package evidence:
+Runtime evidence: `ai/attempts/A-0066-phase2-dev2-runtime-success.md`.
 
-- `ai/attempts/A-0059-phase2-dev2-drawable-section-plan.md`
-- `ai/attempts/A-0060-phase2-dev2-render-api-inspection.md`
-- `ai/attempts/A-0061-phase2-dev2-implementation-and-package.md`
-- `ai/attempts/A-0062-phase2-dev2-runtime-inconclusive-visual.md`
-- `ai/attempts/A-0063-phase2-dev2-visual-window-fix.md`
-- `ai/attempts/A-0064-roadmap-canonical-restoration.md`
-- `ai/attempts/A-0066-phase2-dev2-runtime-success.md`
+Merge: PR #14 -> `f9c64267c5becb3bd80897efdb09ed65a6ce8697`.
 
-P2.2 adds a drawable representation without replacing the oracle:
+P2.2 established the first real section-derived drawable geometry path while retaining the P2.1 oracle:
 
-- `DrawableSectionMesh` consumes only `SectionSnapshot` + `ReferenceFaceMesh`;
-- one reference face -> one drawable quad;
-- 4 vertices + 6 indices per face;
-- section-local positions;
-- 32-bit indices;
-- orientation/debug RGBA colors only;
-- duplicate drawable builds must be deterministic;
-- exact coverage/state/index validation remains explicit.
+- deterministic `DrawableSectionMesh` from `SectionSnapshot` + `ReferenceFaceMesh` only;
+- one reference face -> one drawable quad / 4 vertices / 6 indices;
+- section-local positions and 32-bit indices;
+- exact Minecraft 26.2 world-render hook and camera-relative transform;
+- public Blaze3D live-world indexed-indirect graphics;
+- `nativeGraphicsSeam=false`;
+- live main color/depth target with reversed-depth comparison semantics;
+- bounded validation staging/device-arena ownership;
+- completion-gated geometry/indirect retirement;
+- no post-snapshot world reads during mesh construction;
+- no profiler-only submissions.
 
-Live draw path:
+The reference RX 6800 XT validation completed all six sustained comparison passes. The tester explicitly reported the orientation-colored Obsidian geometry was **perfectly aligned** with the corresponding vanilla terrain.
 
-- hook: immediately after vanilla `LevelRenderer.render(...)` inside `GameRenderer.renderLevel`, before HUD projection/depth reset;
-- transform: `viewRotation * translate(sectionOrigin - cameraPosition)`;
-- public Blaze3D graphics only (`nativeGraphicsSeam=false`);
-- Minecraft `core/position_color` shader contract;
-- live main color + depth target;
-- reversed-depth comparison semantics;
-- indexed-indirect drawing with `IndexType.INT`;
-- vanilla terrain remains active as visual oracle;
-- arena/indirect resources retire only behind real GPU completion.
+Final logged shutdown invariants included:
 
-Validation-only capacities remain bounded at 4 MiB staging + 4 MiB device arena. They are not production memory-budget decisions.
-
-## P2.2 runtime result - SUCCESS
-
-Evidence: `ai/attempts/A-0066-phase2-dev2-runtime-success.md`.
-
-The corrected reference-machine run passed the missing human-visible gate. The tester explicitly reported that the orientation-colored Obsidian geometry appeared and was **perfectly aligned** with the corresponding vanilla terrain.
-
-Logged final-run invariants include:
-
-- corrected harness delayed comparison until world entry was observable;
-- all 6 sustained comparison passes completed;
-- final sample: 5832 cells, interior 4014 air + 82 supported + 0 unsupported = 4096;
-- reference faces=139;
-- drawable faces=139;
-- drawable vertices=556 = faces * 4;
-- drawable indices=834 = faces * 6;
+- `completedVisualPasses=6`;
+- final sample 5832 cells; 4014 air + 82 supported + 0 unsupported = 4096 interior cells;
+- reference/drawable faces=139/139;
+- drawable vertices=556;
+- drawable indices=834;
 - deterministic reference builds=2;
 - deterministic drawable builds=2;
 - `worldReadsAfterSnapshot=0`;
 - `pipelineValid=true`;
-- `nativeGraphicsSeam=false`;
-- indexed-indirect graphics executed;
-- `profilerOnlySubmissions=0`;
 - staging submitted/reclaimed=59256/59256 bytes;
-- arena allocations/retired/reclaimed=12/12/12 across six sequential passes;
+- arena allocations/retired/reclaimed=12/12/12;
 - final arena used=0, one 4194304-byte free span, fragmentation=0;
 - indirect resources retired/released=6/6;
-- all pending upload/arena/resource retirement counts=0;
-- normal shutdown and process exit code 0.
+- all pending upload/arena/resource retirements=0;
+- process exit code 0.
 
 Terrain-dependent coordinates, fingerprints and counts are not hard-coded success values.
 
 ## Deliberate P2.2 boundary
 
-Dev2 does **not** claim:
+P2.2 does **not** claim:
 
 - correct Minecraft material/sprite/texture/UV/tint/render-layer semantics - P2.3;
 - block/sky light or ambient occlusion - P2.4;
@@ -157,10 +132,18 @@ Dev2 does **not** claim:
 
 ## Immediate next action
 
-1. Run exact-head Java 25 / Gradle 9.5.1 CI including A-0066 and this status synchronization.
-2. If green, promote/merge PR #14 with `[no-release]` and record the resulting main merge SHA.
-3. Perform Class-A post-merge synchronization: P2.2 -> COMPLETE; P2.3 becomes the next milestone.
-4. Start P2.3 by inspecting and implementing exact Minecraft 26.2 material/sprite/UV/tint/render-layer identity for the supported terrain subset.
+Start P2.3 from the synchronized `main` state after this Class-A docs sync is merged.
+
+P2.3 should begin with exact Minecraft 26.2 API/source inspection for:
+
+- `BlockStateModelSet` / `BlockStateModelPart` / `BakedQuad` material ownership;
+- atlas/sprite identity and UV semantics;
+- tint/color inputs;
+- material/render-layer classification;
+- stable renderer-owned material identity suitable for immutable snapshots/async meshes;
+- resource reload invalidation and texture/material lifetime.
+
+Do not add light/AO semantics early; they remain P2.4. Do not begin production greedy meshing; Phase 3 remains gated on Phase 2 semantic correctness.
 
 ## Relevant durable decisions
 
