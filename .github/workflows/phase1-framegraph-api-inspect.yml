@@ -44,6 +44,7 @@ jobs:
             'com.mojang.blaze3d.systems.GpuQuery'
             'com.mojang.blaze3d.systems.TimerQuery'
             'com.mojang.blaze3d.buffers.GpuFence'
+            'com.mojang.blaze3d.vulkan.VulkanCommandEncoder'
           )
           for cls in "${classes[@]}"; do
             echo "===== $cls public/constants =====" >> "$out"
