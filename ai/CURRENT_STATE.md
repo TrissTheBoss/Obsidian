@@ -7,10 +7,10 @@ Last updated: 2026-08-20
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
 - Current public release: `v0.0.2-phase0`
-- Current merged development baseline: Phase 1 dev2, merge commit `3d2366a5c07f819a264f5f02dd2f3df9c5ec6fc0`
-- Active development branch: `phase1/staging-upload`
-- Active PR: #5, `Phase 1: bounded staging and upload infrastructure`
-- Current development version: `0.1.0-phase1-dev3`
+- Current merged development baseline: Phase 1 dev3, merge commit `de45e80f96c841372c8263deafd0506545f814cc`
+- Active development branch: `phase1/device-arena`
+- Active PR: #6, `Phase 1: device-preferred geometry arena and suballocator`
+- Current development version: `0.1.0-phase1-dev4`
 
 ## Reference runtime
 
@@ -41,67 +41,63 @@ Validated the `Minecraft.renderFrame(boolean)` lifecycle seam, fixed-allocation 
 
 Validated three-slot frame contexts, real `GpuFence` completion tracking, zero-timeout steady-state polling, deferred GPU destruction, bounded shutdown cleanup, and clean real-machine accounting (`retiredResources=1`, `releasedResources=1`, `pending=0`).
 
-### Phase 1 dev3 - VALIDATED; pending merge through PR #5
+### Phase 1 dev3 - VALIDATED and merged through PR #5
 
-Goal: establish bounded staging/upload ownership before terrain starts producing geometry.
+Validated bounded persistent staging, batched buffer copies, explicit backpressure, deterministic readback, completion-gated ring reclamation, and clean shutdown. Real-machine result included `stagingSubmittedBytes=256`, `stagingReclaimedBytes=256`, `stagingBackpressureEvents=1`, `pendingUploadBatches=0`, exit code 0.
 
-Exact Minecraft 26.2 inspection confirmed:
+### Phase 1 dev4 - VALIDATED; pending merge through PR #6
 
-- `GpuBuffer` supports map-read/map-write and copy source/destination usages.
-- persistent write mapping is available through `GpuBufferSlice.MappedView`.
-- `CommandEncoder.copyToBuffer(sourceSlice, destinationSlice)` is source-first.
-- `CommandEncoder.createFence()` supplies batch completion tracking.
-- the reference RX 6800 XT reports persistent mapping support.
-- Mojang's `StagingBuffer.PersistentlyMapped` ultimately uses `MappableRingBuffer`, whose wrap path can call `GpuFence.awaitCompletion(Long.MAX_VALUE)` when cycling to a busy buffer. Obsidian therefore owns its own nonblocking staging admission/reclamation policy above Minecraft's lower-level GPU abstractions.
+Goal: establish reusable device-preferred GPU storage/suballocation before real chunk meshes use the upload path.
 
-Implemented `StagingUploadArena`:
+Implemented and now runtime validated:
 
-- one fixed-capacity persistently mapped staging buffer;
-- validation capacity 256 KiB;
-- `MAP_WRITE | COPY_SRC` usage;
-- 16-byte aligned monotonic virtual write/reclaim cursors;
-- wrap padding counted as occupied space;
-- fixed 64-entry in-flight batch table;
-- no fallback allocation when safe space is unavailable;
-- explicit backpressure metrics;
-- zero-timeout steady-state fence polling;
-- completion-gated ring-space reclamation;
-- bounded shutdown behavior.
+- one fixed 512 KiB non-mapped `COPY_DST | COPY_SRC | VERTEX | INDEX` backing buffer on Minecraft 26.2's device-preferred Vulkan/VMA allocation path;
+- 4096 preallocated allocation metadata slots;
+- packed `(slot,generation)` 64-bit allocation handles;
+- stale-handle rejection after a freed slot/span is reused;
+- best-fit aligned allocation over sorted/coalescing free spans;
+- bounded allocation failure instead of fallback arena growth;
+- fixed completion-gated retirement metadata with zero-timeout steady-state fence polling;
+- allocation-free retirement validation/state transition;
+- used/free/high-water, allocation, retirement, stale-handle, largest-free-block and fragmentation metrics;
+- uploads reuse the validated `StagingUploadArena` rather than introducing a second upload mechanism.
 
-Implemented `GpuUploadProbe`:
+Exact Minecraft 26.2 inspection established that `VulkanGpuBuffer.Direct` starts from VMA's automatic device-preferred allocation policy and only adds host-visible/coherent requirements when map usages are requested. Portable documentation therefore says **device-preferred** rather than promising literal discrete VRAM on every architecture.
 
-- stages two deterministic 128-byte payloads;
-- encodes both copies into one submission;
-- deliberately requests an impossible full-capacity allocation while 256 bytes are occupied to prove explicit backpressure;
-- fences the batch;
-- reclaims staging only after completion;
-- maps the destination for read and verifies every copied byte.
+### Dev4 real-machine result - SUCCESS
 
-Compile validation:
+The user tested `0.1.0-phase1-dev4` on the reference Windows 11 / RX 6800 XT Vulkan machine.
 
-- exact documented dev3 head `9a4fa580b8fdaed0030b2242b491789aa7c37a11` passed GitHub Actions run `32367096172` on Java 25 / Gradle 9.5.1;
-- build and artifact upload succeeded.
+Observed sequence:
 
-Real-machine runtime validation on 2026-08-20: `SUCCESS`.
+1. Obsidian loaded the correct dev4 build and armed the device-preferred arena foundation.
+2. Frame coordinator reported staging capacity `262144` and device arena capacity `524288`.
+3. A/B/C allocated successfully; initial used/high-water was `212992` bytes.
+4. One deliberately impossible arena allocation failed without arena growth.
+5. Initial A/B/C staging payload was 768 bytes.
+6. B readback/retirement was submitted on frame 1 with one pending free/retirement batch.
+7. On frame 2, after real fence completion, D reused B's exact offset `65536` and slot `1`; generation advanced `1 -> 2`.
+8. The old B handle was deliberately used and correctly rejected (`staleHandleRejections=1`).
+9. After D reuse: used bytes `196608`, free spans 2, fragmentation `50` permille.
+10. Final A/C/D readback/retirement was submitted on frame 3.
+11. Final verification completed on frame 4, with all deterministic bytes correct.
+12. Final allocator state: allocations=4, failures=1, retired=4, reclaimed=4, staleHandleRejections=1, usedBytes=0, freeSpans=1, largestFree=`524288`, fragmentation=0.
+13. Staging totals were submitted/reclaimed `1024/1024`, high-water 768, backpressure 0, pending batches 0.
+14. The user entered a single-player world normally.
+15. Shutdown after 2251 frames had zero pending upload/arena/generic retirement work and process exit code 0.
 
-Observed:
+This is stronger than earlier same-frame probes because B retirement/reuse crossed a real frame boundary. It confirms the arena is completion-gated rather than frame-count-gated.
 
-1. `obsidian 0.1.0-phase1-dev3` loaded on Minecraft 26.2 Vulkan / RX 6800 XT.
-2. Staging capacity reported `262144` bytes.
-3. One batch contained exactly two copies totaling 256 payload bytes.
-4. High-water use was 256 bytes.
-5. Exactly one deliberate backpressure event occurred.
-6. The batch completed through nonblocking fence polling.
-7. Reclaimed bytes reached 256 and pending batches reached 0.
-8. Deterministic destination readback verified successfully.
-9. The user entered a single-player world normally.
-10. Shutdown after 3037 frames reported `stagingSubmittedBytes=256`, `stagingReclaimedBytes=256`, `stagingHighWater=256`, `stagingBackpressureEvents=1`, `pendingUploadBatches=0`, `retiredResources=0`, `releasedResources=0`, `pendingRetirements=0`; process exit code was 0.
+Evidence:
 
-Evidence is preserved in `ai/attempts/A-0026-dev3-runtime-success.md`.
+- `ai/attempts/A-0027-device-arena-api-inspection.md`
+- `ai/attempts/A-0028-dev4-device-arena-implementation.md`
+- `ai/attempts/A-0029-dev4-runtime-success.md`
+- decisions D-0019 and D-0020 in `ai/DECISIONS.md`
 
 ## Proven architecture boundary
 
-`Minecraft 26.2 Vulkan device -> Obsidian RendererBridge -> FrameCoordinator -> frame contexts -> controlled submissions -> fence-gated resource lifetime -> bounded persistently mapped staging -> batched copies -> explicit backpressure -> completion-gated reclamation`
+`Minecraft 26.2 Vulkan device -> Obsidian RendererBridge -> FrameCoordinator -> frame contexts -> controlled submissions -> completion-gated lifetime -> bounded persistent staging -> batched copies/backpressure -> device-preferred geometry arena -> generation-safe suballocation -> completion-gated span reuse/coalescing`
 
 Obsidian still does not:
 
@@ -110,27 +106,22 @@ Obsidian still does not:
 - infer GPU completion from frame count;
 - perform routine device-wide waits;
 - upload actual chunk meshes;
-- own a reusable device-local geometry arena.
+- claim the current O(free-span-count) best-fit allocator is the final high-scale production allocator.
 
-## Next Phase 1 milestone: dev4 device-local arena/suballocator
+## Next Phase 1 milestone: dev5 frame graph / command-stream profiler
 
-After merging PR #5 with `[no-release]`, create a fresh branch from merged `main` and implement a reusable Obsidian-owned device-local geometry arena before terrain uses it.
+After merging PR #6 with `[no-release]`, create a fresh branch from merged `main` and establish Obsidian-owned orchestration before terrain rendering.
 
-Required dev4 pieces:
+Required dev5 pieces:
 
-1. Inspect exact Minecraft 26.2 buffer usage/slice/copy behavior needed for large geometry buffers and readback validation.
-2. Create one fixed-size GPU arena suitable for future vertex/index/metadata allocations without host mapping in the normal path.
-3. Implement aligned suballocation with stable allocation handles carrying slot/generation identity so stale handles cannot silently reference reused memory.
-4. Support freeing allocations only after their last-use completion signal is safe; never reuse freed spans merely because CPU frames advanced.
-5. Coalesce adjacent free spans and expose used/free/high-water/largest-free-block/fragmentation metrics.
-6. Define bounded failure behavior when no suitable span exists; do not grow or allocate fallback arena buffers during the validation milestone.
-7. Use the validated staging arena to upload deterministic data into multiple arena allocations in one or few controlled batches.
-8. Free allocations in a nontrivial order after completion, allocate replacement data, and prove safe span reuse/generation changes.
-9. Copy selected arena ranges to a readback buffer and verify deterministic contents after reuse.
-10. Enter a world and shut down with zero pending upload batches, zero unsafe frees, and clean arena accounting.
+1. Inspect exact Minecraft 26.2 timestamp query/result and command encoder semantics again on the current dependency set.
+2. Create a small fixed-capacity render/frame graph representation with declared pass order/dependencies and no per-frame graph-node allocation on the hot path.
+3. Introduce an Obsidian-owned command-stream/submission object so upload/validation work and later rendering passes can share deliberate submissions.
+4. Integrate GPU timestamp writes into those owned command streams; do not add profiler-only per-frame submissions.
+5. Track CPU pass timing, GPU timestamp ranges, submission count, pass count, and query availability/missed samples.
+6. Keep normal query polling nonblocking.
+7. Add a nonvisual graph validation workload such as `upload -> copy/validation -> completion`, with timestamps surrounding owned work and deterministic verification.
+8. Prove graph execution ordering, one/few deliberate submissions, timestamp result retrieval, world entry, and clean shutdown on the reference machine.
+9. Keep terrain replacement inactive until this orchestration/profiling layer is validated.
 
-Suggested validation sequence:
-
-`allocate A/B/C -> stage/upload A/B/C -> fence -> verify completion -> free B -> allocate D into reusable space -> upload D -> fence -> read back A/C/D -> verify -> free all -> coalesce to one full free span`
-
-Terrain replacement remains intentionally inactive until this arena/lifetime layer is proven.
+The core rule from D-0014 remains active: profiling must measure Obsidian work from inside command streams it already owns, not create routine extra submissions solely to measure them.

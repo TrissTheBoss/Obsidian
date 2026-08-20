@@ -1,0 +1,12 @@
+# A-0027 - Inspect exact Minecraft 26.2 device-arena allocation path
+
+**Date:** 2026-08-20  
+**Objective:** Verify the exact Minecraft 26.2 buffer usage API and determine whether an Obsidian geometry buffer without host-mapping flags follows a device-preferred Vulkan/VMA allocation path.  
+**Action:** Added a temporary GitHub Actions inspection workflow on `phase1/device-arena`, compiled against the exact Loom-resolved Minecraft 26.2 client, and used `javap` on `GpuBuffer`, `GpuBufferSlice`, `CommandEncoder`, `GpuDevice`, `GpuFence`, `VulkanGpuBuffer.Direct`, and `VulkanDevice`. The first probe used an obsolete backend class name; it was corrected once to the actual `VulkanGpuBuffer$Direct` class. The temporary workflow was removed after evidence was captured.  
+**Result:** `SUCCESS` after one corrected inspection pass.  
+**Intended effect:** Avoid guessing about geometry-buffer memory placement and exact usage/slice/copy interfaces before implementing the arena.  
+**Actual effect:** Exact 26.2 constants confirm `USAGE_COPY_DST=8`, `USAGE_COPY_SRC=16`, `USAGE_VERTEX=32`, and `USAGE_INDEX=64`. `GpuBufferSlice` exposes offset/length/slicing; `CommandEncoder.copyToBuffer` and real fences are available. Vulkan backend bytecode shows `VulkanGpuBuffer.Direct` initializes `VmaAllocationCreateInfo.usage(8)` and only adds host-visible/coherent requirements when MAP usage bits are present; MAP_READ/client-storage paths switch to usage value 9. This is the VMA automatic device-preferred vs host-preferred policy boundary used by dev4.  
+**Evidence:** GitHub Actions inspection runs `32367927886` and `32368073127`; inspection artifact `phase1-device-arena-api-inspect`; LWJGL VMA API documentation identifies the AUTO_PREFER_DEVICE/AUTO_PREFER_HOST modes.  
+**Why it worked:** The inspection used the exact Minecraft 26.2 bytecode that the project compiles/runs against rather than remembered APIs.  
+**Side effects / lessons:** The first backend class guess (`VulkanBuffer`) was wrong; jar class listing exposed the correct `VulkanGpuBuffer.Direct` name. Continue using class listing before backend-specific javap probes. Device-preferred is the correct portable wording: discrete hardware will normally land in device-local memory, while unified-memory systems may legitimately choose a different physical heap.  
+**Next action:** Implement a non-mapped `COPY_DST | COPY_SRC | VERTEX | INDEX` geometry arena, upload through the validated staging ring, and validate suballocation/reuse without exposing Vulkan-native handles.

@@ -101,6 +101,18 @@ public final class StagingUploadArena implements AutoCloseable {
         return true;
     }
 
+    public boolean stageCopy(
+            CommandEncoder encoder,
+            ByteBuffer source,
+            GpuBuffer destination,
+            long destinationOffset) {
+        int size = source.remaining();
+        if (destinationOffset < 0L || destinationOffset + size > destination.size()) {
+            throw new IllegalArgumentException("Upload destination range is outside the destination buffer");
+        }
+        return stageCopy(encoder, source, destination.slice(destinationOffset, size));
+    }
+
     /**
      * Copies source bytes into the mapped ring and records a buffer-to-buffer
      * copy into the supplied encoder. Returns false when bounded staging space
@@ -109,8 +121,7 @@ public final class StagingUploadArena implements AutoCloseable {
     public boolean stageCopy(
             CommandEncoder encoder,
             ByteBuffer source,
-            GpuBuffer destination,
-            long destinationOffset) {
+            GpuBufferSlice destination) {
         RenderSystem.assertOnRenderThread();
         ensureOpenBatch();
 
@@ -118,8 +129,8 @@ public final class StagingUploadArena implements AutoCloseable {
         if (size <= 0) {
             throw new IllegalArgumentException("Upload size must be positive");
         }
-        if (destinationOffset < 0L || destinationOffset + size > destination.size()) {
-            throw new IllegalArgumentException("Upload destination range is outside the destination buffer");
+        if (destination == null || destination.length() < size) {
+            throw new IllegalArgumentException("Upload destination slice is smaller than the source payload");
         }
 
         long candidate = alignUp(writeCursor, ALIGNMENT);
@@ -138,7 +149,7 @@ public final class StagingUploadArena implements AutoCloseable {
         mappedData.put(physicalOffset, source, source.position(), size);
         encoder.copyToBuffer(
                 stagingBuffer.slice(physicalOffset, size),
-                destination.slice(destinationOffset, size));
+                destination.slice(0L, size));
 
         writeCursor = endCursor;
         openBatchPayloadBytes += size;
