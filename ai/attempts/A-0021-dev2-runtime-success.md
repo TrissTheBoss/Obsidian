@@ -1,0 +1,12 @@
+# A-0021 - Runtime-validate Phase 1 dev2 fence-gated resource lifetime
+
+**Date:** 2026-08-20  
+**Objective:** Prove that Obsidian can retire an owned GPU resource immediately after submission but defer destruction until a real Minecraft 26.2 `GpuFence` reports completion on the reference Windows 11 / RX 6800 XT Vulkan machine.  
+**Action:** User launched `Obsidian-0.1.0-phase1-dev2` with Minecraft 26.2, Fabric Loader 0.19.3, Fabric API 0.158.0+26.2, Java 25.0.1, and Vulkan; entered a single-player world; then exited normally. The one-shot lifetime probe allocated a 64-byte GPU buffer, wrote/submitted work, created a fence, retired the buffer immediately, and polled the fence with zero timeout during normal frame processing.  
+**Result:** `SUCCESS`.  
+**Intended effect:** Validate the three-slot frame-context bookkeeping and prove that resource destruction is gated by actual GPU completion rather than frame count, with no routine blocking wait or device-wide idle.  
+**Actual effect:** Obsidian logged `contextSlots=3`; the probe submitted and retired the 64-byte buffer on frame 1 with `pendingRetirements=1`; a later zero-timeout fence poll in the same frame iteration reported completion and released the resource. The player entered a world successfully. Shutdown after 1647 frames reported `retiredResources=1, releasedResources=1, pending=0`; process exit code was 0.  
+**Evidence:** User Prism Launcher log dated 2026-08-20 13:44-13:45 local time. Relevant sequence: `obsidian 0.1.0-phase1-dev2`; Vulkan RX 6800 XT; `Phase 1 resource lifetime probe submitted and retired on frame 1`; `Phase 1 resource lifetime probe released on frame 1 after 0 frame(s)`; world join; `Phase 1 frame coordinator closed after 1.647 frame(s): retiredResources=1, releasedResources=1, pending=0`; exit code 0.  
+**Why it worked:** The runtime uses Minecraft's active Vulkan `GpuDevice`, a real `GpuFence`, zero-timeout steady-state polling, and deferred release ownership; no competing device or frame-count completion assumption is involved.  
+**Side effects / lessons:** Same-frame release is valid because the fence had completed by the later poll; it does not imply a blocking wait. Frame serials remain bookkeeping only. Keep future staging/arena reclamation gated by completion primitives or equivalent proven submission ownership.  
+**Next action:** Merge dev2, then continue Phase 1 with bounded staging/upload ownership, copy batching, fence-gated ring-space reclamation, backpressure, and a non-visual upload validation workload before terrain uses the system.
