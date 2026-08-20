@@ -90,7 +90,7 @@ public final class ObsidianBootstrap {
         }
 
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 2 dev2 first-drawable-section probe armed. P2.1 immutable snapshot/reference semantics remain the correctness oracle; dev2 will build arena-backed indexed geometry and briefly overlay orientation-colored faces on the live depth-tested vanilla world for transform validation. Vanilla terrain remains active.");
+                "Obsidian Phase 2 dev3 material/texture probe armed. P2.1 reference coverage and P2.2 world/camera placement remain the correctness foundation; dev3 will capture exact Minecraft 26.2 baked sprite/UV/tint/layer identity on the render thread, build an immutable textured mesh, and overlay a deliberately darkened texture comparison on the live depth-tested vanilla world. Lighting/AO remain P2.4 and vanilla terrain remains active.");
     }
 
     public static void onFrameStart() {
