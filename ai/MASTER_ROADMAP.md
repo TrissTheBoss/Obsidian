@@ -1,6 +1,6 @@
 # Obsidian Master Roadmap and Product Plan
 
-Last materially revised: 2026-08-20  
+Last materially revised: 2026-08-21  
 Roadmap schema: v1  
 Canonical repository: `TrissTheBoss/Obsidian`
 
@@ -357,11 +357,15 @@ Phase 1 is the proven infrastructure foundation for real terrain, not the final 
 
 Purpose: define what a **correct Minecraft section** means before optimizing it.
 
-#### P2.1 — Immutable real-section snapshot + reference oracle — ACTIVE
+#### P2.1 — Immutable real-section snapshot + reference oracle — COMPLETE
 
-Current dev milestone: `0.2.0-phase2-dev1`.
+Validated milestone: `0.2.0-phase2-dev1`.
 
-Planned/implemented contract:
+Closing merge: `a714e19ce871bf73136d52f85a1780109aa851dd`.
+
+Runtime evidence: `ai/attempts/A-0058-phase2-dev1-runtime-success.md`.
+
+Implemented contract:
 
 - capture one real loaded 16^3 section;
 - one-block halo in every direction;
@@ -375,23 +379,31 @@ Planned/implemented contract:
 
 This reference path must remain in the project even after the production greedy mesher exists.
 
-#### P2.2 — First drawable real section — PLANNED
+#### P2.2 — First drawable real section — COMPLETE
 
 Goal: render actual geometry derived from a real Minecraft section for a deliberately narrow supported subset.
 
-Required work:
+Validated milestone: `0.2.0-phase2-dev2`.
+
+Closing merge: `f9c64267c5becb3bd80897efdb09ed65a6ce8697`.
+
+Runtime evidence: `ai/attempts/A-0066-phase2-dev2-runtime-success.md`.
+
+Completed work:
 
 - inspect exact 26.2 block/model/material/sprite/light APIs;
 - decide initial terrain vertex format;
 - generate vertex/index geometry from the P2.1 snapshot;
 - upload to generation-safe arenas;
-- create a real section GPU scene record;
-- render through visibility/indirect infrastructure;
+- create a real section GPU scene record / drawable ownership path sufficient for the correctness probe;
+- render through the proven indexed-indirect graphics infrastructure;
 - compare against vanilla while vanilla remains active;
 - validate world-space positioning and camera transforms;
-- validate section boundaries and neighbor occlusion.
+- validate section boundaries and neighbor occlusion for the conservative supported subset.
 
-Initial success should favor correctness over feature breadth.
+Human visual validation confirmed the orientation-colored Obsidian geometry was visible and perfectly aligned with the corresponding vanilla terrain. Machine validation also confirmed deterministic reference/drawable builds, zero post-snapshot world reads during meshing, public Blaze3D indexed-indirect drawing, zero profiler-only submissions, bounded staging, and completion-gated full reclamation.
+
+P2.2 deliberately does not claim P2.3 material/texture/UV/tint semantics or P2.4 light/AO correctness.
 
 #### P2.3 — Correct textures/material identity — PLANNED
 
@@ -870,9 +882,9 @@ This section is a product-level checklist. Phase sections above describe sequenc
 
 ### Terrain core
 
-- [PLANNED] Real immutable section snapshots.
-- [PLANNED] Neighbor halo/padding.
-- [PLANNED] Permanent reference face/mesh oracle.
+- [COMPLETE foundation] Real immutable section snapshots.
+- [COMPLETE foundation] Neighbor halo/padding.
+- [COMPLETE foundation] Permanent reference face/mesh oracle.
 - [PLANNED] Production binary/bitmask greedy mesher.
 - [PLANNED] Opaque terrain.
 - [PLANNED] Cutout terrain.
@@ -1343,6 +1355,13 @@ Before handoff, verify:
 
 This is a concise index, **not** the evidence log. Detailed reasoning belongs in attempts/decisions.
 
+### 2026-08-21 — P2.2 Class-A status synchronization
+
+- synchronized P2.1 to COMPLETE with its runtime evidence and merge SHA;
+- synchronized P2.2 to COMPLETE after exact CI, reference RX 6800 XT runtime validation, human-visible alignment validation, and merge `f9c64267c5becb3bd80897efdb09ed65a6ce8697`;
+- marked the immutable snapshot, neighbor halo, and permanent reference oracle terrain foundations complete;
+- left P2.3 as the next planned milestone without changing later phase ordering, product scope, or durable architecture.
+
 ### 2026-08-20 — v1
 
 - created the canonical master roadmap;
@@ -1359,8 +1378,9 @@ Current position at the time of this revision:
 - Phase 0: COMPLETE.
 - Phase 1: COMPLETE through GPU visibility/indirect compaction.
 - Phase 2: ACTIVE.
-- Active milestone: P2.1 / `0.2.0-phase2-dev1`, immutable real-section snapshot + canonical reference-face oracle.
-- Next planned milestone after successful P2.1 runtime validation: P2.2, first drawable real section for the conservative supported subset.
+- P2.1: COMPLETE / `0.2.0-phase2-dev1`.
+- P2.2: COMPLETE / `0.2.0-phase2-dev2`, first drawable real section with human-validated world/camera alignment.
+- Next planned milestone: P2.3, correct texture/material identity for the supported terrain subset.
 - Phase 3 production binary/bitmask greedy meshing remains planned after Phase 2 establishes correct render semantics.
 
 Always verify the live details in `ai/CURRENT_STATE.md` before acting on this final section because active milestone state changes more frequently than the long-range plan.
