@@ -204,3 +204,63 @@ Copy this section and replace placeholders. Do not edit previous entries.
 **Side effects / lessons:** Anything future agents should retain.  
 **Next action:** Concrete next step.
 ```
+
+---
+
+## A-0015 - Successful real Vulkan runtime validation of v0.0.2-phase0
+
+**Date:** 2026-08-20  
+**Objective:** Complete Phase 0 by proving the real Vulkan-active path on the reference Windows 11 / RX 6800 XT system.  
+**Action:** User launched `Obsidian-0.0.2-phase0` with Minecraft 26.2, Fabric Loader 0.19.3, Fabric API 0.158.0+26.2, Java 25.0.1, and Minecraft configured to Vulkan; then entered a new single-player world and exited normally.  
+**Result:** `SUCCESS`.  
+**Intended effect:** Prove that Obsidian can attach to Minecraft's real Vulkan `GpuDevice`, read capabilities, survive resource/world loading, and shut down cleanly.  
+**Actual effect:** Minecraft reported Vulkan on the AMD Radeon RX 6800 XT; Obsidian logged `Attached to Vulkan backend: Vulkan`, identified the GPU as `DISCRETE`, reported driver/capability data, entered a world successfully, and the process exited with code 0.  
+**Evidence:** User runtime log at 2026-08-20 01:46 local time. Reported driver `1.4.315 AMD proprietary driver 26.7.1`; exposed Vulkan extensions included `VK_KHR_synchronization2`, `VK_KHR_dynamic_rendering`, `VK_KHR_swapchain`, `VK_KHR_surface`, `VK_KHR_win32_surface`, `VK_KHR_push_descriptor`, and `VK_EXT_debug_utils`. Device features reported indirect drawing, multi-draw indirect, and persistent mapping.  
+**Why it worked:** The 0.0.2 patch allowed the user to select Vulkan first, and the Phase 0 bridge used the exact Minecraft 26.2 `DeviceInfo` API validated in CI.  
+**Side effects / lessons:** Phase 0 is complete. Mojang's Vulkan renderer also logged geometric growth of Dynamic Transforms and Chunk Sections UBO capacities during world entry; this is an observation to profile later, not proof of a performance defect.  
+**Next action:** Begin Phase 1 frame/GPU infrastructure.
+
+---
+
+## A-0016 - Inspect exact Minecraft 26.2 frame and GPU command APIs
+
+**Date:** 2026-08-20  
+**Objective:** Identify a safe first frame lifecycle seam and the exact timestamp/submission interfaces before writing Phase 1 code.  
+**Action:** Created a temporary PR-only GitHub Actions workflow on `phase1/frame-foundation`, resolved the exact Loom Minecraft 26.2 client JAR, and used `javap` on `Minecraft`, `GameRenderer`, `RenderSystem`, `GpuDevice`, `GpuQueryPool`, `GpuQuery`, `TimerQuery`, and `CommandEncoder`. The temporary workflow was removed after inspection.  
+**Result:** `SUCCESS`.  
+**Intended effect:** Eliminate guessed renderer API design and choose a first milestone that does not introduce recurring submission overhead.  
+**Actual effect:** Confirmed `Minecraft.renderFrame(boolean)` as a whole-frame seam; `GpuDevice.createTimestampQueryPool(int)` and `createCommandEncoder()`; `CommandEncoder.writeTimestamp(...)` and explicit `submit()`; and nonblocking `GpuQueryPool.getValue(int)` returning `OptionalLong`.  
+**Evidence:** Draft PR #3; Phase 1 API Inspect workflow runs `32314947722` and `32315046100`; inspection artifacts `9387730765` and `9387757437`.  
+**Why it worked:** The probe interrogated the exact build dependency rather than relying on mappings or memory from another version.  
+**Side effects / lessons:** A dedicated start/end timestamp encoder every frame would require extra submissions and could distort frame pacing. Per-frame GPU timing must eventually be integrated into an existing/owned command stream.  
+**Next action:** Implement a one-shot GPU submission probe plus allocation-free CPU frame timing around `Minecraft.renderFrame`.
+
+---
+
+## A-0017 - Implement first Phase 1 frame foundation
+
+**Date:** 2026-08-20  
+**Objective:** Give Obsidian a real render-frame lifecycle root and prove compile-time access to controlled, non-visual GPU command submission without replacing terrain yet.  
+**Action:** Added `FrameCoordinator`, `FrameTimings`, `GpuSubmissionProbe`, and `MinecraftFrameMixin`; attached the coordinator only after Vulkan bootstrap; added shutdown cleanup; changed version logging to derive the mod version; and marked the branch build `0.1.0-phase1-dev1`. The GPU probe writes two timestamp commands in one command encoder and performs one submission total, then polls results asynchronously on later frames.  
+**Result:** `PARTIAL` pending real runtime validation; hosted compile/build is `SUCCESS`.  
+**Intended effect:** Establish the lifecycle home for future frame contexts/profiling/resource retirement while proving Obsidian can submit GPU commands without visible rendering changes or per-frame submission overhead.  
+**Actual effect:** GitHub Actions compiled the exact code successfully; the temporary API-inspection workflow was removed and the clean implementation head also built successfully. Runtime behavior of the new mixin/query submission is not yet proven on the reference machine.  
+**Evidence:** Draft PR #3; implementation branch `phase1/frame-foundation`; clean code head `10a6e979a2cbfd5b8531ac98fb6cf3f00907d7aa`; Build workflow run `32315268985` concluded `success`.  
+**Why:** The implementation stays within confirmed Minecraft 26.2 public APIs and limits the validation probe to one submission.  
+**Side effects / lessons:** CPU frame history uses a fixed primitive ring (2048 samples) so the timing foundation does not allocate per frame. GPU query polling is only for the one-shot development probe.  
+**Next action:** Build the final documented branch head and test `0.1.0-phase1-dev1` on the real Vulkan machine. Confirm exactly one probe submission, asynchronous completion, world entry, and clean shutdown before merging Phase 1 foundation.
+
+---
+
+## A-0018 - Runtime-validate Phase 1 dev1 controlled GPU submission
+
+**Date:** 2026-08-20  
+**Objective:** Prove the first Phase 1 frame lifecycle and controlled GPU command path on the real Windows 11 / RX 6800 XT Vulkan machine before merging PR #3.  
+**Action:** User launched `Obsidian-0.1.0-phase1-dev1` with Minecraft 26.2, Fabric Loader 0.19.3, Fabric API 0.158.0+26.2, Java 25.0.1, and the Vulkan backend; entered a single-player world; then exited Minecraft normally.  
+**Result:** `SUCCESS`.  
+**Intended effect:** Confirm the `Minecraft.renderFrame(boolean)` mixin is valid at runtime, the fixed CPU frame ring runs continuously, Obsidian can submit exactly one non-visual timestamp command buffer through Minecraft's real `GpuDevice`, query completion without an explicit blocking wait, and cleanly destroy its Phase 1 resources.  
+**Actual effect:** Obsidian armed the Phase 1 frame foundation, activated a 2048-sample frame timing ring, submitted the GPU probe once on frame 1, and a later nonblocking poll during the same frame iteration returned both timestamp values (`20938905848` and `20938905908`, delta 60 ticks). The player entered a world successfully. The coordinator remained active for 2107 frames and closed during normal shutdown; process exit code was 0.  
+**Evidence:** User Prism Launcher log dated 2026-08-20 13:12 local time. Relevant log sequence: `obsidian 0.1.0-phase1-dev1`; Vulkan RX 6800 XT; `Phase 1 frame coordinator active`; `Phase 1 GPU probe submitted on frame 1`; `Phase 1 GPU probe completed on frame 1 after 0 frame(s)`; world join; `Phase 1 frame coordinator closed after 2.107 frame(s)`; exit code 0.  
+**Why it worked:** The implementation uses exact Minecraft 26.2 public GPU interfaces validated in CI and does not create a competing Vulkan device. The query result was available by the later poll in frame 1; there is no explicit GPU wait in the probe.  
+**Side effects / lessons:** This validates controlled GPU submission and lifecycle ownership, not terrain rendering. The `after 0 frame(s)` message means completion was observed within the same frame iteration, not that Obsidian performed a blocking wait. Keep routine GPU profiling integrated into owned/existing command streams rather than adding profiler-only submissions.  
+**Next action:** Merge the validated frame/GPU foundation, then continue Phase 1 with rotating frame contexts, GPU-completion tracking, deferred resource destruction, and bounded upload/staging infrastructure.
