@@ -40,7 +40,9 @@ jobs:
           classes=(
             'com.mojang.blaze3d.systems.GpuDevice'
             'com.mojang.blaze3d.systems.CommandEncoder'
-            'com.mojang.blaze3d.buffers.GpuQueryPool'
+            'com.mojang.blaze3d.systems.GpuQueryPool'
+            'com.mojang.blaze3d.systems.GpuQuery'
+            'com.mojang.blaze3d.systems.TimerQuery'
             'com.mojang.blaze3d.buffers.GpuFence'
           )
           for cls in "${classes[@]}"; do
