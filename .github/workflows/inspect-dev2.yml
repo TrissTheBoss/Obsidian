@@ -57,46 +57,32 @@ jobs:
           CP="$(cat /tmp/client-cp-line.txt)"
           mkdir -p inspection
           {
-            echo '=== CLASSPATH ==='
-            tr ':' '\n' < /tmp/client-cp-line.txt
-            echo
             for CLASS in \
               net.minecraft.client.Minecraft \
-              net.minecraft.client.Camera \
               net.minecraft.client.renderer.GameRenderer \
               net.minecraft.client.renderer.LevelRenderer \
               net.minecraft.client.renderer.DynamicUniforms \
               'net.minecraft.client.renderer.DynamicUniforms$Transform' \
-              net.minecraft.client.renderer.ProjectionMatrixBuffer \
               net.minecraft.client.renderer.RenderPipelines \
               net.minecraft.client.renderer.BindGroupLayouts \
-              net.minecraft.client.renderer.state.GameRenderState \
-              net.minecraft.client.renderer.state.level.CameraRenderState \
-              net.minecraft.client.renderer.state.level.LevelRenderState \
+              net.minecraft.client.renderer.ShaderManager \
               net.minecraft.client.renderer.block.BlockStateModelSet \
-              net.minecraft.client.renderer.block.BlockModelSet \
               net.minecraft.client.renderer.block.dispatch.BlockStateModel \
               net.minecraft.client.renderer.block.dispatch.BlockStateModelPart \
-              net.minecraft.client.renderer.texture.TextureAtlasSprite \
-              net.minecraft.client.resources.model.ModelManager \
               net.minecraft.client.resources.model.geometry.BakedQuad \
               'net.minecraft.client.resources.model.sprite.Material$Baked' \
-              net.minecraft.client.resources.model.sprite.Material \
               com.mojang.blaze3d.IndexType \
+              com.mojang.blaze3d.PrimitiveTopology \
               com.mojang.blaze3d.platform.CompareOp \
               com.mojang.blaze3d.systems.RenderSystem \
-              com.mojang.blaze3d.systems.GpuDevice \
-              com.mojang.blaze3d.systems.CommandEncoder \
               com.mojang.blaze3d.systems.RenderPass \
-              com.mojang.blaze3d.pipeline.BindGroupLayout \
-              'com.mojang.blaze3d.pipeline.BindGroupLayout$Builder' \
               com.mojang.blaze3d.pipeline.RenderTarget \
-              com.mojang.blaze3d.pipeline.TextureTarget \
               com.mojang.blaze3d.pipeline.DepthStencilState \
               com.mojang.blaze3d.pipeline.RenderPipeline \
               'com.mojang.blaze3d.pipeline.RenderPipeline$Builder' \
               com.mojang.blaze3d.vertex.VertexFormat \
-              com.mojang.blaze3d.vertex.DefaultVertexFormat; do
+              com.mojang.blaze3d.vertex.DefaultVertexFormat \
+              com.mojang.blaze3d.vulkan.VulkanRenderPipeline; do
               echo
               echo "=== javap -public $CLASS ==="
               javap -classpath "$CP" -public "$CLASS" || true
@@ -104,18 +90,15 @@ jobs:
           } > inspection/public-api.txt 2>&1
 
           {
-            echo '=== TARGETED BYTECODE / PRIVATE MEMBERS ==='
             for CLASS in \
               net.minecraft.client.renderer.GameRenderer \
-              net.minecraft.client.renderer.LevelRenderer \
               net.minecraft.client.renderer.DynamicUniforms \
               'net.minecraft.client.renderer.DynamicUniforms$Transform' \
               net.minecraft.client.renderer.RenderPipelines \
               net.minecraft.client.renderer.BindGroupLayouts \
-              net.minecraft.client.renderer.state.level.CameraRenderState \
-              com.mojang.blaze3d.systems.RenderSystem \
-              com.mojang.blaze3d.systems.RenderPass \
-              com.mojang.blaze3d.pipeline.RenderTarget; do
+              net.minecraft.client.renderer.ShaderManager \
+              com.mojang.blaze3d.vertex.DefaultVertexFormat \
+              com.mojang.blaze3d.vulkan.VulkanRenderPipeline; do
               echo
               echo "=== javap -c -p $CLASS ==="
               javap -classpath "$CP" -c -p "$CLASS" || true
@@ -123,15 +106,19 @@ jobs:
           } > inspection/bytecode.txt 2>&1
 
           {
-            echo '=== RELEVANT CLASS NAMES ==='
+            echo '=== SHADER / INCLUDE RESOURCES ==='
             tr ':' '\n' < /tmp/client-cp-line.txt | while IFS= read -r JAR; do
               case "$JAR" in
                 *.jar)
-                  jar tf "$JAR" 2>/dev/null | grep -E '^(net/minecraft/client/(Camera|Minecraft)|net/minecraft/client/renderer/|net/minecraft/client/resources/model/|com/mojang/blaze3d/(systems|pipeline|vertex)/)' || true
+                  jar tf "$JAR" 2>/dev/null | grep -E '(^|/)(position_color\.(vsh|fsh)|.*dynamic.*\.glsl|.*projection.*\.glsl)$' | while IFS= read -r ENTRY; do
+                    echo
+                    echo "=== $JAR :: $ENTRY ==="
+                    unzip -p "$JAR" "$ENTRY" 2>/dev/null || true
+                  done
                   ;;
               esac
-            done | sort -u
-          } > inspection/classes.txt
+            done
+          } > inspection/shaders.txt
 
       - name: Upload inspection artifact
         uses: actions/upload-artifact@v4
