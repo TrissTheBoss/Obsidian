@@ -195,7 +195,8 @@ public final class DeviceGeometryArena implements AutoCloseable {
      * fence reports completion.
      *
      * <p>On false, ownership of {@code fence} remains with the caller and no
-     * allocation state changes.</p>
+     * allocation state changes. Validation and steady-state retirement do not
+     * allocate temporary Java objects.</p>
      */
     public boolean retireBatch(GpuFence fence, long[] handles, int count) {
         RenderSystem.assertOnRenderThread();
@@ -211,16 +212,14 @@ public final class DeviceGeometryArena implements AutoCloseable {
             return false;
         }
 
-        int[] validatedSlots = new int[count];
         for (int i = 0; i < count; i++) {
             long handle = handles[i];
-            int slot = requireHandleState(handle, SLOT_LIVE);
+            requireHandleState(handle, SLOT_LIVE);
             for (int j = 0; j < i; j++) {
                 if (handles[j] == handle) {
                     throw new IllegalArgumentException("Duplicate allocation in retirement batch");
                 }
             }
-            validatedSlots[i] = slot;
         }
 
         int tail = retirementHead + retirementBatchCount;
@@ -230,8 +229,9 @@ public final class DeviceGeometryArena implements AutoCloseable {
         int base = tail * MAX_RETIREMENTS_PER_BATCH;
 
         for (int i = 0; i < count; i++) {
-            retirementHandles[base + i] = handles[i];
-            slotStates[validatedSlots[i]] = SLOT_PENDING;
+            long handle = handles[i];
+            retirementHandles[base + i] = handle;
+            slotStates[decodeSlot(handle)] = SLOT_PENDING;
         }
         retirementFences[tail] = fence;
         retirementCounts[tail] = count;
