@@ -117,9 +117,18 @@ Obsidian still does not:
 6. Add bounded indirect-command storage, one/few indirect draws, embedded timestamps, deterministic pixel readback, completion-gated retirement and clean accounting.
 7. Keep terrain replacement inactive until dev7 passes real-machine validation.
 
-## Terrain meshing roadmap note
+## Terrain meshing roadmap
 
-Greedy meshing is now a required final-product direction. Detailed research/design is being added during dev7 planning. It belongs in the CPU terrain mesher after the one-chunk correctness path is established and before large-scale terrain throughput work. The preferred performance target is a bitmask/binary greedy mesher with merge keys that preserve visual/material correctness, rather than a naive per-face rectangle scan.
+Greedy meshing is a required final-product direction under D-0024. Research is preserved in `ai/attempts/A-0038-greedy-meshing-roadmap-research.md`.
+
+Placement:
+
+- Phase 1: finish GPU ownership/indirect submission infrastructure; no terrain mesher yet.
+- Phase 2: one real chunk/section correctly; define immutable snapshot, neighbor halo and rendered-face semantics; keep a simple reference mesher as a differential correctness oracle.
+- Phase 3: production asynchronous CPU mesh system; implement and benchmark worker-local **binary/bitmask greedy meshing** with reusable scratch, AO/light/material-aware merge keys, AO diagonal selection, boundary halo handling, T-junction validation, mesh byte/quad/build-time metrics and scheduler integration.
+- Phase 4+: GPU visibility/compaction consumes the already-reduced section meshes.
+
+A greedy face may merge only when all properties affecting rendered output agree; block ID alone is insufficient. Keep the reference mesher even after greedy becomes production so optimized output can be differential-tested/fuzzed.
 
 ## Relevant durable decisions
 
@@ -131,3 +140,4 @@ Greedy meshing is now a required final-product direction. Detailed research/desi
 - D-0021: timestamps live inside useful owned command streams.
 - D-0022: timestamp results are bounded/sampled because the public wrapper allocates.
 - D-0023: the initial graphics path remains on public Blaze3D until evidence justifies native Vulkan access.
+- D-0024: greedy meshing is the production terrain-meshing default, with a binary/bitmask implementation as the Phase 3 performance target.
