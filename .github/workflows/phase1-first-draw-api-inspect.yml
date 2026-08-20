@@ -35,24 +35,25 @@ jobs:
           : > "$out"
           jarfile=$(find "$HOME/.gradle/caches/fabric-loom/26.2" -type f -name 'minecraft-client*.jar' | head -n 1)
           echo "jar=$jarfile" >> "$out"
-          echo '===== Graphics-related classes =====' >> "$out"
-          jar tf "$jarfile" | grep -E 'com/mojang/blaze3d/(pipeline|systems|textures|vertex)/.*(RenderPipeline|RenderPass|GpuTexture|TextureFormat|VertexFormat|VertexBuffer|Shader|Pipeline).*class' | sort >> "$out" || true
-          echo >> "$out"
           classes=(
+            'com.mojang.blaze3d.GpuFormat'
+            'com.mojang.blaze3d.PrimitiveTopology'
+            'com.mojang.blaze3d.IndexType'
+            'com.mojang.blaze3d.pipeline.ColorTargetState'
             'com.mojang.blaze3d.pipeline.RenderPipeline'
             'com.mojang.blaze3d.pipeline.RenderPipeline$Builder'
-            'com.mojang.blaze3d.pipeline.RenderPipelines'
+            'com.mojang.blaze3d.pipeline.CompiledRenderPipeline'
+            'com.mojang.blaze3d.shaders.ShaderSource'
             'com.mojang.blaze3d.systems.GpuDevice'
             'com.mojang.blaze3d.systems.CommandEncoder'
             'com.mojang.blaze3d.systems.RenderPass'
             'com.mojang.blaze3d.textures.GpuTexture'
             'com.mojang.blaze3d.textures.GpuTextureView'
-            'com.mojang.blaze3d.textures.TextureFormat'
             'com.mojang.blaze3d.buffers.GpuBuffer'
             'com.mojang.blaze3d.buffers.GpuBufferSlice'
             'com.mojang.blaze3d.vertex.VertexFormat'
-            'com.mojang.blaze3d.vertex.VertexFormat$Mode'
             'com.mojang.blaze3d.vertex.DefaultVertexFormat'
+            'net.minecraft.resources.Identifier'
           )
           for cls in "${classes[@]}"; do
             echo "===== $cls public/constants =====" >> "$out"
@@ -62,8 +63,12 @@ jobs:
             javap -classpath "$jarfile" -c -p "$cls" >> "$out" 2>&1 || true
             echo >> "$out"
           done
-          echo '===== Shader/resource references =====' >> "$out"
-          jar tf "$jarfile" | grep -E 'assets/minecraft/shaders/.*\.(vsh|fsh|glsl)$' | head -n 80 >> "$out" || true
+          echo '===== position_color.vsh =====' >> "$out"
+          unzip -p "$jarfile" assets/minecraft/shaders/core/position_color.vsh >> "$out" || true
+          echo >> "$out"
+          echo '===== position_color.fsh =====' >> "$out"
+          unzip -p "$jarfile" assets/minecraft/shaders/core/position_color.fsh >> "$out" || true
+          echo >> "$out"
       - name: Upload inspection artifact
         uses: actions/upload-artifact@v4
         with:
