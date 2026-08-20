@@ -41,21 +41,29 @@ jobs:
           mkdir -p inspection
           cat > inspection/target-classes.txt <<'EOF'
           net.minecraft.client.renderer.block.ModelBlockRenderer
-          net.minecraft.client.renderer.block.BlockRenderDispatcher
+          net.minecraft.client.renderer.block.BlockModelLighter
+          net.minecraft.client.renderer.block.BlockModelLighter$Cache
+          net.minecraft.client.renderer.block.BlockModelLighter$AdjacencyInfo
+          net.minecraft.client.renderer.block.BlockModelLighter$AmbientVertexRemap
+          net.minecraft.client.renderer.block.BlockAndTintGetter
           net.minecraft.client.renderer.chunk.SectionCompiler
           net.minecraft.client.renderer.chunk.ChunkSectionLayer
+          net.minecraft.client.renderer.chunk.RenderSectionRegion
           net.minecraft.client.renderer.LevelRenderer
-          net.minecraft.client.renderer.LightTexture
+          net.minecraft.client.renderer.Lightmap
+          net.minecraft.client.renderer.GameRenderer
           net.minecraft.client.renderer.RenderPipelines
-          net.minecraft.client.renderer.block.dispatch.BlockStateModel
+          net.minecraft.client.renderer.BindGroupLayouts
           net.minecraft.client.resources.model.geometry.BakedQuad
           net.minecraft.client.resources.model.geometry.BakedQuad$MaterialInfo
-          net.minecraft.world.level.BlockAndTintGetter
           net.minecraft.world.level.LightLayer
+          net.minecraft.world.level.CardinalLighting
           net.minecraft.world.level.block.state.BlockState
           net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase
+          net.minecraft.util.LightCoordsUtil
           com.mojang.blaze3d.vertex.DefaultVertexFormat
           com.mojang.blaze3d.vertex.VertexConsumer
+          com.mojang.blaze3d.vertex.QuadInstance
           com.mojang.blaze3d.systems.RenderPass
           com.mojang.blaze3d.systems.RenderSystem
           EOF
@@ -70,26 +78,10 @@ jobs:
             echo >> inspection/bytecode.txt
           done < inspection/target-classes.txt
 
-          : > inspection/discovered-classes.txt
-          tr ':' '\n' < /tmp/cp | while IFS= read -r JAR; do
-            if [ -f "$JAR" ] && [[ "$JAR" == *.jar ]]; then
-              jar tf "$JAR" 2>/dev/null | grep -E '^net/minecraft/(client/renderer|world/level)/.*(Light|light|Ambient|ambient|Occlusion|occlusion|ModelBlockRenderer|SectionCompiler|VertexConsumer|ChunkSectionLayer).*\.class$' >> inspection/discovered-classes.txt || true
-            fi
-          done
-          sort -u inspection/discovered-classes.txt | head -n 300 > inspection/discovered-classes-bounded.txt
-          sed -E 's#/#.#g; s#\.class$##' inspection/discovered-classes-bounded.txt > inspection/discovered-class-names.txt
-          : > inspection/discovered-bytecode.txt
-          while IFS= read -r CLASS; do
-            echo "=== $CLASS ===" >> inspection/discovered-bytecode.txt
-            javap -classpath "$CP" -c -p "$CLASS" >> inspection/discovered-bytecode.txt 2>&1 || true
-            echo >> inspection/discovered-bytecode.txt
-          done < inspection/discovered-class-names.txt
-
-          grep -n -E 'getLightColor|lightCoordsWithEmission|LightTexture|LightLayer|block\(|sky\(|pack\(|getBrightness|getRawBrightness|brightness|shade|Shade|ambient|Ambient|occlusion|Occlusion|viewBlocking|usesShapeForLightOcclusion|calculateShape|calculateShapeByLight|putBlockBakedQuad|putBulkData|lightmap|LIGHTMAP|Sampler2|UV2|POSITION.*LIGHT|BLOCK|SOLID|quad|diagonal|vertexRemapping|recalculateWinding' inspection/bytecode.txt inspection/discovered-bytecode.txt > inspection/key-grep.txt || true
-
-          grep -n -E 'ModelBlockRenderer|Ambient|Occlusion|LightTexture|LightLayer|SectionCompiler|VertexConsumer|DefaultVertexFormat|RenderPipelines' inspection/public-api.txt > inspection/public-key-grep.txt || true
+          grep -n -E 'getLightCoords|blend|smoothBlend|smoothWeightedBlend|block\(|sky\(|pack\(|setLightCoords|setColor|prepareQuadAmbientOcclusion|prepareQuadFlat|getShadeBrightness|cardinalLighting|byFace|lightEmission|Sampler2|Lightmap|getTextureView|bindTexture|SOLID_BLOCK|SOLID_TERRAIN|BLOCK|UV2|MATRICES_PROJECTION|FOG|SAMPLER0_SAMPLER2' inspection/bytecode.txt > inspection/key-grep.txt || true
+          grep -n -E 'BlockModelLighter|BlockAndTintGetter|LightCoordsUtil|QuadInstance|Lightmap|CardinalLighting|GameRenderer|RenderPipelines|BindGroupLayouts|DefaultVertexFormat' inspection/public-api.txt > inspection/public-key-grep.txt || true
       - uses: actions/upload-artifact@v4
         with:
-          name: phase2-dev4-lighting-ao-inspection-${{ github.sha }}
+          name: phase2-dev4-targeted-inspection-${{ github.sha }}
           if-no-files-found: error
           path: inspection/
