@@ -2,22 +2,23 @@
 
 [![Build](https://github.com/TrissTheBoss/Obsidian/actions/workflows/build.yml/badge.svg)](https://github.com/TrissTheBoss/Obsidian/actions/workflows/build.yml)
 
-Obsidian is an experimental, Vulkan-only rendering engine replacement project for Minecraft Java 26.2 on Fabric. Its primary performance goal is consistent frame pacing and strong 1% lows, followed by smooth chunk streaming and scaling to large render distances.
+Obsidian is an experimental, Vulkan-only rendering engine replacement project for Minecraft Java 26.2 on Fabric. Its primary performance goal is consistent frame pacing and strong 1%/0.1% lows, followed by smooth chunk streaming and scaling to very large render distances.
 
-> **Current status:** Phase 0 bootstrap. Obsidian does not replace terrain rendering yet and should not be expected to improve FPS in this milestone.
+> **Current status:** Phase 1 infrastructure. Obsidian does not replace terrain rendering yet and should not be expected to improve FPS at this stage.
 
-## Phase 0 scope
+## Validated foundation
 
-Phase 0 establishes the boundary the real renderer will build on:
+On the reference Windows 11 / AMD Radeon RX 6800 XT system, Obsidian has validated:
 
-- Fabric client bootstrap
-- strict renderer-mod conflict detection
-- Vulkan-only backend validation
-- runtime GPU capability capture through Minecraft's `GpuDevice`
-- a clean `RendererBridge` seam for later renderer ownership
-- configuration scaffolding
-- VS Code / Gradle project setup
-- reproducible GitHub Actions builds and release artifacts
+- Fabric/Vulkan bootstrap and device capability capture;
+- a render-frame lifecycle hook;
+- controlled GPU command submission through Minecraft's active Vulkan `GpuDevice`;
+- nonblocking GPU completion observation;
+- a three-slot frame-context ring with monotonically increasing serials;
+- real fence-gated deferred GPU resource destruction;
+- clean single-player world entry and shutdown with no pending retired test resources.
+
+Frame count is never treated as proof that the GPU is finished. Resource reclamation is completion-gated.
 
 ## Requirements
 
@@ -27,32 +28,25 @@ Phase 0 establishes the boundary the real renderer will build on:
 - Gradle 9.5.1 for local development
 - Vulkan selected under Minecraft's experimental **Graphics API** setting
 
-Minecraft 26.2 currently defaults to OpenGL. If Obsidian starts while OpenGL is active, Phase 0.0.2 and newer stay inactive for that session instead of crashing. Open **Video Settings**, set **Graphics API** to **Prefer Vulkan (Experimental)**, then restart Minecraft. Obsidian only establishes its renderer bridge when the active backend is Vulkan.
+If Minecraft starts on OpenGL, Obsidian remains inactive for that session instead of crashing. Set **Video Settings -> Graphics API -> Prefer Vulkan (Experimental)** and restart.
 
-## VS Code
+## Next Phase 1 milestone
 
-1. Install a Java 25 JDK.
-2. Install Gradle 9.5.1 and make `gradle` available on `PATH`.
-3. Install the extensions recommended by `.vscode/extensions.json`.
-4. Open the repository folder in VS Code.
-5. Run **Obsidian: build** or **Obsidian: run client** from **Terminal > Run Task**.
+Before terrain ownership begins, Obsidian is building a bounded staging/upload path with:
 
-Equivalent terminal commands:
-
-```text
-gradle build
-gradle runClient
-```
-
-## Renderer conflicts
-
-Obsidian is intended to replace the renderer/optimization stack rather than layer on top of another renderer. Phase 0 rejects or flags Sodium, VulkanMod, Iris, ImmediatelyFast, EntityCulling, and MoreCulling.
+- fixed-capacity host-visible staging storage;
+- aligned suballocation/ring semantics;
+- batched GPU copies;
+- real completion-gated staging-space reclamation;
+- controlled backpressure instead of unbounded temporary allocation;
+- upload capacity/high-water/reclamation/backpressure metrics;
+- a small non-visual runtime validation workload.
 
 ## Roadmap
 
-- **Phase 0:** Vulkan bootstrap, lifecycle seam, capability reporting, conflicts, configuration.
-- **Phase 1:** Vulkan infrastructure, frame contexts, synchronization, memory/staging allocators, render graph, profiling.
-- **Phase 2:** Initial Obsidian-owned terrain path.
+- **Phase 0:** Vulkan bootstrap, lifecycle seam, capability reporting, conflicts, configuration. **Validated.**
+- **Phase 1:** frame contexts, synchronization, resource lifetime, staging/upload allocators, profiling, render graph. **Active.**
+- **Phase 2:** initial Obsidian-owned terrain path.
 - **Phase 3:** GPU-driven visibility and indirect terrain submission.
 - Later phases: translucency, entities, block entities, particles, UI/text, experimental GPU paths.
 
@@ -60,10 +54,14 @@ Obsidian is intended to replace the renderer/optimization stack rather than laye
 
 1. 1% and 0.1% lows / frame pacing
 2. smooth chunk streaming
-3. large render distance scaling
+3. large render-distance scaling
 4. average FPS
 5. low avoidable CPU allocation and synchronization
 6. minimal visual differences without deliberately preserving vanilla rendering bugs
+
+## AI continuity
+
+Read `ai/README.md` before substantial work. The repository stores current state, durable decisions, historical attempts, and immutable new attempt records so another agent/model can continue without relying on chat history.
 
 ## License status
 
