@@ -1,0 +1,117 @@
+name: Inspect Phase 2 Dev2 APIs
+
+on:
+  push:
+    branches: [phase2/drawable-real-section-inspect]
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle 9.5.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+
+      - name: Resolve exact Minecraft 26.2 client classpath
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle classes --stacktrace
+          cat > /tmp/obsidian-inspect.init.gradle <<'EOF'
+          allprojects {
+            afterEvaluate { p ->
+              if (p == rootProject) {
+                tasks.register('printClientCompileClasspath') {
+                  doLast {
+                    println sourceSets.client.compileClasspath.files.collect { it.absolutePath }.join(File.pathSeparator)
+                  }
+                }
+              }
+            }
+          }
+          EOF
+          gradle -q -I /tmp/obsidian-inspect.init.gradle printClientCompileClasspath > /tmp/client-cp.txt
+          tail -n 1 /tmp/client-cp.txt > /tmp/client-cp-line.txt
+          test -s /tmp/client-cp-line.txt
+
+      - name: Inspect rendering and world-draw APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          CP="$(cat /tmp/client-cp-line.txt)"
+          mkdir -p inspection
+          {
+            echo '=== CLASSPATH ==='
+            tr ':' '\n' < /tmp/client-cp-line.txt
+            echo
+            for CLASS in \
+              net.minecraft.client.Minecraft \
+              net.minecraft.client.Camera \
+              net.minecraft.client.renderer.GameRenderer \
+              net.minecraft.client.renderer.LevelRenderer \
+              net.minecraft.client.renderer.LightTexture \
+              net.minecraft.client.renderer.RenderType \
+              net.minecraft.client.renderer.block.BlockRenderDispatcher \
+              net.minecraft.client.renderer.block.BlockModelShaper \
+              net.minecraft.client.renderer.texture.TextureAtlasSprite \
+              net.minecraft.client.resources.model.ModelManager \
+              com.mojang.blaze3d.systems.RenderSystem \
+              com.mojang.blaze3d.systems.GpuDevice \
+              com.mojang.blaze3d.systems.CommandEncoder \
+              com.mojang.blaze3d.systems.RenderPass \
+              com.mojang.blaze3d.pipeline.RenderPipeline \
+              com.mojang.blaze3d.vertex.DefaultVertexFormat; do
+              echo
+              echo "=== javap -public $CLASS ==="
+              javap -classpath "$CP" -public "$CLASS" || true
+            done
+          } > inspection/public-api.txt 2>&1
+
+          {
+            echo '=== TARGETED BYTECODE / PRIVATE MEMBERS ==='
+            for CLASS in \
+              net.minecraft.client.Minecraft \
+              net.minecraft.client.renderer.GameRenderer \
+              net.minecraft.client.renderer.LevelRenderer \
+              net.minecraft.client.renderer.block.BlockRenderDispatcher \
+              net.minecraft.client.renderer.block.BlockModelShaper \
+              net.minecraft.client.renderer.LightTexture \
+              com.mojang.blaze3d.systems.RenderSystem \
+              com.mojang.blaze3d.systems.RenderPass; do
+              echo
+              echo "=== javap -c -p $CLASS ==="
+              javap -classpath "$CP" -c -p "$CLASS" || true
+            done
+          } > inspection/bytecode.txt 2>&1
+
+          {
+            echo '=== RELEVANT CLASS NAMES ==='
+            tr ':' '\n' < /tmp/client-cp-line.txt | while IFS= read -r JAR; do
+              case "$JAR" in
+                *.jar)
+                  jar tf "$JAR" 2>/dev/null | grep -E '^(net/minecraft/client/(Camera|Minecraft)|net/minecraft/client/renderer/(GameRenderer|LevelRenderer|LightTexture|RenderType|block/|texture/)|net/minecraft/client/resources/model/|com/mojang/blaze3d/(systems|pipeline|vertex)/)' || true
+                  ;;
+              esac
+            done | sort -u
+          } > inspection/classes.txt
+
+      - name: Upload inspection artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-dev2-api-inspection-${{ github.sha }}
+          if-no-files-found: error
+          path: inspection/
