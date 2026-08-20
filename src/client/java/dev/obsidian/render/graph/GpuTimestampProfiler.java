@@ -10,9 +10,9 @@ import java.util.OptionalLong;
 /**
  * GPU timestamp ranges embedded in an Obsidian-owned command stream.
  *
- * <p>Dev5 intentionally records one validation sample without reusing query
- * slots. This proves integrated timestamping without requiring profiler-only
- * submissions. Query result polling is nonblocking in Minecraft's Vulkan
+ * <p>The current Phase 1 validation profiler records one sample without
+ * reusing query slots. This proves integrated timestamping without profiler-
+ * only submissions. Query result polling is nonblocking in Minecraft's Vulkan
  * backend because availability bits are requested instead of the Vulkan WAIT
  * flag.</p>
  */
@@ -54,7 +54,7 @@ public final class GpuTimestampProfiler implements AutoCloseable {
     public void markSubmitted(int passCount) {
         RenderSystem.assertOnRenderThread();
         if (submitted) {
-            throw new IllegalStateException("Dev5 timestamp sample has already been submitted");
+            throw new IllegalStateException("Phase 1 timestamp sample has already been submitted");
         }
         if (passCount <= 0 || passCount > gpuPassNs.length) {
             throw new IllegalArgumentException("Invalid submitted pass count: " + passCount);
@@ -151,7 +151,7 @@ public final class GpuTimestampProfiler implements AutoCloseable {
             throw new IllegalStateException("GPU timestamp profiler is closed");
         }
         if (submitted) {
-            throw new IllegalStateException("Dev5 timestamp query slots are one-shot and cannot be reused");
+            throw new IllegalStateException("Phase 1 timestamp query slots are one-shot and cannot be reused");
         }
         if (passIndex < 0 || passIndex >= gpuPassNs.length) {
             throw new IndexOutOfBoundsException("GPU profiler pass index " + passIndex + " is out of range");
