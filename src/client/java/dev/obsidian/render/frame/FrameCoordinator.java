@@ -158,6 +158,9 @@ public final class FrameCoordinator implements AutoCloseable {
         }
         closed = true;
 
+        FrameGraphProbe.State graphStateBeforeClose =
+                frameGraphProbe == null ? FrameGraphProbe.State.FAILED : frameGraphProbe.state();
+
         // Staging owns the useful submission fence. Closing it first either
         // completes/reclaims safely or explicitly abandons in-flight memory to
         // Minecraft device shutdown. The probe can then make the same choice
@@ -174,9 +177,9 @@ public final class FrameCoordinator implements AutoCloseable {
         deferredReleases.close();
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 1 frame coordinator closed after {0} frame(s): graphState={1}, graphPasses={2}, usefulSubmissions={3}, profilerOnlySubmissions=0, queryPolls={4}, unavailableQueryPolls={5}, stagingSubmittedBytes={6}, stagingReclaimedBytes={7}, stagingHighWater={8}, stagingBackpressureEvents={9}, pendingUploadBatches={10}, arenaUsedBytes={11}, arenaHighWater={12}, arenaAllocations={13}, arenaAllocationFailures={14}, arenaRetired={15}, arenaReclaimed={16}, arenaStaleHandleRejections={17}, arenaFreeSpans={18}, arenaLargestFree={19}, arenaFragmentationPermille={20}, pendingArenaRetirementBatches={21}, retiredResources={22}, releasedResources={23}, pendingRetirements={24}.",
+                "Phase 1 frame coordinator closed after {0} frame(s): graphResult={1}, graphPasses={2}, usefulSubmissions={3}, profilerOnlySubmissions=0, queryPolls={4}, unavailableQueryPolls={5}, stagingSubmittedBytes={6}, stagingReclaimedBytes={7}, stagingHighWater={8}, stagingBackpressureEvents={9}, pendingUploadBatches={10}, arenaUsedBytes={11}, arenaHighWater={12}, arenaAllocations={13}, arenaAllocationFailures={14}, arenaRetired={15}, arenaReclaimed={16}, arenaStaleHandleRejections={17}, arenaFreeSpans={18}, arenaLargestFree={19}, arenaFragmentationPermille={20}, pendingArenaRetirementBatches={21}, retiredResources={22}, releasedResources={23}, pendingRetirements={24}.",
                 frameIndex,
-                frameGraphProbe == null ? FrameGraphProbe.State.FAILED : frameGraphProbe.state(),
+                graphStateBeforeClose,
                 frameGraphProbe == null ? 0 : frameGraphProbe.graph().passCount(),
                 frameGraphProbe == null ? 0L : frameGraphProbe.stream().submissionCount(),
                 frameGraphProbe == null ? 0L : frameGraphProbe.profiler().pollCount(),
