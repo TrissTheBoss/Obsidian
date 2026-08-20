@@ -89,7 +89,7 @@ public final class ObsidianBootstrap {
         }
 
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 1 resource-lifetime foundation armed. Terrain replacement is still intentionally inactive.");
+                "Obsidian Phase 1 bounded staging/upload foundation armed. Terrain replacement is still intentionally inactive.");
     }
 
     public static void onFrameStart() {
