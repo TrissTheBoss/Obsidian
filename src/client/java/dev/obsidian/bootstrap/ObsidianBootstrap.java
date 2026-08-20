@@ -7,6 +7,7 @@ import dev.obsidian.render.MojangVulkanBridge;
 import dev.obsidian.render.RendererBridge;
 import dev.obsidian.render.frame.FrameCoordinator;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.renderer.GameRenderer;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -89,13 +90,20 @@ public final class ObsidianBootstrap {
         }
 
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 2 real-section snapshot/reference-mesher foundation armed. The dev1 probe captures immutable section data and validates its canonical face stream through the existing GPU arena; vanilla terrain intentionally remains active.");
+                "Obsidian Phase 2 dev2 first-drawable-section probe armed. P2.1 immutable snapshot/reference semantics remain the correctness oracle; dev2 will build arena-backed indexed geometry and briefly overlay orientation-colored faces on the live depth-tested vanilla world for transform validation. Vanilla terrain remains active.");
     }
 
     public static void onFrameStart() {
         FrameCoordinator coordinator = frameCoordinator;
         if (coordinator != null) {
             coordinator.beginFrame();
+        }
+    }
+
+    public static void onWorldRendered(GameRenderer renderer) {
+        FrameCoordinator coordinator = frameCoordinator;
+        if (coordinator != null) {
+            coordinator.afterWorldRender(renderer);
         }
     }
 
