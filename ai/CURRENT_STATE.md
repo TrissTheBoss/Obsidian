@@ -7,12 +7,27 @@ Last updated: 2026-08-20
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
 - Current public release: `v0.0.2-phase0`
+- Canonical long-range product/feature plan: `ai/MASTER_ROADMAP.md`
 - Phase 1 status: **COMPLETE / runtime validated through dev9**
 - Phase 1 closing merge: `61df7b8e2abc09ce387e09c9e4d6811a9ef6c40f`
 - Active development branch: `phase2/real-section-reference`
-- Active draft PR: #12, `Phase 2: real section snapshot and reference mesher`
+- Active draft PR: #12, `Phase 2: immutable real-section snapshot and reference oracle`
 - Current development version: `0.2.0-phase2-dev1`
-- Phase 2 dev1 status: **implementation compile-clean; final exact-head CI/package + RX 6800 XT runtime pending**
+- Phase 2 dev1 status: **implementation + exact CI package verified; RX 6800 XT runtime validation pending**
+
+## Continuity model
+
+The continuity files now have explicit non-overlapping roles:
+
+- `ai/CURRENT_STATE.md` = current truth and immediate next action;
+- `ai/MASTER_ROADMAP.md` = canonical full future roadmap, phases, planned features, experiments, gates, release/compatibility direction, and roadmap-alteration procedure;
+- `ai/OPERATING_MANUAL.md` = engineering and handoff procedure;
+- `ai/DECISIONS.md` = durable reasoning/policy;
+- `ai/ATTEMPT_LOG.md` + `ai/attempts/` = immutable evidence/history.
+
+Roadmap creation/governance evidence: `ai/attempts/A-0057-master-roadmap-and-governance.md`.
+
+Future agents must read the roadmap before making architectural/product planning changes and must follow its Class A-E change protocol rather than silently rewriting planned scope.
 
 ## Reference runtime
 
@@ -106,6 +121,21 @@ Implementation evidence: `ai/attempts/A-0055-phase2-reference-snapshot-implement
 
 Clean source-only tree after removing dev9 one-shot code and the temporary inspector passed GitHub Actions run `32418735722` with build + artifact upload SUCCESS and release SKIPPED.
 
+### Exact package verification
+
+Evidence: `ai/attempts/A-0056-phase2-dev1-final-package.md`.
+
+- documented code head: `80a518653e034200532eb0c75033b0726ef8edd5`;
+- package CI run: `32418949171`;
+- artifact ID: `9424977392`;
+- packaged version: `0.2.0-phase2-dev1`;
+- main JAR SHA-256: `3ab8c5437b73789a00ff90d0a87d0af87921bcc85a2498db96b39b3f4d7b2a23`;
+- sources SHA-256: `69f6fb34b700ee965897569afb028a8e531e1228e6368f9ff554f972fbfe90f0`;
+- required Phase 2 classes present;
+- completed dev9 one-shot probe absent.
+
+The commits after this package verification are documentation/continuity changes only; no Java/source behavior has changed since the verified dev1 JAR.
+
 ## Runtime success criteria for dev1
 
 Expected invariants on the reference RX 6800 XT:
@@ -132,7 +162,7 @@ Exact face count, fingerprints and timings are world-dependent and must not be h
 
 ## Next after dev1 runtime success
 
-Phase 2 dev2 should produce the first **drawable** real section for the same conservative supported subset:
+Phase 2 dev2 / roadmap item P2.2 should produce the first **drawable** real section for the same conservative supported subset:
 
 - preserve immutable snapshot/reference semantics;
 - inspect exact material/model/sprite/light APIs needed for correct drawable vertices;
@@ -142,11 +172,11 @@ Phase 2 dev2 should produce the first **drawable** real section for the same con
 - render through the already-proven visibility/indirect path;
 - retain vanilla terrain as a visual comparison oracle until Obsidian output is validated.
 
-Broader block classes, light/AO, cutout/translucent and resource/model compatibility expand during Phase 2 before global terrain replacement.
+Broader block classes, light/AO, cutout/translucent and resource/model compatibility expand during Phase 2 before production greedy meshing.
 
 ## Greedy meshing roadmap
 
-D-0024 remains active:
+The complete plan is now in `ai/MASTER_ROADMAP.md`; D-0024 remains the durable greedy-meshing decision.
 
 - Phase 2: immutable snapshot + halo + simple reference oracle + correct drawable semantics;
 - Phase 3: worker-local binary/bitmask greedy mesher with reusable scratch and render-correct merge keys for material/sprite, layer, tint, light, AO, UV and special/fluid state;
@@ -155,12 +185,11 @@ D-0024 remains active:
 
 ## Immediate next action
 
-1. Update PR #12 with exact dev1 implementation and runtime invariants.
-2. Run final CI on the documented exact head.
-3. Inspect/package the exact CI-built `0.2.0-phase2-dev1` JAR and checksums.
-4. Runtime-test on the reference RX 6800 XT.
-5. Keep PR #12 draft/unmerged until runtime validation passes.
+1. Runtime-test the already package-verified `0.2.0-phase2-dev1` JAR on the reference RX 6800 XT.
+2. Record the real-section snapshot/reference result in a new immutable attempt.
+3. Keep PR #12 draft/unmerged until runtime validation passes.
+4. If dev1 passes, promote/merge it with `[no-release]` when explicitly authorized and start P2.2 from the resulting `main`.
 
 ## Relevant durable decisions
 
-D-0014 through D-0027 remain active. D-0024 governs the production greedy mesher; Phase 2 dev1 additionally establishes the primitive-only snapshot + conservative canonical reference-face oracle as the correctness baseline for later optimized meshing.
+D-0014 through D-0027 remain active. D-0024 governs the production greedy mesher. The canonical long-range feature/phase plan and the procedure for changing it now live in `ai/MASTER_ROADMAP.md` and are mandatory continuity reading.
