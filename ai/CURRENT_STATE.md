@@ -11,9 +11,9 @@ Last updated: 2026-08-20
 - Phase 1 status: **COMPLETE / runtime validated through dev9**
 - Phase 1 closing merge: `61df7b8e2abc09ce387e09c9e4d6811a9ef6c40f`
 - Active development branch: `phase2/real-section-reference`
-- Active draft PR: #12, `Phase 2: immutable real-section snapshot and reference oracle`
+- Active PR: #12, `Phase 2: immutable real-section snapshot and reference oracle`
 - Current development version: `0.2.0-phase2-dev1`
-- Phase 2 dev1 status: **implementation + exact CI package verified; RX 6800 XT runtime validation pending**
+- Phase 2 dev1 status: **RUNTIME VALIDATED on the reference RX 6800 XT; final CI + merge pending**
 
 ## Continuity model
 
@@ -136,29 +136,32 @@ Evidence: `ai/attempts/A-0056-phase2-dev1-final-package.md`.
 
 The commits after this package verification are documentation/continuity changes only; no Java/source behavior has changed since the verified dev1 JAR.
 
-## Runtime success criteria for dev1
+### Dev1 runtime result - SUCCESS
 
-Expected invariants on the reference RX 6800 XT:
+Runtime evidence: `ai/attempts/A-0058-phase2-dev1-runtime-success.md`.
 
-- `obsidian 0.2.0-phase2-dev1` loads on Vulkan;
-- probe waits quietly until player/world/required chunks exist;
+The reference RX 6800 XT test passed all dev1 invariants:
+
+- correct `obsidian 0.2.0-phase2-dev1` loaded on Vulkan;
+- real section captured at `(-2,4,5)` after world/player/chunks became available;
 - sampledCells=5832;
-- interiorAir + interiorSupported + interiorUnsupported = 4096;
-- supportedCells > 0;
-- faceCount > 0;
+- interiorAir=3954, interiorSupported=13, interiorUnsupported=129, totaling 4096 interior cells;
+- snapshot fingerprint `16894373850408670304`;
+- faceCount=27, quadCount=27, vertexCount=108, indexCount=162;
+- blockedByUnsupportedFaces=28;
+- mesh fingerprint `16640427735610179256`;
+- referenceBytes=216 = 27 * 8;
 - deterministicBuilds=2;
 - `worldReadsAfterSnapshot=0`;
-- referenceBytes = faceCount * 8;
-- usefulSubmissions=1;
-- profilerOnlySubmissions=0;
-- staging submitted/reclaimed bytes = referenceBytes;
-- gpuVerifiedBytes = referenceBytes;
-- arena allocation retires/reclaims and fully coalesces;
-- world entry stays normal with vanilla terrain active;
-- no pending work at shutdown;
-- process exits code 0.
+- usefulSubmissions=1, profilerOnlySubmissions=0;
+- gpuVerifiedBytes=216;
+- staging submitted/reclaimed=216/216 bytes, high-water=216, no backpressure;
+- arena allocation retired/reclaimed=1/1, used=0, one 524288-byte free span, fragmentation=0;
+- no pending upload/arena/generic retirements at shutdown;
+- vanilla world entry and rendering remained normal;
+- process exited with code 0.
 
-Exact face count, fingerprints and timings are world-dependent and must not be hard-coded.
+The exact section coordinates, counts, fingerprints and timings are world-dependent. The success claim is based on their internal consistency and the architectural invariants above, not on hard-coded terrain values.
 
 ## Next after dev1 runtime success
 
@@ -185,10 +188,10 @@ The complete plan is now in `ai/MASTER_ROADMAP.md`; D-0024 remains the durable g
 
 ## Immediate next action
 
-1. Runtime-test the already package-verified `0.2.0-phase2-dev1` JAR on the reference RX 6800 XT.
-2. Record the real-section snapshot/reference result in a new immutable attempt.
-3. Keep PR #12 draft/unmerged until runtime validation passes.
-4. If dev1 passes, promote/merge it with `[no-release]` when explicitly authorized and start P2.2 from the resulting `main`.
+1. Run final CI on the runtime-evidence/status head of PR #12.
+2. Promote and merge PR #12 with `[no-release]`, including `MASTER_ROADMAP.md` and its governance/continuity wiring.
+3. After merge, synchronize roadmap P2.1 status to COMPLETE on `main` if the merge commit is the final validation gate.
+4. Start P2.2 from the resulting `main` commit and inspect exact Minecraft 26.2 material/model/sprite/light APIs for the first drawable real section.
 
 ## Relevant durable decisions
 
