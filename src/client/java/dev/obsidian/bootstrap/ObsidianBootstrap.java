@@ -89,7 +89,7 @@ public final class ObsidianBootstrap {
         }
 
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 1 frame-graph / integrated GPU profiler foundation armed. Terrain replacement is still intentionally inactive.");
+                "Obsidian Phase 1 first offscreen graphics draw foundation armed. The validation target is never presented; terrain replacement is still intentionally inactive.");
     }
 
     public static void onFrameStart() {
