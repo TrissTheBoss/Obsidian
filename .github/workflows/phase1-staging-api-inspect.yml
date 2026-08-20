@@ -40,17 +40,27 @@ jobs:
             'com.mojang.blaze3d.buffers.GpuBufferSlice$MappedView'
             'com.mojang.blaze3d.systems.CommandEncoder'
             'com.mojang.blaze3d.systems.GpuDevice'
+            'com.mojang.blaze3d.systems.DeviceFeatures'
+            'com.mojang.blaze3d.vertex.StagingBuffer'
+            'com.mojang.blaze3d.vertex.StagingBuffer$PersistentlyMapped'
+            'com.mojang.blaze3d.vertex.StagingBuffer$Cpu'
+            'com.mojang.blaze3d.vertex.StagingBuffer$Uploader'
+            'com.mojang.blaze3d.vertex.StagingBuffer$BufferHandle'
+            'com.mojang.blaze3d.vertex.UberGpuBuffer'
           )
           for cls in "${classes[@]}"; do
             echo "===== $cls public =====" >> "$out"
             javap -classpath "$jarfile" -public -constants "$cls" >> "$out" 2>&1 || true
             echo >> "$out"
           done
-          echo '===== CommandEncoder bytecode =====' >> "$out"
-          javap -classpath "$jarfile" -c -p com.mojang.blaze3d.systems.CommandEncoder >> "$out" 2>&1 || true
-          echo >> "$out"
-          echo '===== GpuBufferSlice bytecode =====' >> "$out"
-          javap -classpath "$jarfile" -c -p com.mojang.blaze3d.buffers.GpuBufferSlice >> "$out" 2>&1 || true
+          for cls in \
+            com.mojang.blaze3d.systems.CommandEncoder \
+            com.mojang.blaze3d.vertex.StagingBuffer \
+            'com.mojang.blaze3d.vertex.StagingBuffer$PersistentlyMapped'; do
+            echo "===== $cls bytecode =====" >> "$out"
+            javap -classpath "$jarfile" -c -p "$cls" >> "$out" 2>&1 || true
+            echo >> "$out"
+          done
       - name: Upload inspection artifact
         uses: actions/upload-artifact@v4
         with:
