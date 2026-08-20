@@ -14,10 +14,12 @@ Last updated: 2026-08-21
 - P2.1 closing merge: `a714e19ce871bf73136d52f85a1780109aa851dd`
 - Phase 2 P2.2: **COMPLETE / runtime + human visual validated and merged**
 - P2.2 closing merge: `f9c64267c5becb3bd80897efdb09ed65a6ce8697`
-- Last validated development version: `0.2.0-phase2-dev2`
 - Current product phase: **Phase 2 - real-section correctness and renderer semantics**
-- Next planned milestone: **P2.3 - correct textures/material identity**
-- No P2.3 implementation branch/version has been started at this status-sync point.
+- Active milestone: **P2.3 - correct textures/material identity**
+- Active branch: `phase2/material-texture-identity`
+- Active draft PR: #16, `Phase 2 dev3: texture and material identity`
+- Current development version: `0.2.0-phase2-dev3`
+- P2.3 status: **ACTIVE - exact Minecraft 26.2 material/model/sprite/UV/tint/layer API inspection in progress before implementation**
 
 ## Continuity model
 
@@ -119,31 +121,44 @@ Final logged shutdown invariants included:
 
 Terrain-dependent coordinates, fingerprints and counts are not hard-coded success values.
 
-## Deliberate P2.2 boundary
+## P2.3 / dev3 - ACTIVE
 
-P2.2 does **not** claim:
+Planning evidence: `ai/attempts/A-0067-phase2-dev3-material-identity-plan.md`.
 
-- correct Minecraft material/sprite/texture/UV/tint/render-layer semantics - P2.3;
-- block/sky light or ambient occlusion - P2.4;
-- broad cutout/model semantics - P2.5+;
+Goal: replace P2.2 orientation/debug colors with exact Minecraft texture/material identity for the deliberately conservative supported full-cube path while preserving the permanent reference oracle and proven placement/lifetime architecture.
+
+Dev3 begins with exact Loom-resolved Minecraft 26.2 inspection for:
+
+- `BlockStateModelSet` / `BlockStateModel` / `BlockStateModelPart` selection and quad ownership;
+- `BakedQuad` positions, packed UVs, direction, tint and material data;
+- `Material.Baked` / `TextureAtlasSprite` identity and UV domain;
+- block tint/color resolution and required world/position context;
+- material/render-layer classification;
+- public textured Blaze3D pipeline/bind-group/texture-sampler contracts;
+- model/texture resource reload lifetime and invalidation.
+
+The expected architecture is a render-thread capture/materialization bridge that converts mutable Minecraft model/resource state into immutable renderer-owned primitive/material identity. Future async mesh work must not retain or query live `ModelManager`, baked-model, sprite or world objects.
+
+## Deliberate P2.3 boundary
+
+Dev3 must not claim or pull forward:
+
+- block/sky lighting or ambient occlusion - P2.4;
+- broad cutout/non-full/custom-model semantics - P2.5+ unless a tiny case is required to prove material classification;
 - production greedy meshing - Phase 3;
 - global vanilla terrain replacement;
 - production-scale visibility/performance - Phase 4+.
 
+Unsupported resource-pack/custom-model cases must be explicit rather than silently approximated.
+
 ## Immediate next action
 
-Start P2.3 from the synchronized `main` state after this Class-A docs sync is merged.
-
-P2.3 should begin with exact Minecraft 26.2 API/source inspection for:
-
-- `BlockStateModelSet` / `BlockStateModelPart` / `BakedQuad` material ownership;
-- atlas/sprite identity and UV semantics;
-- tint/color inputs;
-- material/render-layer classification;
-- stable renderer-owned material identity suitable for immutable snapshots/async meshes;
-- resource reload invalidation and texture/material lifetime.
-
-Do not add light/AO semantics early; they remain P2.4. Do not begin production greedy meshing; Phase 3 remains gated on Phase 2 semantic correctness.
+1. Complete exact Minecraft 26.2 API/bytecode inspection on the disposable dev3 inspection workstream.
+2. Record findings immutably on the production dev3 branch and close the inspection PR without merge.
+3. Implement renderer-owned material/sprite/UV identity for the conservative supported subset while keeping post-snapshot meshing world/model-manager free.
+4. Preserve the validated P2.2 section-local transform, public indexed-indirect graphics and completion-gated lifetime path.
+5. Run exact Java 25 / Gradle 9.5.1 CI and package `0.2.0-phase2-dev3`.
+6. Keep PR #16 draft until reference RX 6800 XT runtime/visual validation proves textured materialized geometry aligns with vanilla and all lifetime invariants remain clean.
 
 ## Relevant durable decisions
 
