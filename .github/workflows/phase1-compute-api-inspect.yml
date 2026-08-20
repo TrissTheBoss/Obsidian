@@ -36,12 +36,14 @@ jobs:
           jarfile=$(find "$HOME/.gradle/caches/fabric-loom/26.2" -type f -name 'minecraft-client*.jar' | head -n 1)
           echo "jar=$jarfile" >> "$out"
           echo '===== Compute/storage/barrier related classes =====' >> "$out"
-          jar tf "$jarfile" | grep -Ei 'Compute|Storage|Barrier|ResourceAccess|ShaderType|Pipeline' | sort >> "$out" || true
+          jar tf "$jarfile" | grep -Ei 'Compute|Storage|Barrier|ResourceAccess|ShaderType|Pipeline|VulkanGpuBuffer|GlslCompiler' | sort >> "$out" || true
           echo >> "$out"
           classes=(
             'com.mojang.blaze3d.systems.CommandEncoder'
+            'com.mojang.blaze3d.systems.CommandEncoderBackend'
             'com.mojang.blaze3d.systems.ComputePass'
             'com.mojang.blaze3d.systems.GpuDevice'
+            'com.mojang.blaze3d.systems.GpuDeviceBackend'
             'com.mojang.blaze3d.systems.DeviceFeatures'
             'com.mojang.blaze3d.buffers.GpuBuffer'
             'com.mojang.blaze3d.buffers.GpuBufferSlice'
@@ -52,6 +54,11 @@ jobs:
             'com.mojang.blaze3d.vulkan.VulkanComputePass'
             'com.mojang.blaze3d.vulkan.VulkanCommandEncoder'
             'com.mojang.blaze3d.vulkan.VulkanDevice'
+            'com.mojang.blaze3d.vulkan.VulkanGpuBuffer'
+            'com.mojang.blaze3d.vulkan.VulkanGpuBuffer$Direct'
+            'com.mojang.blaze3d.vulkan.VulkanRenderPass'
+            'com.mojang.blaze3d.vulkan.glsl.GlslCompiler'
+            'com.mojang.blaze3d.vulkan.glsl.IntermediaryShaderModule'
           )
           for cls in "${classes[@]}"; do
             echo "===== $cls public/constants =====" >> "$out"
@@ -61,9 +68,10 @@ jobs:
             javap -classpath "$jarfile" -c -p "$cls" >> "$out" 2>&1 || true
             echo >> "$out"
           done
-          echo '===== Vulkan compute/barrier references =====' >> "$out"
-          javap -classpath "$jarfile" -c -p com.mojang.blaze3d.vulkan.VulkanCommandEncoder 2>&1 | grep -n -E 'Compute|Barrier|vkCmdDispatch|PipelineBarrier|INDIRECT|SHADER' >> "$out" || true
-          javap -classpath "$jarfile" -c -p com.mojang.blaze3d.vulkan.VulkanComputePass 2>&1 | grep -n -E 'dispatch|setStorage|setPipeline|Barrier|vkCmdDispatch' >> "$out" || true
+          echo '===== Vulkan compute/buffer/barrier references =====' >> "$out"
+          javap -classpath "$jarfile" -c -p com.mojang.blaze3d.vulkan.VulkanCommandEncoder 2>&1 | grep -n -E 'Compute|Barrier|vkCmdDispatch|PipelineBarrier|INDIRECT|SHADER|allocateAndBegin|execute' >> "$out" || true
+          javap -classpath "$jarfile" -c -p com.mojang.blaze3d.vulkan.VulkanRenderPass 2>&1 | grep -n -E 'drawIndexedIndirect|vkCmdDrawIndexedIndirect|VulkanGpuBuffer' >> "$out" || true
+          javap -classpath "$jarfile" -c -p 'com.mojang.blaze3d.vulkan.VulkanGpuBuffer$Direct' 2>&1 | grep -n -E 'VkBufferCreateInfo|usage|vmaCreateBuffer|vkBuffer|allocation' >> "$out" || true
       - name: Upload inspection artifact
         uses: actions/upload-artifact@v4
         with:
