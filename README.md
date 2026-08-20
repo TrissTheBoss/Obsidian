@@ -4,4 +4,14 @@
 
 Obsidian is an experimental Vulkan-only Minecraft Java 26.2 Fabric renderer project focused first on frame pacing and large render-distance scalability.
 
-Current phase: **Phase 1 infrastructure**. Terrain replacement has not started yet. See `ai/README.md` for the canonical current state, decisions, validation history, and handoff instructions.
+Current development phase: **Phase 2 - real-section correctness and renderer semantics**. Phase 1's Vulkan/GPU infrastructure is runtime-validated and complete; Phase 2 is establishing immutable real-section data and a permanent correctness oracle before visible terrain replacement and production greedy meshing.
+
+Project planning and continuity:
+
+- [`ai/MASTER_ROADMAP.md`](ai/MASTER_ROADMAP.md) - canonical full roadmap, planned features, phase gates, experiments, performance/compatibility/release strategy, and roadmap-change procedure.
+- [`ai/CURRENT_STATE.md`](ai/CURRENT_STATE.md) - exact active branch/version/milestone and current validation state.
+- [`ai/README.md`](ai/README.md) - required reading order and continuity-system guide.
+- [`ai/OPERATING_MANUAL.md`](ai/OPERATING_MANUAL.md) - engineering, validation, handoff, and roadmap-governance procedure.
+- [`ai/DECISIONS.md`](ai/DECISIONS.md) - durable architectural/product decisions and rationale.
+
+Planned production terrain meshing uses a worker-local **binary/bitmask greedy mesher**, differential-tested against the simple Phase 2 reference oracle rather than serving as its own correctness source.
