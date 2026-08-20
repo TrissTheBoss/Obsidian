@@ -2,12 +2,14 @@ package dev.obsidian.render.frame;
 
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
-import dev.obsidian.render.draw.VisibilityCompactionProbe;
 import dev.obsidian.render.memory.DeviceGeometryArena;
 import dev.obsidian.render.resource.DeferredReleaseQueue;
+import dev.obsidian.render.terrain.RealSectionReferenceProbe;
+import dev.obsidian.render.terrain.ReferenceFaceMesh;
+import dev.obsidian.render.terrain.SectionSnapshot;
 import dev.obsidian.render.upload.StagingUploadArena;
 
-/** Render-thread Phase 1 lifecycle root. */
+/** Render-thread lifecycle root for the active Obsidian milestone. */
 public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
     private static final int VALIDATION_STAGING_BYTES = 256 * 1024;
@@ -18,7 +20,7 @@ public final class FrameCoordinator implements AutoCloseable {
     private final DeferredReleaseQueue deferredReleases = new DeferredReleaseQueue();
     private final StagingUploadArena stagingUploads;
     private final DeviceGeometryArena deviceArena;
-    private final VisibilityCompactionProbe visibilityProbe;
+    private final RealSectionReferenceProbe sectionProbe;
 
     private FrameContext activeFrame;
     private long frameIndex;
@@ -28,17 +30,17 @@ public final class FrameCoordinator implements AutoCloseable {
     public FrameCoordinator(GpuDevice device) {
         StagingUploadArena staging = null;
         DeviceGeometryArena arena = null;
-        VisibilityCompactionProbe probe = null;
+        RealSectionReferenceProbe probe = null;
         try {
             staging = new StagingUploadArena(
                     device,
-                    () -> "Obsidian Phase 1 bounded staging ring",
+                    () -> "Obsidian Phase 2 bounded staging ring",
                     VALIDATION_STAGING_BYTES);
             arena = new DeviceGeometryArena(
                     device,
-                    () -> "Obsidian Phase 1 device geometry arena",
+                    () -> "Obsidian Phase 2 device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
-            probe = new VisibilityCompactionProbe(device, staging, arena);
+            probe = new RealSectionReferenceProbe(device, staging, arena);
         } catch (RuntimeException e) {
             if (probe != null) {
                 try {
@@ -62,11 +64,11 @@ public final class FrameCoordinator implements AutoCloseable {
                 }
             }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 1 visibility-compaction initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 2 real-section reference initialization failed; Minecraft will continue for diagnosis.", e);
         }
         stagingUploads = staging;
         deviceArena = arena;
-        visibilityProbe = probe;
+        sectionProbe = probe;
     }
 
     public void beginFrame() {
@@ -81,16 +83,15 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 1 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, stagingCapacity={2}, deviceArenaCapacity={3}, graphPasses={4}; dev9 uses GPU scene visibility + command compaction, native compute only, public fixed-count Blaze3D indirect graphics with zeroed tail slots, GPU safety/reuse are completion-gated, profiler-only submissions are forbidden.",
+                    "Phase 2 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, stagingCapacity={2}, deviceArenaCapacity={3}; dev1 waits for a real loaded section, captures an immutable 18^3 snapshot, builds the simple reference face oracle, and validates it through the existing GPU arena. Vanilla terrain remains active.",
                     frameContexts.size(),
                     cpuFrameTimings.capacity(),
                     stagingUploads == null ? 0 : stagingUploads.capacityBytes(),
-                    deviceArena == null ? 0L : deviceArena.capacityBytes(),
-                    visibilityProbe == null ? 0 : visibilityProbe.graph().passCount());
+                    deviceArena == null ? 0L : deviceArena.capacityBytes());
         }
 
-        if (visibilityProbe != null) {
-            visibilityProbe.submit(frameIndex);
+        if (sectionProbe != null) {
+            sectionProbe.tryCaptureAndSubmit(frameIndex);
         }
     }
 
@@ -116,8 +117,8 @@ public final class FrameCoordinator implements AutoCloseable {
         if (deviceArena != null) {
             deviceArena.pollRetirements();
         }
-        if (visibilityProbe != null) {
-            visibilityProbe.poll(frameIndex);
+        if (sectionProbe != null) {
+            sectionProbe.poll(frameIndex);
         }
     }
 
@@ -145,8 +146,8 @@ public final class FrameCoordinator implements AutoCloseable {
         return deviceArena == null ? 0 : deviceArena.pendingRetirementBatches();
     }
 
-    public VisibilityCompactionProbe.State visibilityProbeState() {
-        return visibilityProbe == null ? VisibilityCompactionProbe.State.FAILED : visibilityProbe.state();
+    public RealSectionReferenceProbe.State sectionProbeState() {
+        return sectionProbe == null ? RealSectionReferenceProbe.State.FAILED : sectionProbe.state();
     }
 
     @Override
@@ -157,14 +158,18 @@ public final class FrameCoordinator implements AutoCloseable {
         }
         closed = true;
 
-        VisibilityCompactionProbe.State visibilityStateBeforeClose =
-                visibilityProbe == null ? VisibilityCompactionProbe.State.FAILED : visibilityProbe.state();
+        RealSectionReferenceProbe.State sectionStateBeforeClose =
+                sectionProbe == null ? RealSectionReferenceProbe.State.FAILED : sectionProbe.state();
+        SectionSnapshot snapshot = sectionProbe == null ? null : sectionProbe.snapshot();
+        ReferenceFaceMesh mesh = sectionProbe == null ? null : sectionProbe.mesh();
 
+        // The probe owns temporary readback/completion handles. Let it relinquish
+        // those before the shared staging/arena owners perform their bounded shutdown.
+        if (sectionProbe != null) {
+            sectionProbe.close();
+        }
         if (stagingUploads != null) {
             stagingUploads.close();
-        }
-        if (visibilityProbe != null) {
-            visibilityProbe.close();
         }
         if (deviceArena != null) {
             deviceArena.close();
@@ -172,19 +177,25 @@ public final class FrameCoordinator implements AutoCloseable {
         deferredReleases.close();
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 1 frame coordinator closed after {0} frame(s): visibilityResult={1}, graphPasses={2}, usefulSubmissions={3}, profilerOnlySubmissions=0, computeDispatches={4}, candidates=4, visibleCount={5}, culledCount={6}, indirectCalls={7}, publicIndirectSlots={8}, nativeComputeSeam=true, nativeGraphicsSeam=false, indirectCountConsumed=false, pipelineValid={9}, queryPolls={10}, unavailableQueryPolls={11}, stagingSubmittedBytes={12}, stagingReclaimedBytes={13}, stagingHighWater={14}, stagingBackpressureEvents={15}, pendingUploadBatches={16}, arenaUsedBytes={17}, arenaHighWater={18}, arenaAllocations={19}, arenaAllocationFailures={20}, arenaRetired={21}, arenaReclaimed={22}, arenaRetirementBackpressureEvents={23}, arenaStaleHandleRejections={24}, arenaFreeSpans={25}, arenaLargestFree={26}, arenaFragmentationPermille={27}, pendingArenaRetirementBatches={28}, retiredResources={29}, releasedResources={30}, pendingRetirements={31}.",
+                "Phase 2 frame coordinator closed after {0} frame(s): sectionReferenceResult={1}, section=({2},{3},{4}), sampledCells={5}, interiorAir={6}, interiorSupported={7}, interiorUnsupported={8}, snapshotFingerprint={9}, snapshotNs={10}, faceCount={11}, blockedByUnsupportedFaces={12}, meshFingerprint={13}, meshNs={14}, referenceBytes={15}, gpuVerifiedBytes={16}, usefulSubmissions={17}, profilerOnlySubmissions=0, stagingSubmittedBytes={18}, stagingReclaimedBytes={19}, stagingHighWater={20}, stagingBackpressureEvents={21}, pendingUploadBatches={22}, arenaUsedBytes={23}, arenaHighWater={24}, arenaAllocations={25}, arenaAllocationFailures={26}, arenaRetired={27}, arenaReclaimed={28}, arenaRetirementBackpressureEvents={29}, arenaStaleHandleRejections={30}, arenaFreeSpans={31}, arenaLargestFree={32}, arenaFragmentationPermille={33}, pendingArenaRetirementBatches={34}, retiredResources={35}, releasedResources={36}, pendingRetirements={37}.",
                 frameIndex,
-                visibilityStateBeforeClose,
-                visibilityProbe == null ? 0 : visibilityProbe.graph().passCount(),
-                visibilityProbe == null ? 0L : visibilityProbe.stream().submissionCount(),
-                visibilityProbe == null ? 0L : visibilityProbe.computeDispatches(),
-                visibilityProbe == null ? 0 : visibilityProbe.visibleCount(),
-                visibilityProbe == null ? 0 : visibilityProbe.culledCount(),
-                visibilityProbe == null ? 0L : visibilityProbe.indirectCalls(),
-                visibilityProbe == null ? 0L : visibilityProbe.publicIndirectSlots(),
-                visibilityProbe != null && visibilityProbe.pipelineValid(),
-                visibilityProbe == null ? 0L : visibilityProbe.profiler().pollCount(),
-                visibilityProbe == null ? 0L : visibilityProbe.profiler().unavailablePolls(),
+                sectionStateBeforeClose,
+                snapshot == null ? 0 : snapshot.sectionX(),
+                snapshot == null ? 0 : snapshot.sectionY(),
+                snapshot == null ? 0 : snapshot.sectionZ(),
+                snapshot == null ? 0 : snapshot.sampledCells(),
+                snapshot == null ? 0 : snapshot.interiorAirCells(),
+                snapshot == null ? 0 : snapshot.interiorSupportedCells(),
+                snapshot == null ? 0 : snapshot.interiorUnsupportedCells(),
+                snapshot == null ? "none" : Long.toUnsignedString(snapshot.fingerprint()),
+                snapshot == null ? 0L : snapshot.captureTimeNs(),
+                mesh == null ? 0 : mesh.faceCount(),
+                mesh == null ? 0 : mesh.blockedByUnsupportedFaces(),
+                mesh == null ? "none" : Long.toUnsignedString(mesh.fingerprint()),
+                mesh == null ? 0L : mesh.meshTimeNs(),
+                mesh == null ? 0 : mesh.byteSize(),
+                sectionProbe == null ? 0L : sectionProbe.gpuVerifiedBytes(),
+                sectionProbe == null ? 0L : sectionProbe.usefulSubmissions(),
                 stagingUploads == null ? 0L : stagingUploads.submittedBytes(),
                 stagingUploads == null ? 0L : stagingUploads.reclaimedBytes(),
                 stagingUploads == null ? 0L : stagingUploads.highWaterBytes(),

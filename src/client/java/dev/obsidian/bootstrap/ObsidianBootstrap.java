@@ -89,7 +89,7 @@ public final class ObsidianBootstrap {
         }
 
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 1 GPU visibility/indirect-compaction foundation armed. Native Vulkan remains compute/storage-only; graphics uses public Blaze3D fixed-count indirect drawing with GPU-zeroed tail commands. Terrain replacement is still intentionally inactive.");
+                "Obsidian Phase 2 real-section snapshot/reference-mesher foundation armed. The dev1 probe captures immutable section data and validates its canonical face stream through the existing GPU arena; vanilla terrain intentionally remains active.");
     }
 
     public static void onFrameStart() {
