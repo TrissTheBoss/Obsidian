@@ -4,43 +4,52 @@ import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.obsidian.render.memory.DeviceGeometryArena;
 import dev.obsidian.render.resource.DeferredReleaseQueue;
-import dev.obsidian.render.terrain.RealSectionReferenceProbe;
+import dev.obsidian.render.terrain.DrawableSectionMesh;
+import dev.obsidian.render.terrain.RealSectionDrawableProbe;
 import dev.obsidian.render.terrain.ReferenceFaceMesh;
 import dev.obsidian.render.terrain.SectionSnapshot;
 import dev.obsidian.render.upload.StagingUploadArena;
+import net.minecraft.client.renderer.GameRenderer;
 
 /** Render-thread lifecycle root for the active Obsidian milestone. */
 public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
-    private static final int VALIDATION_STAGING_BYTES = 256 * 1024;
-    private static final int VALIDATION_DEVICE_ARENA_BYTES = 512 * 1024;
+    private static final int VALIDATION_STAGING_BYTES = 4 * 1024 * 1024;
+    private static final int VALIDATION_DEVICE_ARENA_BYTES = 4 * 1024 * 1024;
+    private static final long VISUAL_ARM_DELAY_NS = 5_000_000_000L;
+    private static final int VISUAL_COMPARISON_PASSES = 6;
 
     private final FrameTimings cpuFrameTimings = new FrameTimings();
     private final FrameContextRing frameContexts = new FrameContextRing();
     private final DeferredReleaseQueue deferredReleases = new DeferredReleaseQueue();
+    private final GpuDevice device;
     private final StagingUploadArena stagingUploads;
     private final DeviceGeometryArena deviceArena;
-    private final RealSectionReferenceProbe sectionProbe;
+    private RealSectionDrawableProbe sectionProbe;
 
     private FrameContext activeFrame;
     private long frameIndex;
+    private long firstWorldRenderNs;
+    private int completedVisualPasses;
     private boolean firstFrameLogged;
+    private boolean visualDelayLogged;
     private boolean closed;
 
     public FrameCoordinator(GpuDevice device) {
+        this.device = device;
         StagingUploadArena staging = null;
         DeviceGeometryArena arena = null;
-        RealSectionReferenceProbe probe = null;
+        RealSectionDrawableProbe probe = null;
         try {
             staging = new StagingUploadArena(
                     device,
-                    () -> "Obsidian Phase 2 bounded staging ring",
+                    () -> "Obsidian Phase 2 dev2 bounded staging ring",
                     VALIDATION_STAGING_BYTES);
             arena = new DeviceGeometryArena(
                     device,
-                    () -> "Obsidian Phase 2 device geometry arena",
+                    () -> "Obsidian Phase 2 dev2 device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
-            probe = new RealSectionReferenceProbe(device, staging, arena);
+            probe = new RealSectionDrawableProbe(device, staging, arena, deferredReleases);
         } catch (RuntimeException e) {
             if (probe != null) {
                 try {
@@ -64,7 +73,7 @@ public final class FrameCoordinator implements AutoCloseable {
                 }
             }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 2 real-section reference initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 2 dev2 drawable-section initialization failed; Minecraft will continue for diagnosis.", e);
         }
         stagingUploads = staging;
         deviceArena = arena;
@@ -83,16 +92,35 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 2 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, stagingCapacity={2}, deviceArenaCapacity={3}; dev1 waits for a real loaded section, captures an immutable 18^3 snapshot, builds the simple reference face oracle, and validates it through the existing GPU arena. Vanilla terrain remains active.",
+                    "Phase 2 dev2 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, stagingCapacity={2}, deviceArenaCapacity={3}; P2.1 snapshot/reference semantics remain the oracle, while dev2 waits for the live world render hook to build and depth-test one drawable real section against vanilla terrain.",
                     frameContexts.size(),
                     cpuFrameTimings.capacity(),
                     stagingUploads == null ? 0 : stagingUploads.capacityBytes(),
                     deviceArena == null ? 0L : deviceArena.capacityBytes());
         }
+    }
 
-        if (sectionProbe != null) {
-            sectionProbe.tryCaptureAndSubmit(frameIndex);
+    /** Called from the exact GameRenderer world-render hook before HUD projection/depth reset. */
+    public void afterWorldRender(GameRenderer renderer) {
+        RenderSystem.assertOnRenderThread();
+        if (closed || sectionProbe == null) {
+            return;
         }
+
+        long nowNs = System.nanoTime();
+        if (firstWorldRenderNs == 0L) {
+            firstWorldRenderNs = nowNs;
+        }
+        if (completedVisualPasses == 0 && nowNs - firstWorldRenderNs < VISUAL_ARM_DELAY_NS) {
+            if (!visualDelayLogged) {
+                visualDelayLogged = true;
+                LOG.log(System.Logger.Level.INFO,
+                        "Phase 2 dev2 visual comparison is armed but intentionally delayed for 5 seconds after the first world render so the human validation window is not consumed during initial world entry.");
+            }
+            return;
+        }
+
+        sectionProbe.afterWorldRender(renderer, frameIndex);
     }
 
     public void endFrame() {
@@ -119,6 +147,22 @@ public final class FrameCoordinator implements AutoCloseable {
         }
         if (sectionProbe != null) {
             sectionProbe.poll(frameIndex);
+            if (sectionProbe.state() == RealSectionDrawableProbe.State.VERIFIED
+                    && completedVisualPasses < VISUAL_COMPARISON_PASSES) {
+                completedVisualPasses++;
+                if (completedVisualPasses < VISUAL_COMPARISON_PASSES) {
+                    sectionProbe.close();
+                    sectionProbe = new RealSectionDrawableProbe(device, stagingUploads, deviceArena, deferredReleases);
+                    LOG.log(System.Logger.Level.INFO,
+                            "Phase 2 dev2 visual comparison pass {0}/{1} completed; re-arming immediately so the colored overlay remains observable for a sustained human-validation interval.",
+                            completedVisualPasses,
+                            VISUAL_COMPARISON_PASSES);
+                } else {
+                    LOG.log(System.Logger.Level.INFO,
+                            "Phase 2 dev2 sustained visual comparison completed all {0} pass(es); awaiting shutdown/runtime review.",
+                            VISUAL_COMPARISON_PASSES);
+                }
+            }
         }
     }
 
@@ -146,8 +190,8 @@ public final class FrameCoordinator implements AutoCloseable {
         return deviceArena == null ? 0 : deviceArena.pendingRetirementBatches();
     }
 
-    public RealSectionReferenceProbe.State sectionProbeState() {
-        return sectionProbe == null ? RealSectionReferenceProbe.State.FAILED : sectionProbe.state();
+    public RealSectionDrawableProbe.State sectionProbeState() {
+        return sectionProbe == null ? RealSectionDrawableProbe.State.FAILED : sectionProbe.state();
     }
 
     @Override
@@ -158,13 +202,14 @@ public final class FrameCoordinator implements AutoCloseable {
         }
         closed = true;
 
-        RealSectionReferenceProbe.State sectionStateBeforeClose =
-                sectionProbe == null ? RealSectionReferenceProbe.State.FAILED : sectionProbe.state();
+        RealSectionDrawableProbe.State sectionStateBeforeClose =
+                sectionProbe == null ? RealSectionDrawableProbe.State.FAILED : sectionProbe.state();
         SectionSnapshot snapshot = sectionProbe == null ? null : sectionProbe.snapshot();
-        ReferenceFaceMesh mesh = sectionProbe == null ? null : sectionProbe.mesh();
+        ReferenceFaceMesh reference = sectionProbe == null ? null : sectionProbe.referenceMesh();
+        DrawableSectionMesh drawable = sectionProbe == null ? null : sectionProbe.drawableMesh();
 
-        // The probe owns temporary readback/completion handles. Let it relinquish
-        // those before the shared staging/arena owners perform their bounded shutdown.
+        // The dev2 probe registers completion-gated arena/resource retirement
+        // before the shared owners perform their bounded shutdown waits.
         if (sectionProbe != null) {
             sectionProbe.close();
         }
@@ -177,7 +222,7 @@ public final class FrameCoordinator implements AutoCloseable {
         deferredReleases.close();
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 2 frame coordinator closed after {0} frame(s): sectionReferenceResult={1}, section=({2},{3},{4}), sampledCells={5}, interiorAir={6}, interiorSupported={7}, interiorUnsupported={8}, snapshotFingerprint={9}, snapshotNs={10}, faceCount={11}, blockedByUnsupportedFaces={12}, meshFingerprint={13}, meshNs={14}, referenceBytes={15}, gpuVerifiedBytes={16}, usefulSubmissions={17}, profilerOnlySubmissions=0, stagingSubmittedBytes={18}, stagingReclaimedBytes={19}, stagingHighWater={20}, stagingBackpressureEvents={21}, pendingUploadBatches={22}, arenaUsedBytes={23}, arenaHighWater={24}, arenaAllocations={25}, arenaAllocationFailures={26}, arenaRetired={27}, arenaReclaimed={28}, arenaRetirementBackpressureEvents={29}, arenaStaleHandleRejections={30}, arenaFreeSpans={31}, arenaLargestFree={32}, arenaFragmentationPermille={33}, pendingArenaRetirementBatches={34}, retiredResources={35}, releasedResources={36}, pendingRetirements={37}.",
+                "Phase 2 dev2 frame coordinator closed after {0} frame(s): drawableSectionResult={1}, section=({2},{3},{4}), sampledCells={5}, interiorAir={6}, interiorSupported={7}, interiorUnsupported={8}, snapshotFingerprint={9}, referenceFaces={10}, referenceFingerprint={11}, drawableFaces={12}, drawableVertices={13}, drawableIndices={14}, drawableFingerprint={15}, drawableVertexBytes={16}, drawableIndexBytes={17}, pipelineValid={18}, usefulSubmissions={19}, comparisonDraws={20}, completedVisualPasses={21}, profilerOnlySubmissions=0, worldReadsAfterSnapshot=0, vanillaTerrainActive=true, stagingSubmittedBytes={22}, stagingReclaimedBytes={23}, stagingHighWater={24}, stagingBackpressureEvents={25}, pendingUploadBatches={26}, arenaUsedBytes={27}, arenaHighWater={28}, arenaAllocations={29}, arenaAllocationFailures={30}, arenaRetired={31}, arenaReclaimed={32}, arenaRetirementBackpressureEvents={33}, arenaStaleHandleRejections={34}, arenaFreeSpans={35}, arenaLargestFree={36}, arenaFragmentationPermille={37}, pendingArenaRetirementBatches={38}, retiredResources={39}, releasedResources={40}, pendingRetirements={41}.",
                 frameIndex,
                 sectionStateBeforeClose,
                 snapshot == null ? 0 : snapshot.sectionX(),
@@ -188,14 +233,18 @@ public final class FrameCoordinator implements AutoCloseable {
                 snapshot == null ? 0 : snapshot.interiorSupportedCells(),
                 snapshot == null ? 0 : snapshot.interiorUnsupportedCells(),
                 snapshot == null ? "none" : Long.toUnsignedString(snapshot.fingerprint()),
-                snapshot == null ? 0L : snapshot.captureTimeNs(),
-                mesh == null ? 0 : mesh.faceCount(),
-                mesh == null ? 0 : mesh.blockedByUnsupportedFaces(),
-                mesh == null ? "none" : Long.toUnsignedString(mesh.fingerprint()),
-                mesh == null ? 0L : mesh.meshTimeNs(),
-                mesh == null ? 0 : mesh.byteSize(),
-                sectionProbe == null ? 0L : sectionProbe.gpuVerifiedBytes(),
+                reference == null ? 0 : reference.faceCount(),
+                reference == null ? "none" : Long.toUnsignedString(reference.fingerprint()),
+                drawable == null ? 0 : drawable.faceCount(),
+                drawable == null ? 0 : drawable.vertexCount(),
+                drawable == null ? 0 : drawable.indexCount(),
+                drawable == null ? "none" : Long.toUnsignedString(drawable.fingerprint()),
+                drawable == null ? 0 : drawable.vertexBytes(),
+                drawable == null ? 0 : drawable.indexBytes(),
+                sectionProbe != null && sectionProbe.pipelineValid(),
                 sectionProbe == null ? 0L : sectionProbe.usefulSubmissions(),
+                sectionProbe == null ? 0L : sectionProbe.drawSubmissions(),
+                completedVisualPasses,
                 stagingUploads == null ? 0L : stagingUploads.submittedBytes(),
                 stagingUploads == null ? 0L : stagingUploads.reclaimedBytes(),
                 stagingUploads == null ? 0L : stagingUploads.highWaterBytes(),
