@@ -9,9 +9,9 @@ Last updated: 2026-08-20
 - Current public release: `v0.0.2-phase0`
 - Current merged development baseline: Phase 1 dev7, merge commit `fa0379887a945e2bf2adc722270a064915477fce`
 - Active development branch: `phase1/compute-indirect`
-- Active draft PR: #10, `Phase 1: compute-generated indirect commands`
+- Active draft PR: #10, `Phase 1: compute-generated indexed-indirect commands`
 - Current development version: `0.1.0-phase1-dev8`
-- Dev8 status: **implementation compile-clean; real RX 6800 XT runtime pending**
+- Dev8 status: **runtime validated on the reference RX 6800 XT; pending final exact-head CI and merge with `[no-release]`**
 
 ## Reference runtime
 
@@ -32,21 +32,12 @@ Phase 0 and Phase 1 dev1-dev7 are runtime validated and merged with development 
 
 ### Phase 1 dev7 - VALIDATED / merged PR #9
 
-Runtime proved:
-
-- public Blaze3D true `vkCmdDrawIndexedIndirect` path;
-- shared `DeviceGeometryArena` vertex/index allocations;
-- one indirect call containing two native 20-byte commands;
-- two independently verified triangles;
-- one useful submission and zero profiler-only submissions;
-- staging 124/124 bytes, high-water 136;
-- arena allocations=2, high-water=84, retired/reclaimed=2/2 and fully coalesced;
-- world entry, clean shutdown and exit code 0.
+Runtime proved public Blaze3D true indexed-indirect drawing from shared device-arena geometry, including two independent commands/triangles, completion-gated arena reclamation and deterministic readback.
 
 Runtime evidence: `ai/attempts/A-0043-dev7-runtime-success.md`.
 Merge commit: `fa0379887a945e2bf2adc722270a064915477fce`.
 
-## Phase 1 dev8 - ACTIVE / draft PR #10
+## Phase 1 dev8 - RUNTIME VALIDATED / pending merge through PR #10
 
 Goal: prove GPU compute can generate indexed-indirect command data that a following graphics pass consumes, while retaining Minecraft ownership of device, graphics queue/submission and presentation.
 
@@ -68,7 +59,7 @@ The Vulkan backend exposes a narrow interop surface sufficient to fill only that
 
 Evidence: `ai/attempts/A-0044-dev8-compute-api-inspection.md`.
 
-### Current dev8 implementation
+### Dev8 implementation and compile result
 
 - Mixins expose only the existing `GpuDeviceBackend` and `CommandEncoderBackend` objects for the isolated interop layer;
 - `VulkanStorageIndirectBuffer`: device-preferred VMA buffer with native STORAGE_BUFFER | INDIRECT_BUFFER usages, non-mapped;
@@ -78,23 +69,41 @@ Evidence: `ai/attempts/A-0044-dev8-compute-api-inspection.md`.
 - compute command buffer is inserted into Minecraft's existing `VulkanCommandEncoder` submission;
 - graphics remains public Blaze3D `RenderPass.drawIndexedIndirect`;
 - graph has four passes: geometry upload -> compute indirect generation -> indirect draw -> readback;
-- CPU staging payload is now only 84 bytes (72 vertex + 12 index); indirect command bytes are generated entirely on GPU;
-- expected staging high-water is 92 bytes from `[0,72)` + `[80,92)` aligned reservations;
-- deterministic pixels remain left magenta, right magenta, corner black;
-- expected graph executedMask=15;
-- expected usefulSubmissions=1, profilerOnlySubmissions=0;
-- expected computeDispatches=1, indirectCalls=1, indirectCommands=2, triangles=2;
-- expected arena high-water=84, retired/reclaimed=2/2, used=0 and fragmentation=0 after completion.
+- CPU staging payload is only 84 bytes (72 vertex + 12 index); indirect command bytes are generated entirely on GPU;
+- expected staging high-water is 92 bytes from `[0,72)` + `[80,92)` aligned reservations.
 
-First compile attempt found only an exact LWJGL handle-type mismatch (`vkAllocateDescriptorSets` requires `LongBuffer`, not `PointerBuffer`); corrected implementation then compiled successfully. Evidence: `ai/attempts/A-0045-dev8-compute-indirect-implementation.md`.
+First compile attempt found one exact LWJGL handle-type mismatch (`vkAllocateDescriptorSets` requires `LongBuffer`, not `PointerBuffer`); corrected implementation then compiled successfully. Evidence: `ai/attempts/A-0045-dev8-compute-indirect-implementation.md`.
 
-Completed dev7 probe, CPU-authored indirect buffer and temporary compute API inspection workflow have been removed from the clean branch.
+Final package evidence before runtime: `ai/attempts/A-0046-dev8-final-package-verification.md`.
+
+### Real RX 6800 XT runtime result - SUCCESS
+
+- correct `0.1.0-phase1-dev8` loaded on Vulkan;
+- `VK_KHR_synchronization2` available;
+- `indirect=true`, `multiDrawIndirect=true`, `persistentMapping=true`;
+- graphPasses=4, executedMask=15;
+- usefulSubmissions=1, profilerOnlySubmissions=0;
+- computeDispatches=1;
+- indirectCalls=1, indirectCommands=2, triangles=2;
+- nativeComputeSeam=true, nativeGraphicsSeam=false;
+- pipelineValid=true;
+- GPU generated 40 bytes of native indexed-indirect commands;
+- CPU staging submitted/reclaimed=84/84 bytes, high-water=92, backpressure=0;
+- left and right triangle pixels both verified magenta, clear corner verified black, pixelsVerified=3;
+- arena allocations=2, high-water=84, retired/reclaimed=2/2, used=0 after completion;
+- freeSpans=1, largestFree=524288, fragmentation=0, no pending arena retirements;
+- all four GPU timestamp ranges resolved nonblockingly;
+- world entry succeeded;
+- shutdown after 1810 frames had no pending work;
+- process exited with code 0.
+
+Runtime evidence: `ai/attempts/A-0047-dev8-runtime-success.md`.
 
 ## Proven architecture boundary
 
-`Minecraft Vulkan device/queue/presentation -> FrameCoordinator -> bounded staging -> device geometry arena -> FixedFrameGraph -> one Minecraft-owned submission -> [narrow native Vulkan compute/storage seam] -> explicit compute-to-indirect Sync2 barrier -> public Blaze3D indexed-indirect graphics -> deterministic readback -> completion-gated reclamation`
+`Minecraft Vulkan device/queue/presentation -> FrameCoordinator -> bounded staging -> generation-safe device geometry arena -> FixedFrameGraph -> one Minecraft-owned submission -> [narrow native Vulkan compute/storage seam] -> explicit compute-to-indirect Sync2 barrier -> public Blaze3D indexed-indirect graphics -> deterministic readback -> completion-gated reclamation`
 
-Native Vulkan access is now justified only for a capability public Blaze3D 26.2 cannot express. Obsidian still does not create a second device, queue, swapchain or native graphics renderer.
+Native Vulkan access is justified only for the capability public Blaze3D 26.2 cannot express. Obsidian still does not create a second device, queue, swapchain or native graphics renderer.
 
 ## Terrain meshing roadmap
 
@@ -104,14 +113,18 @@ Greedy meshing remains required under D-0024. Research: `ai/attempts/A-0038-gree
 - **Phase 3:** production worker-local binary/bitmask greedy meshing with reusable scratch and render-correct merge keys covering material/layer/tint/light/AO/UV/special state.
 - **Phase 4+:** GPU visibility/compaction consumes those reduced section meshes and generates/compacts indirect work.
 
+Block ID alone is never a valid greedy merge key. Keep the simple reference mesher after the optimized mesher lands so greedy output can be differential-tested and fuzzed.
+
 ## Immediate next action
 
-1. Preserve dev8 native-compute decisions in the durable ledger.
-2. Final-CI the exact cleaned/documented branch head.
-3. Inspect the CI-built `0.1.0-phase1-dev8` artifact and checksums.
-4. Keep PR #10 draft/unmerged.
-5. Runtime-test dev8 on the reference RX 6800 XT: compute shader/pipeline creation, one dispatch, explicit barrier, two compute-generated indirect commands, both triangle pixels, timestamps, staging 84/84 high-water 92, arena 2/2 reclaim, world entry and clean exit.
+1. Final-CI the exact dev8 runtime-evidence head of PR #10.
+2. Promote and squash-merge PR #10 with `[no-release]`.
+3. Start Phase 1 dev9 from the resulting `main` merge commit.
+4. Establish the GPU visibility/compaction bridge before real terrain: GPU scene/candidate records -> compute visibility decision -> compacted indexed-indirect records -> graphics consumption -> deterministic offscreen verification.
+5. Inspect exact Vulkan 1.3 / Minecraft backend support for `vkCmdDrawIndexedIndirectCount` and draw-count storage. Prefer a GPU-produced draw count if this can be integrated without taking over normal graphics ownership; otherwise validate fixed-count compaction first and record the exact limitation.
+6. Preserve one useful submission, zero profiler-only submissions, explicit synchronization and completion-gated reclamation.
+7. Terrain replacement remains inactive until the visibility/compaction infrastructure is runtime validated.
 
 ## Relevant durable decisions
 
-D-0014 through D-0024 remain active. Dev8 additionally establishes that native Vulkan interop is allowed only for the exact compute/storage capability absent from public Blaze3D, while public graphics and Minecraft submission ownership remain the default.
+D-0014 through D-0026 remain active. D-0024 keeps binary/bitmask greedy meshing as the Phase 3 production CPU mesher target; D-0025/D-0026 constrain the native compute seam and synchronization requirements.
