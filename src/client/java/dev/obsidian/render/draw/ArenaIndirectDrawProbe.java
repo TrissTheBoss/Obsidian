@@ -127,6 +127,7 @@ public final class ArenaIndirectDrawProbe implements AutoCloseable {
     private long indirectCommandsExecuted;
     private long triangles;
     private long retirementBackpressureEvents;
+    private long retirementRegistrationFailures;
     private boolean pipelineValid;
     private boolean submitted;
 
@@ -235,13 +236,8 @@ public final class ArenaIndirectDrawProbe implements AutoCloseable {
 
         retirementHandles[0] = vertexHandle;
         retirementHandles[1] = indexHandle;
-        if (arena.retireBatch(arenaFence, retirementHandles, retirementHandles.length)) {
-            arenaFence = null;
-        } else {
-            pendingArenaFence = arenaFence;
-            arenaFence = null;
-            retirementBackpressureEvents++;
-        }
+        pendingArenaFence = arenaFence;
+        tryRegisterArenaRetirement();
 
         LOG.log(System.Logger.Level.INFO,
                 "Phase 1 arena indirect draw submitted on frame {0}: graphPasses={1}, usefulSubmissions={2}, profilerOnlySubmissions=0, indirectCalls={3}, indirectCommands={4}, triangles={5}, pipelineValid={6}, vertexArenaOffset={7}, indexArenaOffset={8}, firstIndex={9}, vertexBytes={10}, indexBytes={11}, indirectBytes={12}, stagingPayloadBytes={13}, arenaUsedBytes={14}.",
@@ -268,15 +264,9 @@ public final class ArenaIndirectDrawProbe implements AutoCloseable {
             return;
         }
 
-        if (pendingArenaFence != null) {
-            if (arena.retireBatch(pendingArenaFence, retirementHandles, retirementHandles.length)) {
-                pendingArenaFence = null;
-            } else {
-                retirementBackpressureEvents++;
-                return;
-            }
+        if (pendingArenaFence != null && !tryRegisterArenaRetirement()) {
+            return;
         }
-
         if (!stream.isSubmissionComplete()) {
             return;
         }
@@ -364,6 +354,10 @@ public final class ArenaIndirectDrawProbe implements AutoCloseable {
         return retirementBackpressureEvents;
     }
 
+    public long retirementRegistrationFailures() {
+        return retirementRegistrationFailures;
+    }
+
     @Override
     public void close() {
         RenderSystem.assertOnRenderThread();
@@ -384,10 +378,13 @@ public final class ArenaIndirectDrawProbe implements AutoCloseable {
         }
 
         if (pendingArenaFence != null) {
-            if (arena.retireBatch(pendingArenaFence, retirementHandles, retirementHandles.length)) {
-                pendingArenaFence = null;
+            if (tryRegisterArenaRetirement()) {
                 arena.pollRetirements();
             } else {
+                // Submission is complete here, but retirement metadata could
+                // not accept ownership. Close only the lightweight timeline
+                // handle and leave the live arena allocations for arena.close()
+                // to abandon safely rather than forging a clean counter state.
                 pendingArenaFence.close();
                 pendingArenaFence = null;
             }
@@ -399,6 +396,25 @@ public final class ArenaIndirectDrawProbe implements AutoCloseable {
         closeLocalResourcesIfSafe();
         profiler.close();
         state = State.CLOSED;
+    }
+
+    private boolean tryRegisterArenaRetirement() {
+        if (pendingArenaFence == null) {
+            return true;
+        }
+        try {
+            if (!arena.retireBatch(pendingArenaFence, retirementHandles, retirementHandles.length)) {
+                retirementBackpressureEvents++;
+                return false;
+            }
+            pendingArenaFence = null;
+            return true;
+        } catch (RuntimeException e) {
+            retirementRegistrationFailures++;
+            LOG.log(System.Logger.Level.ERROR,
+                    "Arena retirement registration failed after the useful dev7 submission; keeping the timeline handle and allocations alive for safe retry/diagnosis.", e);
+            return false;
+        }
     }
 
     private void createResourcesAndAllocations() {
@@ -422,7 +438,7 @@ public final class ArenaIndirectDrawProbe implements AutoCloseable {
         vertexOffset = vertexSlice.offset();
         indexOffset = indexSlice.offset();
         if ((indexOffset & 1L) != 0L || indexOffset / Short.BYTES > Integer.MAX_VALUE) {
-            throw new IllegalStateException("Dev7 index arena offset cannot be represented as SHORT firstIndex");
+            throw new IllegalStateException("Dev7 index arena offset cannot be represented as an indexed-draw firstIndex");
         }
         firstIndex = (int) (indexOffset / Short.BYTES);
 
