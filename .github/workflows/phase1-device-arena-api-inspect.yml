@@ -50,7 +50,8 @@ jobs:
           jar tf "$jarfile" | grep -E 'com/mojang/blaze3d/.*vulkan.*(Buffer|Device).*class' | sort >> "$out" || true
           echo >> "$out"
           for cls in \
-            'com.mojang.blaze3d.vulkan.VulkanBuffer' \
+            'com.mojang.blaze3d.vulkan.VulkanGpuBuffer' \
+            'com.mojang.blaze3d.vulkan.VulkanGpuBuffer$Direct' \
             'com.mojang.blaze3d.vulkan.VulkanDevice'; do
             echo "===== $cls bytecode =====" >> "$out"
             javap -classpath "$jarfile" -c -p "$cls" >> "$out" 2>&1 || true
