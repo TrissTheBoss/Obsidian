@@ -147,3 +147,10 @@ This file records durable decisions. Do not delete old decisions when they chang
 **Decision:** Starting with Phase 1 dev5, GPU timestamp ranges for normal profiling must be encoded around work inside Obsidian-owned command streams/submissions. The frame graph may expose timestamped pass ranges, but it must not create extra submissions solely to obtain profiler samples.  
 **Why:** Dev1 established timestamp capability, while dev3/dev4 established real owned upload/copy submissions. Obsidian now has a natural place to measure GPU work without contaminating frame pacing with profiler-only queue submissions.  
 **Effect:** Dev5 should introduce fixed-capacity graph/pass metadata, submission-count metrics, nonblocking timestamp result polling, and a validation graph whose profiling is part of the same command stream that performs useful copy/validation work.
+
+## D-0022 - Production timestamp result collection is bounded and sampled
+
+**Status:** ACTIVE  
+**Decision:** The production profiler must not call Minecraft 26.2's public `GpuQueryPool.getValues()` on every rendered frame by default. Result collection should be sampled/bounded initially, and missed/unavailable samples are preferable to waiting or producing persistent allocation pressure.  
+**Why:** Exact dev5 bytecode inspection showed the Vulkan query path is nonblocking and availability-based, but the public Java API constructs an `OptionalLong[]` plus result wrappers. A profiler intended to protect 1%/0.1% lows must not quietly add routine garbage collection pressure.  
+**Effect:** Dev5 may use a one-shot result read for validation. Later continuous profiling should use a configurable low-frequency sampling policy first; backend-specific/raw allocation-free result access should only be introduced if profiling shows the public wrapper allocation is materially harmful and the deeper ownership cost is justified.
