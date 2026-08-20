@@ -35,6 +35,9 @@ jobs:
           : > "$out"
           jarfile=$(find "$HOME/.gradle/caches/fabric-loom/26.2" -type f -name 'minecraft-client*.jar' | head -n 1)
           echo "jar=$jarfile" >> "$out"
+          echo '===== Vulkan pipeline/render classes =====' >> "$out"
+          jar tf "$jarfile" | grep -E '^com/mojang/blaze3d/vulkan/.*(Pipeline|RenderPass).*class$' | sort >> "$out" || true
+          echo >> "$out"
           classes=(
             'com.mojang.blaze3d.GpuFormat'
             'com.mojang.blaze3d.PrimitiveTopology'
@@ -44,6 +47,7 @@ jobs:
             'com.mojang.blaze3d.pipeline.RenderPipeline$Builder'
             'com.mojang.blaze3d.pipeline.CompiledRenderPipeline'
             'com.mojang.blaze3d.shaders.ShaderSource'
+            'com.mojang.blaze3d.shaders.ShaderType'
             'com.mojang.blaze3d.systems.GpuDevice'
             'com.mojang.blaze3d.systems.CommandEncoder'
             'com.mojang.blaze3d.systems.RenderPass'
@@ -53,7 +57,7 @@ jobs:
             'com.mojang.blaze3d.buffers.GpuBufferSlice'
             'com.mojang.blaze3d.vertex.VertexFormat'
             'com.mojang.blaze3d.vertex.DefaultVertexFormat'
-            'net.minecraft.resources.Identifier'
+            'com.mojang.blaze3d.vulkan.VulkanDevice'
           )
           for cls in "${classes[@]}"; do
             echo "===== $cls public/constants =====" >> "$out"
@@ -63,12 +67,11 @@ jobs:
             javap -classpath "$jarfile" -c -p "$cls" >> "$out" 2>&1 || true
             echo >> "$out"
           done
-          echo '===== position_color.vsh =====' >> "$out"
-          unzip -p "$jarfile" assets/minecraft/shaders/core/position_color.vsh >> "$out" || true
-          echo >> "$out"
-          echo '===== position_color.fsh =====' >> "$out"
-          unzip -p "$jarfile" assets/minecraft/shaders/core/position_color.fsh >> "$out" || true
-          echo >> "$out"
+          for cls in $(jar tf "$jarfile" | grep -E '^com/mojang/blaze3d/vulkan/.*(Pipeline|RenderPass).*class$' | sed 's#/#.#g;s#.class$##'); do
+            echo "===== $cls bytecode =====" >> "$out"
+            javap -classpath "$jarfile" -c -p "$cls" >> "$out" 2>&1 || true
+            echo >> "$out"
+          done
       - name: Upload inspection artifact
         uses: actions/upload-artifact@v4
         with:
