@@ -16,20 +16,27 @@ public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
     private static final int VALIDATION_STAGING_BYTES = 4 * 1024 * 1024;
     private static final int VALIDATION_DEVICE_ARENA_BYTES = 4 * 1024 * 1024;
+    private static final long VISUAL_ARM_DELAY_NS = 5_000_000_000L;
+    private static final int VISUAL_COMPARISON_PASSES = 6;
 
     private final FrameTimings cpuFrameTimings = new FrameTimings();
     private final FrameContextRing frameContexts = new FrameContextRing();
     private final DeferredReleaseQueue deferredReleases = new DeferredReleaseQueue();
+    private final GpuDevice device;
     private final StagingUploadArena stagingUploads;
     private final DeviceGeometryArena deviceArena;
-    private final RealSectionDrawableProbe sectionProbe;
+    private RealSectionDrawableProbe sectionProbe;
 
     private FrameContext activeFrame;
     private long frameIndex;
+    private long firstWorldRenderNs;
+    private int completedVisualPasses;
     private boolean firstFrameLogged;
+    private boolean visualDelayLogged;
     private boolean closed;
 
     public FrameCoordinator(GpuDevice device) {
+        this.device = device;
         StagingUploadArena staging = null;
         DeviceGeometryArena arena = null;
         RealSectionDrawableProbe probe = null;
@@ -99,6 +106,20 @@ public final class FrameCoordinator implements AutoCloseable {
         if (closed || sectionProbe == null) {
             return;
         }
+
+        long nowNs = System.nanoTime();
+        if (firstWorldRenderNs == 0L) {
+            firstWorldRenderNs = nowNs;
+        }
+        if (completedVisualPasses == 0 && nowNs - firstWorldRenderNs < VISUAL_ARM_DELAY_NS) {
+            if (!visualDelayLogged) {
+                visualDelayLogged = true;
+                LOG.log(System.Logger.Level.INFO,
+                        "Phase 2 dev2 visual comparison is armed but intentionally delayed for 5 seconds after the first world render so the human validation window is not consumed during initial world entry.");
+            }
+            return;
+        }
+
         sectionProbe.afterWorldRender(renderer, frameIndex);
     }
 
@@ -126,6 +147,22 @@ public final class FrameCoordinator implements AutoCloseable {
         }
         if (sectionProbe != null) {
             sectionProbe.poll(frameIndex);
+            if (sectionProbe.state() == RealSectionDrawableProbe.State.VERIFIED
+                    && completedVisualPasses < VISUAL_COMPARISON_PASSES) {
+                completedVisualPasses++;
+                if (completedVisualPasses < VISUAL_COMPARISON_PASSES) {
+                    sectionProbe.close();
+                    sectionProbe = new RealSectionDrawableProbe(device, stagingUploads, deviceArena, deferredReleases);
+                    LOG.log(System.Logger.Level.INFO,
+                            "Phase 2 dev2 visual comparison pass {0}/{1} completed; re-arming immediately so the colored overlay remains observable for a sustained human-validation interval.",
+                            completedVisualPasses,
+                            VISUAL_COMPARISON_PASSES);
+                } else {
+                    LOG.log(System.Logger.Level.INFO,
+                            "Phase 2 dev2 sustained visual comparison completed all {0} pass(es); awaiting shutdown/runtime review.",
+                            VISUAL_COMPARISON_PASSES);
+                }
+            }
         }
     }
 
@@ -185,7 +222,7 @@ public final class FrameCoordinator implements AutoCloseable {
         deferredReleases.close();
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 2 dev2 frame coordinator closed after {0} frame(s): drawableSectionResult={1}, section=({2},{3},{4}), sampledCells={5}, interiorAir={6}, interiorSupported={7}, interiorUnsupported={8}, snapshotFingerprint={9}, referenceFaces={10}, referenceFingerprint={11}, drawableFaces={12}, drawableVertices={13}, drawableIndices={14}, drawableFingerprint={15}, drawableVertexBytes={16}, drawableIndexBytes={17}, pipelineValid={18}, usefulSubmissions={19}, comparisonDraws={20}, profilerOnlySubmissions=0, worldReadsAfterSnapshot=0, vanillaTerrainActive=true, stagingSubmittedBytes={21}, stagingReclaimedBytes={22}, stagingHighWater={23}, stagingBackpressureEvents={24}, pendingUploadBatches={25}, arenaUsedBytes={26}, arenaHighWater={27}, arenaAllocations={28}, arenaAllocationFailures={29}, arenaRetired={30}, arenaReclaimed={31}, arenaRetirementBackpressureEvents={32}, arenaStaleHandleRejections={33}, arenaFreeSpans={34}, arenaLargestFree={35}, arenaFragmentationPermille={36}, pendingArenaRetirementBatches={37}, retiredResources={38}, releasedResources={39}, pendingRetirements={40}.",
+                "Phase 2 dev2 frame coordinator closed after {0} frame(s): drawableSectionResult={1}, section=({2},{3},{4}), sampledCells={5}, interiorAir={6}, interiorSupported={7}, interiorUnsupported={8}, snapshotFingerprint={9}, referenceFaces={10}, referenceFingerprint={11}, drawableFaces={12}, drawableVertices={13}, drawableIndices={14}, drawableFingerprint={15}, drawableVertexBytes={16}, drawableIndexBytes={17}, pipelineValid={18}, usefulSubmissions={19}, comparisonDraws={20}, completedVisualPasses={21}, profilerOnlySubmissions=0, worldReadsAfterSnapshot=0, vanillaTerrainActive=true, stagingSubmittedBytes={22}, stagingReclaimedBytes={23}, stagingHighWater={24}, stagingBackpressureEvents={25}, pendingUploadBatches={26}, arenaUsedBytes={27}, arenaHighWater={28}, arenaAllocations={29}, arenaAllocationFailures={30}, arenaRetired={31}, arenaReclaimed={32}, arenaRetirementBackpressureEvents={33}, arenaStaleHandleRejections={34}, arenaFreeSpans={35}, arenaLargestFree={36}, arenaFragmentationPermille={37}, pendingArenaRetirementBatches={38}, retiredResources={39}, releasedResources={40}, pendingRetirements={41}.",
                 frameIndex,
                 sectionStateBeforeClose,
                 snapshot == null ? 0 : snapshot.sectionX(),
@@ -207,6 +244,7 @@ public final class FrameCoordinator implements AutoCloseable {
                 sectionProbe != null && sectionProbe.pipelineValid(),
                 sectionProbe == null ? 0L : sectionProbe.usefulSubmissions(),
                 sectionProbe == null ? 0L : sectionProbe.drawSubmissions(),
+                completedVisualPasses,
                 stagingUploads == null ? 0L : stagingUploads.submittedBytes(),
                 stagingUploads == null ? 0L : stagingUploads.reclaimedBytes(),
                 stagingUploads == null ? 0L : stagingUploads.highWaterBytes(),
