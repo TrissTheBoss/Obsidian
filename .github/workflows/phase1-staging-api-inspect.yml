@@ -3,6 +3,8 @@ name: Phase 1 Staging API Inspect
 on:
   push:
     branches: [phase1/staging-upload]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
