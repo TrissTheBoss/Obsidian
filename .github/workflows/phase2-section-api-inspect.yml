@@ -44,22 +44,22 @@ jobs:
             'net.minecraft.client.Minecraft'
             'net.minecraft.client.multiplayer.ClientLevel'
             'net.minecraft.client.multiplayer.ClientChunkCache'
+            'net.minecraft.world.level.chunk.ChunkAccess'
             'net.minecraft.world.level.chunk.LevelChunk'
             'net.minecraft.world.level.chunk.LevelChunkSection'
             'net.minecraft.world.level.LevelHeightAccessor'
             'net.minecraft.world.level.BlockGetter'
             'net.minecraft.world.level.Level'
+            'net.minecraft.world.level.block.Block'
+            'net.minecraft.world.level.block.Blocks'
             'net.minecraft.world.level.block.state.BlockState'
             'net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase'
             'net.minecraft.world.level.block.RenderShape'
-            'net.minecraft.client.renderer.block.BlockRenderDispatcher'
-            'net.minecraft.client.renderer.block.ModelBlockRenderer'
-            'net.minecraft.client.renderer.LevelRenderer'
+            'net.minecraft.world.level.material.FluidState'
+            'net.minecraft.core.BlockPos$MutableBlockPos'
             'net.minecraft.core.SectionPos'
             'net.minecraft.world.level.ChunkPos'
             'net.minecraft.world.level.chunk.status.ChunkStatus'
-            'net.minecraft.core.registries.BuiltInRegistries'
-            'net.minecraft.core.IdMapper'
           )
           for cls in "${classes[@]}"; do
             echo "===== $cls public/constants =====" >> "$out"
@@ -69,13 +69,10 @@ jobs:
             javap -classpath "$cp" -c -p "$cls" >> "$out" 2>&1 || true
             echo >> "$out"
           done
-          echo '===== common/client likely section/model/light class names =====' >> "$out"
-          { jar tf "$common"; jar tf "$client"; } | grep -Ei 'LevelChunkSection|ClientChunkCache|SectionPos|RenderShape|BlockState|LightEngine|LightTexture|ModelData|BlockRenderDispatcher|BakedModel|BlockStateModel|BlockModel' | sort -u >> "$out" || true
-          echo >> "$out"
           echo '===== selected method references =====' >> "$out"
           for cls in "${classes[@]}"; do
             echo "--- $cls ---" >> "$out"
-            javap -classpath "$cp" -p "$cls" 2>&1 | grep -n -Ei 'getChunk|hasChunk|getSection|getSections|sectionIndex|getBlockState|isAir|canOcclude|isSolidRender|RenderShape|getRenderShape|getShadeBrightness|getLight|blockRenderer|player|level|getMinY|getMaxY|getMinSection|getMaxSection|isOutsideBuildHeight|getBlock|byId|getId' >> "$out" || true
+            javap -classpath "$cp" -p "$cls" 2>&1 | grep -n -Ei 'getChunk|hasChunk|getSection|getSections|sectionIndex|getBlockState|isAir|canOcclude|isSolidRender|getRenderShape|hasBlockEntity|hasOffsetFunction|getFluidState|isEmpty|player|level|getMinY|getMaxY|getMinSection|getMaxSection|isOutsideBuildHeight|getBlock|getId|stateById|blockPosition| set\(' >> "$out" || true
           done
       - name: Upload inspection artifact
         uses: actions/upload-artifact@v4
