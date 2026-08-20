@@ -100,7 +100,7 @@ public final class SectionSnapshot {
             return null;
         }
 
-        int sectionY = selectNonEmptySection(level, center, playerSection.y());
+        int sectionY = selectInterestingSection(level, center, playerSection.y());
         if (sectionY == Integer.MIN_VALUE) {
             return null;
         }
@@ -198,19 +198,25 @@ public final class SectionSnapshot {
                 System.nanoTime() - startNs);
     }
 
-    private static int selectNonEmptySection(ClientLevel level, LevelChunk chunk, int preferredSectionY) {
+    /**
+     * Finds the nearest section containing both air and at least one block in
+     * the conservative supported-full-cube class. This prevents the validation
+     * oracle from accidentally choosing a completely enclosed solid section
+     * whose exposed-face stream would legitimately be empty.
+     */
+    private static int selectInterestingSection(ClientLevel level, LevelChunk chunk, int preferredSectionY) {
         int minSectionY = level.getMinSectionY();
         int maxSectionY = level.getMaxSectionY();
         int maxRadius = Math.max(preferredSectionY - minSectionY, maxSectionY - 1 - preferredSectionY);
 
         for (int radius = 0; radius <= maxRadius; radius++) {
             int below = preferredSectionY - radius;
-            if (below >= minSectionY && below < maxSectionY && !isSectionEmpty(level, chunk, below)) {
+            if (below >= minSectionY && below < maxSectionY && hasAirAndSupported(level, chunk, below)) {
                 return below;
             }
             if (radius != 0) {
                 int above = preferredSectionY + radius;
-                if (above >= minSectionY && above < maxSectionY && !isSectionEmpty(level, chunk, above)) {
+                if (above >= minSectionY && above < maxSectionY && hasAirAndSupported(level, chunk, above)) {
                     return above;
                 }
             }
@@ -218,10 +224,28 @@ public final class SectionSnapshot {
         return Integer.MIN_VALUE;
     }
 
-    private static boolean isSectionEmpty(ClientLevel level, LevelChunk chunk, int sectionY) {
+    private static boolean hasAirAndSupported(ClientLevel level, LevelChunk chunk, int sectionY) {
         int index = level.getSectionIndexFromSectionY(sectionY);
         LevelChunkSection section = chunk.getSection(index);
-        return section.hasOnlyAir();
+        if (section.hasOnlyAir()) {
+            return false;
+        }
+
+        boolean air = false;
+        boolean supported = false;
+        for (int y = 0; y < INTERIOR_SIZE && !(air && supported); y++) {
+            for (int z = 0; z < INTERIOR_SIZE && !(air && supported); z++) {
+                for (int x = 0; x < INTERIOR_SIZE; x++) {
+                    byte classification = classify(section.getBlockState(x, y, z));
+                    air |= classification == AIR;
+                    supported |= classification == SUPPORTED_FULL_CUBE;
+                    if (air && supported) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private static byte classify(BlockState state) {
