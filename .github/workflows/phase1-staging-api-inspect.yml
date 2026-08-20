@@ -47,16 +47,23 @@ jobs:
             'com.mojang.blaze3d.vertex.StagingBuffer$Uploader'
             'com.mojang.blaze3d.vertex.StagingBuffer$BufferHandle'
             'com.mojang.blaze3d.vertex.UberGpuBuffer'
+            'net.minecraft.client.renderer.MappableRingBuffer'
           )
           for cls in "${classes[@]}"; do
             echo "===== $cls public =====" >> "$out"
             javap -classpath "$jarfile" -public -constants "$cls" >> "$out" 2>&1 || true
             echo >> "$out"
           done
-          for cls in \
-            com.mojang.blaze3d.systems.CommandEncoder \
-            com.mojang.blaze3d.vertex.StagingBuffer \
-            'com.mojang.blaze3d.vertex.StagingBuffer$PersistentlyMapped'; do
+          bytecode_classes=(
+            'com.mojang.blaze3d.systems.CommandEncoder'
+            'com.mojang.blaze3d.vertex.StagingBuffer'
+            'com.mojang.blaze3d.vertex.StagingBuffer$PersistentlyMapped'
+            'com.mojang.blaze3d.vertex.StagingBuffer$Cpu'
+            'com.mojang.blaze3d.vertex.StagingBuffer$Uploader'
+            'com.mojang.blaze3d.vertex.StagingBuffer$BufferHandle'
+            'net.minecraft.client.renderer.MappableRingBuffer'
+          )
+          for cls in "${bytecode_classes[@]}"; do
             echo "===== $cls bytecode =====" >> "$out"
             javap -classpath "$jarfile" -c -p "$cls" >> "$out" 2>&1 || true
             echo >> "$out"
