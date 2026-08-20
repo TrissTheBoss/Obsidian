@@ -20,7 +20,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.5.1'
-      - name: Inspect Minecraft 26.2 material and texture APIs
+      - name: Inspect exact dev3 UV and texture binding contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -39,35 +39,56 @@ jobs:
           gradle -q -I /tmp/obsidian-inspect.init.gradle printClientCompileClasspath | tail -n 1 > /tmp/cp
           CP="$(cat /tmp/cp)"
           mkdir -p inspection
-          tr ':' '\n' < /tmp/cp > inspection/classpath.txt
-          : > inspection/matched-classes.txt
-          while IFS= read -r JAR; do
-            if [ -f "$JAR" ] && [[ "$JAR" == *.jar ]]; then
-              jar tf "$JAR" 2>/dev/null | grep -E '^(net/minecraft|com/mojang/blaze3d)/.*(BlockStateModel|BakedQuad|TextureAtlasSprite|SpriteContents|ModelManager|BlockColors|BlockTint|Material|RenderType|RenderPipelines|TextureAtlas|TextureManager|AbstractTexture|TextureSetup|DefaultVertexFormat|VertexFormat).*\.class$' >> inspection/matched-classes.txt || true
-            fi
-          done < inspection/classpath.txt
-          sort -u inspection/matched-classes.txt | head -n 220 > inspection/matched-classes-bounded.txt
-          sed -E 's#/#.#g; s#\.class$##' inspection/matched-classes-bounded.txt > inspection/class-names.txt
+          cat > inspection/target-classes.txt <<'EOF'
+          net.minecraft.client.resources.model.geometry.BakedQuad
+          net.minecraft.client.resources.model.geometry.BakedQuad$MaterialInfo
+          net.minecraft.client.resources.model.sprite.Material
+          net.minecraft.client.resources.model.sprite.Material$Baked
+          net.minecraft.client.renderer.chunk.ChunkSectionLayer
+          net.minecraft.client.renderer.block.BlockStateModelSet
+          net.minecraft.client.renderer.block.dispatch.BlockStateModel
+          net.minecraft.client.renderer.block.dispatch.BlockStateModelPart
+          net.minecraft.client.resources.model.ModelManager
+          net.minecraft.client.color.block.BlockColors
+          net.minecraft.client.color.block.BlockTintSource
+          net.minecraft.client.renderer.rendertype.PreparedRenderType
+          net.minecraft.client.renderer.rendertype.PreparedRenderType$Texture
+          net.minecraft.client.renderer.rendertype.RenderType
+          net.minecraft.client.renderer.rendertype.RenderTypes
+          net.minecraft.client.renderer.RenderPipelines
+          com.mojang.blaze3d.systems.RenderPass
+          com.mojang.blaze3d.systems.RenderSystem
+          com.mojang.blaze3d.vertex.DefaultVertexFormat
+          com.mojang.blaze3d.vertex.VertexConsumer
+          net.minecraft.client.Minecraft
+          EOF
           : > inspection/public-api.txt
+          : > inspection/bytecode.txt
           while IFS= read -r CLASS; do
             echo "=== $CLASS ===" >> inspection/public-api.txt
             javap -classpath "$CP" -public "$CLASS" >> inspection/public-api.txt 2>&1 || true
             echo >> inspection/public-api.txt
-          done < inspection/class-names.txt
-          for CLASS in \
-            net.minecraft.client.renderer.block.model.BakedQuad \
-            net.minecraft.client.renderer.texture.TextureAtlasSprite \
-            net.minecraft.client.renderer.texture.TextureAtlas \
-            net.minecraft.client.renderer.texture.TextureManager \
-            net.minecraft.client.color.block.BlockColors \
-            net.minecraft.client.renderer.RenderType \
-            net.minecraft.client.renderer.RenderPipelines \
-            com.mojang.blaze3d.vertex.DefaultVertexFormat; do
-            SAFE="$(echo "$CLASS" | tr '.' '_')"
-            javap -classpath "$CP" -c -p "$CLASS" > "inspection/${SAFE}-bytecode.txt" 2>&1 || true
+            echo "=== $CLASS ===" >> inspection/bytecode.txt
+            javap -classpath "$CP" -c -p "$CLASS" >> inspection/bytecode.txt 2>&1 || true
+            echo >> inspection/bytecode.txt
+          done < inspection/target-classes.txt
+          : > inspection/render-helper-classes.txt
+          tr ':' '\n' < /tmp/cp | while IFS= read -r JAR; do
+            if [ -f "$JAR" ] && [[ "$JAR" == *.jar ]]; then
+              jar tf "$JAR" 2>/dev/null | grep -E '^net/minecraft/client/renderer/.*(SectionCompiler|ModelBlockRenderer|BlockModel|VertexConsumer|SectionRenderDispatcher|BlockRenderDispatcher).*\.class$' >> inspection/render-helper-classes.txt || true
+            fi
           done
+          sort -u inspection/render-helper-classes.txt | head -n 120 > inspection/render-helper-classes-bounded.txt
+          sed -E 's#/#.#g; s#\.class$##' inspection/render-helper-classes-bounded.txt > inspection/render-helper-names.txt
+          : > inspection/render-helper-bytecode.txt
+          while IFS= read -r CLASS; do
+            echo "=== $CLASS ===" >> inspection/render-helper-bytecode.txt
+            javap -classpath "$CP" -c -p "$CLASS" >> inspection/render-helper-bytecode.txt 2>&1 || true
+            echo >> inspection/render-helper-bytecode.txt
+          done < inspection/render-helper-names.txt
+          grep -n -E 'position_tex|POSITION_TEX|Sampler0|Sampler2|bindTexture|packedUV|unpack|uv|UV0|SOLID_BLOCK|SOLID_TERRAIN|CUTOUT_BLOCK|CUTOUT_TERRAIN|MATRICES_PROJECTION|SAMPLER0_SAMPLER2' inspection/bytecode.txt inspection/render-helper-bytecode.txt > inspection/key-grep.txt || true
       - uses: actions/upload-artifact@v4
         with:
-          name: phase2-dev3-api-inspection-${{ github.sha }}
+          name: phase2-dev3-targeted-inspection-${{ github.sha }}
           if-no-files-found: error
           path: inspection/
