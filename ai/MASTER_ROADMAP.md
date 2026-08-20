@@ -1,6 +1,6 @@
 # Obsidian Master Roadmap and Product Plan
 
-Last materially revised: 2026-08-21  
+Last materially revised: 2026-08-20  
 Roadmap schema: v1  
 Canonical repository: `TrissTheBoss/Obsidian`
 
@@ -14,19 +14,19 @@ It is deliberately different from the other continuity files:
 - `ai/attempts/` and `ai/ATTEMPT_LOG.md` answer **what was tried, what happened, and what evidence exists**.
 - Source code and CI artifacts remain the authority for **what is actually implemented**.
 
-A roadmap item is not evidence that a feature exists. Any item described below remains planned until `CURRENT_STATE.md`, code, CI, and the required runtime/benchmark evidence say otherwise.
+A roadmap item is not evidence that a feature exists. Any item described below remains planned until `CURRENT_STATE.md`, code, CI, and required runtime evidence say otherwise.
 
 ---
 
 ## 1. Product mission
 
-Obsidian is a client-side Minecraft Java Fabric renderer intended to become a clean, Vulkan-only, vendor-neutral replacement for the vanilla terrain/world rendering path and the usual stack of separate renderer, culling, and immediate-mode optimization mods.
+Obsidian is a client-side Minecraft Java Fabric renderer intended to become a clean, Vulkan-only, vendor-neutral replacement for the vanilla terrain/world rendering path and the usual stack of separate renderer/culling/immediate-mode optimization mods.
 
-The central objective is:
+The renderer is being designed around a single central objective:
 
 > **Make Minecraft feel consistently smooth under workloads that normally produce bad frame-time spikes, especially chunk streaming, camera rotation, world traversal, and large render distances.**
 
-Average FPS matters, but it is not allowed to come at the expense of 1%/0.1% lows, uncontrolled memory growth, hidden visual-quality reductions, or unstable synchronization.
+Average FPS matters, but it is not allowed to come at the expense of 1%/0.1% lows, uncontrolled memory growth, hidden quality reductions, or unstable synchronization.
 
 ### Primary priorities, in order
 
@@ -98,14 +98,14 @@ No single scene is allowed to become the only performance oracle.
 
 Every major roadmap item should use one of these meanings consistently:
 
-- **COMPLETE** — implementation, CI, required runtime validation, and the milestone merge are complete.
-- **ACTIVE** — current milestone or actively being implemented/validated.
+- **COMPLETE** — implementation, CI, and required runtime validation are complete and merged.
+- **ACTIVE** — current milestone or actively being implemented.
 - **PLANNED** — intended work, not yet started.
 - **EXPERIMENTAL** — optional path that must prove stability/performance before becoming default.
 - **DEFERRED** — still potentially wanted but intentionally moved later.
 - **BLOCKED** — cannot proceed until a named dependency/evidence gap is resolved.
 - **REJECTED** — considered and deliberately not planned; reason must exist in `DECISIONS.md` or an attempt record.
-- **SUPERSEDED** — replaced by a newer roadmap item or strategy; historical reasoning must remain discoverable.
+- **SUPERSEDED** — replaced by a newer roadmap item or strategy; historical wording should not simply disappear without a trace.
 
 ---
 
@@ -122,7 +122,7 @@ Responsibilities:
 - observe Minecraft world/chunk/section changes;
 - convert mutable game state into immutable renderer-owned snapshots;
 - capture all neighbor data needed for meshing without worker-thread world reads;
-- capture or derive material/model/light/tint information required by supported render classes;
+- capture or derive material/model/light/tint information needed for supported render classes;
 - provide stable generation/version identity so stale async results can be discarded;
 - avoid retaining mutable world objects in long-lived worker jobs;
 - keep extraction cost bounded on the render/client thread.
@@ -168,7 +168,7 @@ Target design:
 - frame-time-aware admission so meshing does not steal all CPU headroom;
 - output suitable for large GPU arenas and indirect rendering.
 
-The production mesher is planned to be **binary/bitmask greedy meshing**. The simple Phase 2 reference mesher remains permanently available as a correctness oracle.
+The production mesher is planned to be **binary/bitmask greedy meshing**; the simple reference mesher remains permanently available as a correctness oracle.
 
 ### 4.4 GPU geometry and metadata storage
 
@@ -181,7 +181,7 @@ Baseline:
 - batched transfer work;
 - completion-gated reuse/destruction;
 - no frame-count-based lifetime guesses;
-- observable fragmentation/high-water metrics;
+- background fragmentation/compaction metrics;
 - optional future defragmentation only when it can be made latency-safe.
 
 Planned arena classes eventually include:
@@ -357,61 +357,52 @@ Phase 1 is the proven infrastructure foundation for real terrain, not the final 
 
 Purpose: define what a **correct Minecraft section** means before optimizing it.
 
-#### P2.1 — Immutable real-section snapshot + reference oracle — COMPLETE
+#### P2.1 — Immutable real-section snapshot + reference oracle — ACTIVE
 
-Validated milestone: `0.2.0-phase2-dev1`.
+Current dev milestone: `0.2.0-phase2-dev1`.
 
-Closing evidence:
+Planned/implemented contract:
 
-- immutable real 16^3 section + one-block halo capture;
-- 18^3 / 5832 primitive sampled cells;
-- no world reads during post-capture reference meshing;
-- conservative AIR / supported-full-cube / unsupported classification;
-- canonical deterministic one-face-per-exposed-face oracle;
-- original BlockState ID retained in canonical records;
-- duplicate-build determinism;
-- bounded staging/device-arena GPU validation;
-- completion-gated reclamation;
-- vanilla terrain remained active;
-- reference RX 6800 XT runtime success in A-0058;
-- PR #12 merged at `a714e19ce871bf73136d52f85a1780109aa851dd`.
+- capture one real loaded 16^3 section;
+- one-block halo in every direction;
+- primitive-only immutable snapshot;
+- no world reads after capture;
+- conservative first supported subset;
+- canonical deterministic reference-face stream;
+- duplicate-build determinism check;
+- GPU upload/readback verification using Phase 1 memory infrastructure;
+- vanilla terrain remains active.
 
-The P2.1 `ReferenceFaceMesh` remains permanently in the project even after production greedy meshing exists.
+This reference path must remain in the project even after the production greedy mesher exists.
 
-#### P2.2 — First drawable real section — ACTIVE
+#### P2.2 — First drawable real section — PLANNED
 
-Current dev milestone: `0.2.0-phase2-dev2`.
+Goal: render actual geometry derived from a real Minecraft section for a deliberately narrow supported subset.
 
-Goal: render actual indexed geometry derived from a real Minecraft section for the same deliberately narrow supported subset while retaining vanilla terrain as the comparison oracle.
+Required work:
 
-Required/active work:
+- inspect exact 26.2 block/model/material/sprite/light APIs;
+- decide initial terrain vertex format;
+- generate vertex/index geometry from the P2.1 snapshot;
+- upload to generation-safe arenas;
+- create a real section GPU scene record;
+- render through visibility/indirect infrastructure;
+- compare against vanilla while vanilla remains active;
+- validate world-space positioning and camera transforms;
+- validate section boundaries and neighbor occlusion.
 
-- preserve immutable snapshot/reference semantics;
-- inspect exact Minecraft 26.2 render/model/material/light APIs rather than guessing older interfaces;
-- create a separate deterministic drawable representation from canonical reference faces;
-- choose an initial correctness-oriented terrain vertex/index representation;
-- upload vertex/index geometry through bounded staging and generation-safe arenas;
-- create/use a real section GPU draw record/indirect command;
-- render through the already-proven public Blaze3D indexed-indirect graphics path;
-- validate section/world origin and camera transforms;
-- validate section-boundary face semantics against the halo/reference oracle;
-- compare output with vanilla while vanilla remains active.
-
-Current dev2 implementation intentionally uses orientation-colored debug faces and Minecraft's built-in position/color shader contract to isolate geometry/placement correctness. Correct Minecraft texture/material identity remains P2.3; light/AO remains P2.4.
-
-P2.2 is **not COMPLETE** until the exact dev2 artifact passes reference RX 6800 XT runtime validation and the live overlay is observed to align with vanilla supported full-cube faces without offset/rotation/drift.
+Initial success should favor correctness over feature breadth.
 
 #### P2.3 — Correct textures/material identity — PLANNED
 
 Goals:
 
-- exact Minecraft 26.2 block/model/material API integration;
 - atlas/sprite identity for supported model cubes;
 - UV mapping semantics;
 - tint/color path;
 - material/render-layer classification;
-- stable material IDs/tables suitable for async meshes;
 - resource reload invalidation;
+- stable material IDs or tables suitable for async meshes;
 - texture/resource lifetime across reloads.
 
 Resource-pack/custom-model support may remain incomplete initially, but failures must be explicit rather than silently rendering incorrect geometry.
@@ -464,14 +455,14 @@ Goals:
 - stable camera movement;
 - no visible duplicate/missing borders;
 - bounded upload behavior under rebuild bursts;
-- begin retiring synthetic/probe-only assumptions.
+- begin retiring synthetic probe-only assumptions.
 
 #### Phase 2 exit criteria
 
 Phase 2 is complete when:
 
 - real section snapshots are immutable and lifecycle-safe;
-- a permanent independent reference oracle exists;
+- a permanent reference oracle exists;
 - supported terrain can be rendered with correct position/material/UV/light/AO semantics;
 - section updates/unloads/rebuilds are safe;
 - multiple sections can be managed through persistent scene ownership;
@@ -555,8 +546,8 @@ Default:
 
 For representative snapshots:
 
-- run the permanent reference oracle;
-- run the greedy mesher;
+- run reference oracle;
+- run greedy mesher;
 - expand greedy quads conceptually into covered reference faces;
 - compare coverage/material/light/AO semantics;
 - preserve failing snapshot fixtures where legally/practically possible;
@@ -626,7 +617,7 @@ Purpose: scale the proven Phase 1 synthetic visibility pipeline to thousands of 
 
 #### P4.3 — Temporal visibility
 
-Conservative strategy:
+Planned conservative strategy:
 
 - remember recently visible sections;
 - avoid pathological flicker/overaggressive culling;
@@ -690,7 +681,7 @@ Potential inputs:
 - distance;
 - view direction;
 - whether currently visible;
-- missing geometry vs stale geometry;
+- whether missing geometry vs stale geometry;
 - age of job;
 - camera velocity;
 - player velocity;
@@ -814,7 +805,7 @@ Planned directions:
 
 ### Phase 11 — Experimental renderer features — PLANNED / OPTIONAL
 
-Experimental features live behind explicit settings and stability tracking. Failure must not silently corrupt normal rendering.
+Experimental features should live behind explicit settings and stability tracking. Failure must not silently corrupt normal rendering.
 
 Planned experiment candidates:
 
@@ -879,10 +870,9 @@ This section is a product-level checklist. Phase sections above describe sequenc
 
 ### Terrain core
 
-- [COMPLETE P2.1 foundation] Real immutable section snapshots.
-- [COMPLETE P2.1 foundation] Neighbor halo/padding.
-- [COMPLETE P2.1 foundation] Permanent reference face/mesh oracle.
-- [ACTIVE P2.2] First drawable real-section geometry/placement path.
+- [PLANNED] Real immutable section snapshots.
+- [PLANNED] Neighbor halo/padding.
+- [PLANNED] Permanent reference face/mesh oracle.
 - [PLANNED] Production binary/bitmask greedy mesher.
 - [PLANNED] Opaque terrain.
 - [PLANNED] Cutout terrain.
@@ -906,7 +896,6 @@ This section is a product-level checklist. Phase sections above describe sequenc
 - [COMPLETE foundation] Indexed indirect rendering.
 - [COMPLETE foundation] Compute-generated commands.
 - [COMPLETE foundation] GPU visibility/compaction primitive.
-- [ACTIVE P2.2] First real-section arena-backed indexed-indirect draw.
 - [PLANNED] Persistent real-section scene database.
 - [PLANNED] Large-scale frustum culling.
 - [PLANNED] Hierarchical region/column culling.
@@ -1097,7 +1086,7 @@ A feature should not be promoted merely because a lower rung passed when a highe
 
 - development versions may be distributed as CI artifacts;
 - milestone merges normally use `[no-release]`;
-- PRs remain draft until compile validation and required real-machine runtime validation pass;
+- PRs remain draft until required runtime evidence exists;
 - a compile-clean JAR is not automatically a runtime-validated JAR.
 
 ### Public releases
@@ -1135,7 +1124,6 @@ Candidate toggles:
 - device-address geometry;
 - async GPU defragmentation;
 - native indirect-count draw;
-- alternative visibility hierarchies;
 - optional LOD.
 
 Each experiment should declare:
@@ -1190,13 +1178,13 @@ This section is mandatory procedure for AI agents and maintainers.
 
 ### 15.1 Treat this file as canonical plan state, not an append-only log
 
-Unlike attempt records, the roadmap **is allowed to change** as the product plan changes. Meaningful changes must remain explainable through decisions/attempts/PR history.
+Unlike attempt records, the roadmap **is allowed to change** as the product plan changes. However, meaningful changes must remain explainable through decisions/attempts/PR history.
 
 Do not preserve stale wording merely for history; preserve the **reason/history elsewhere**, then keep this file readable as the best current plan.
 
 ### 15.2 Classify every roadmap edit
 
-Before editing, classify the change.
+Before editing, classify the change:
 
 #### Class A — Status synchronization
 
@@ -1205,7 +1193,7 @@ Examples:
 - PLANNED -> ACTIVE;
 - ACTIVE -> COMPLETE after merge/runtime validation;
 - updating the active dev milestone;
-- adding the merge SHA for a completed milestone.
+- adding the merge SHA for a completed phase.
 
 Required records:
 
@@ -1298,7 +1286,7 @@ Evidence hierarchy should include, as applicable:
 
 ### 15.4 Keep CURRENT_STATE and roadmap roles separate
 
-`CURRENT_STATE.md` should remain focused enough to answer:
+`CURRENT_STATE.md` should remain concise enough to answer:
 
 - what branch/PR/version is active;
 - what just passed;
@@ -1362,29 +1350,17 @@ This is a concise index, **not** the evidence log. Detailed reasoning belongs in
 - preserved Phase 2 reference-oracle -> Phase 3 binary/bitmask greedy-meshing ordering;
 - established formal change classes and synchronization procedure with `CURRENT_STATE.md`, `DECISIONS.md`, and immutable attempt records.
 
-### 2026-08-21 — Class A status synchronization
-
-- synchronized the successful/merged `0.2.0-phase2-dev1` evidence from A-0058 and PR #12;
-- marked P2.1 immutable real-section snapshot/reference oracle COMPLETE;
-- marked P2.2 first drawable real section ACTIVE as `0.2.0-phase2-dev2` on draft PR #14;
-- recorded that dev2 intentionally isolates geometry/world-transform correctness with a diagnostic overlay before P2.3 texture/material identity and P2.4 light/AO;
-- no phase ordering, product priority, compatibility promise, experimental feature, or planned renderer domain was removed or reprioritized.
-
 ---
 
 ## 17. Immediate roadmap position
 
-Current position at this revision:
+Current position at the time of this revision:
 
 - Phase 0: COMPLETE.
 - Phase 1: COMPLETE through GPU visibility/indirect compaction.
 - Phase 2: ACTIVE.
-- P2.1: COMPLETE — immutable real-section snapshot + permanent canonical reference oracle, runtime validated and merged.
-- Active milestone: P2.2 / `0.2.0-phase2-dev2` — first drawable real section.
-- Dev2 implementation/API inspection/CI package are complete; reference RX 6800 XT runtime and visual alignment validation are still required before P2.2 may become COMPLETE.
-- Next after successful P2.2: P2.3 correct texture/material/sprite/UV/tint/render-layer identity.
-- P2.4 remains light/AO correctness.
-- Phase 3 production worker-local binary/bitmask greedy meshing remains planned only after Phase 2 establishes the required render semantics.
-- Phase 4 real-scale GPU visibility remains downstream of real terrain/meshing semantics.
+- Active milestone: P2.1 / `0.2.0-phase2-dev1`, immutable real-section snapshot + canonical reference-face oracle.
+- Next planned milestone after successful P2.1 runtime validation: P2.2, first drawable real section for the conservative supported subset.
+- Phase 3 production binary/bitmask greedy meshing remains planned after Phase 2 establishes correct render semantics.
 
-Always verify live branch/PR/build details in `ai/CURRENT_STATE.md` before acting, because current milestone state changes more frequently than the long-range plan.
+Always verify the live details in `ai/CURRENT_STATE.md` before acting on this final section because active milestone state changes more frequently than the long-range plan.
