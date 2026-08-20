@@ -1,189 +1,158 @@
 # Obsidian AI Operating Manual
 
-## 1. Mission
+This manual defines how an AI agent or human maintainer should continue Obsidian safely and consistently.
 
-Obsidian is a Minecraft Java 26.2 Fabric rendering-engine replacement focused on modern systems and Vulkan only.
+## Mission
 
-The primary engineering objective is excellent frame consistency, especially 1% and 0.1% lows. Secondary objectives are smooth chunk streaming, scaling to large render distances, and high average FPS without deliberate visual degradation.
+Obsidian is a client-side Minecraft Java Fabric renderer project targeting Minecraft 26.2. Its purpose is to replace the vanilla terrain/world rendering path with a Vulkan-only, vendor-neutral renderer optimized first for frame pacing and worst-frame behavior, then for very large render distances and high average FPS.
 
-## 2. Locked project constraints
+## Primary priorities
 
-Current user-approved constraints:
+1. Exceptional 1% and 0.1% lows.
+2. Smooth chunk loading and camera movement.
+3. 32 chunks as a normal baseline workload.
+4. Scale to 64/96/128+ render distances.
+5. High average FPS.
+6. Reasonable RAM/VRAM use.
+7. Minimal visual differences from intended vanilla output.
+8. Fix obvious vanilla rendering defects rather than deliberately reproducing them.
+9. Vulkan only.
+10. Vendor-neutral baseline.
+11. Vanilla/Fabric-first compatibility.
+12. Clean architecture suitable for eventual public release.
 
-- OS target for primary development/testing: Windows 11.
-- Editor preference: VS Code.
-- Project name: Obsidian.
-- Minecraft target: Java Edition 26.2.
-- Mod loader: Fabric.
-- Graphics API: Vulkan only. Do not spend engineering time on an OpenGL fallback unless this decision is explicitly changed.
-- Hardware target: modern systems, vendor-neutral.
-- Reference test hardware: AMD Radeon RX 6800 XT, Ryzen 5 5600X, 16 GB DDR4-2666.
-- Do not create NVIDIA-specific or AMD-specific renderer implementations as the baseline.
-- Iris/shader-pack compatibility is not a current requirement.
-- Perfect custom resource-pack/model compatibility is not a current requirement.
-- Primary compatibility target is vanilla + ordinary Fabric client usage, not giant modpacks.
-- Obsidian replaces Sodium rather than running beside it.
-- The long-term goal is to subsume the useful rendering-side work of Sodium-style terrain optimization, ImmediatelyFast-style immediate batching, and conservative entity/visibility culling.
-- Normal operating range starts around 32 chunks and should scale substantially higher.
-- Visual output should have minimal differences, but pixel-perfect reproduction of inefficient vanilla methods is not required.
-- Fix obvious vanilla renderer bugs instead of reproducing them intentionally.
-- Experimental renderer features are allowed behind explicit toggles/auto capability checks.
-- Native code is allowed if profiling proves it worthwhile, but Java/LWJGL is preferred until evidence says otherwise.
-- Public release is an eventual goal. Keep code modular, documented, and non-orphaned now even though broad public compatibility is not yet the priority.
+Not current priorities: OpenGL fallback, Iris/shader-pack compatibility, old hardware, vendor-specific renderer backends, giant modpacks, or pixel-identical reproduction of inefficient vanilla behavior.
 
-Priority order:
+## Reference machine
 
-1. 1% / 0.1% lows and frame pacing.
-2. Smooth chunk loading/streaming.
-3. Very large render-distance scaling.
-4. Average FPS.
-5. Sensible RAM/VRAM use.
+- Windows 11
+- AMD Radeon RX 6800 XT, 16 GB VRAM
+- Ryzen 5 5600X
+- 16 GB DDR4-2666
+- VS Code
 
-## 3. Architectural direction
+## Architecture direction
 
-The stable core should remain vendor-neutral and backend-focused rather than brand-focused.
+Long-term data flow:
 
-Preferred long-term terrain path:
+`Minecraft/Fabric -> extraction -> world scene database -> CPU mesh system + GPU scene system -> async uploads + visibility compute -> draw compaction -> indirect rendering -> Vulkan render graph -> screen`
 
-`Minecraft state -> compact scene extraction -> asynchronous CPU meshing -> large device-local GPU arenas -> GPU visibility/culling -> compacted indirect draw commands -> Vulkan render passes`
+Core constraints:
 
-Baseline GPU-driven techniques should favor broadly available Vulkan functionality such as compute culling, indirect indexed drawing, indirect draw counts, large buffer arenas, staging rings, and explicit synchronization.
+- The render thread coordinates work but must not walk enormous chunk lists, allocate hot-path objects, perform many tiny uploads, or issue thousands of Java-side draw calls every frame.
+- Keep terrain data in large GPU arenas with explicit suballocation.
+- Prefer GPU visibility/culling and indirect draw generation.
+- Camera turns should mostly update camera constants and let GPU work recompute visibility.
+- Avoid routine device-wide waits.
+- Background work must yield to frame-critical work when frame-time pressure rises.
 
-Mesh shaders, work graphs, experimental transparency systems, partial remeshing, and other bleeding-edge paths should remain optional until benchmarking demonstrates a real win with acceptable correctness.
+## Vulkan/device ownership
 
-The render thread must not become the place where tens of thousands of sections are walked, allocated, rebuilt, uploaded individually, or converted into many driver submissions every frame.
+Preserve Minecraft 26.2's active Vulkan `GpuDevice` and presentation ownership until a concrete requirement proves the public abstraction insufficient. Do not create a second Vulkan device/swapchain speculatively.
 
-## 4. Engineering rules
+Backend-specific/native Vulkan access is an escalation path only after exact ownership, synchronization, and lifetime consequences are understood.
 
-### 4.1 Exact-version API rule
+## Synchronization and lifetime rules
 
-Do not assume Minecraft/Fabric renderer APIs from older versions, documentation for another mapping set, or memory.
+- CPU frame advancement never proves GPU completion.
+- Frame-context slots and serials are bookkeeping only.
+- Resource reuse/destruction must be gated by a real completion primitive associated with the last submission that uses the resource, or another mechanism specifically proven equivalent.
+- Normal frame processing must not intentionally wait for the GPU.
+- Use zero-timeout completion polling where appropriate.
+- Shutdown waits must be bounded and must not destroy resources known to still be in flight merely to make cleanup counters look clean.
+- No routine `vkDeviceWaitIdle` or equivalent global idle behavior.
 
-Before depending on a nontrivial Minecraft 26.2 renderer API, validate it against the exact dependencies resolved by the project. A clean GitHub Actions build is the minimum compile-time truth source.
+## Upload/staging rules
 
-The Phase 0 failure documented in `ATTEMPT_LOG.md` exists specifically because an older `GpuDevice` API shape was assumed. Do not repeat that class of mistake.
+- Upload staging must be bounded.
+- Prefer fixed-capacity persistent host-visible staging storage with suballocation/ring semantics.
+- Reclaim staging space only after GPU completion.
+- Batch copies rather than making many tiny submissions.
+- When staging capacity is exhausted, apply controlled backpressure/defer work rather than allocating unbounded temporary buffers.
+- Record upload capacity, high-water usage, bytes staged/submitted/reclaimed, and backpressure events.
 
-### 4.2 Performance evidence rule
+## Performance rules
 
-Do not call an optimization successful because it sounds efficient.
+- Tail latency wins over headline FPS.
+- Do not introduce a profiler implementation that changes submission behavior enough to contaminate the measured frame pacing.
+- Avoid per-frame allocation in foundational hot paths.
+- Large render distance must be treated as a design workload, not an afterthought.
+- No hidden visual-quality degradation to manufacture benchmark wins.
 
-For meaningful renderer changes, collect evidence appropriate to the change:
+## Profiling direction
 
-- CPU frame time
-- GPU frame time
-- 1% low and 0.1% low
-- allocation rate / GC
-- chunk mesh latency
-- upload latency and bandwidth
-- draw count
-- visible/candidate/culled section counts
-- VRAM and RAM use
-- worst-frame behavior while rotating, sprinting, flying, teleporting, or loading new terrain
+Eventually provide:
 
-Prefer before/after captures using the same scene and settings.
+- CPU/GPU frame time.
+- P95/P99/P99.9/max.
+- stage timings.
+- queue sizes and latency.
+- mesh/upload latency.
+- RAM/VRAM usage.
+- allocation/GC information.
+- visible/culled section counts.
+- draw/triangle counts.
 
-### 4.3 Visual-correctness rule
+Benchmark commands are planned around `/render benchmark start` / stop with JSON/CSV export.
 
-Optimization may change implementation and ordering details, but should not deliberately lower normal visual quality for FPS.
+## Compatibility rules
 
-Do not silently add:
+Obsidian is intended to replace Sodium-class renderer ownership rather than stack with another complete renderer. Detect and clearly reject conflicting renderer/optimization mods where ownership would be undefined.
 
-- dynamic resolution
-- reduced internal resolution
-- hidden render-distance reduction
-- entity-distance reduction
-- particle-count reduction
-- texture-resolution reduction
-- forced terrain LOD
-- incorrect face/occlusion culling
-- visibly broken transparency
+Initial compatibility is vanilla/Fabric-first. Broad shader-pack/resource-pack/modpack compatibility should not block renderer architecture work unless a decision explicitly changes the scope.
 
-Any approximation with visible tradeoffs belongs behind an explicit experimental option and must be logged.
+## Development workflow
 
-### 4.4 Frame-pacing rule
+1. Read `ai/README.md`, `CURRENT_STATE.md`, this manual, `DECISIONS.md`, historical `ATTEMPT_LOG.md`, and the newest files in `ai/attempts/`.
+2. Work from repository truth, not remembered chat context.
+3. For unstable Minecraft renderer APIs, inspect the exact Minecraft 26.2 dependency resolved by Loom rather than guessing from another version.
+4. Use a feature branch for each coherent milestone.
+5. Keep PRs draft until compile validation and any required real-machine runtime validation pass.
+6. GitHub CI against the real declared dependencies is the compile/package authority.
+7. Do not publish a development milestone as a public release merely because it merged; use `[no-release]` when appropriate.
+8. Remove temporary API-inspection/debug workflows once they have served their purpose.
+9. Record every meaningful attempt whether it succeeds or fails.
+10. Update `CURRENT_STATE.md` whenever project truth changes and `DECISIONS.md` whenever a durable design choice changes.
 
-Do not maximize background utilization at the expense of the current frame.
+## Attempt logging
 
-Chunk meshing, upload work, cache maintenance, defragmentation, and other background work should eventually be governed by frame-pressure feedback. Leaving CPU headroom is acceptable when it improves 1% lows.
+Historical attempts are in `ai/ATTEMPT_LOG.md`.
 
-### 4.5 Memory rule
+New attempts should use immutable one-file-per-attempt entries under `ai/attempts/`, with globally monotonic IDs such as `A-0021-description.md`.
 
-The reference machine has 16 GB system RAM and 16 GB GPU VRAM. Avoid redundant long-lived Java-side mesh copies. Prefer bounded/recyclable CPU data and large suballocated device-local GPU arenas.
+Each attempt should state:
 
-### 4.6 Synchronization rule
+- Date.
+- Objective.
+- Action.
+- Result (`SUCCESS`, `PARTIAL`, `FAILED`, `REVERTED`, or `SUPERSEDED`).
+- Intended effect.
+- Actual effect.
+- Evidence.
+- Why/root cause when known.
+- Side effects/lessons.
+- Next action.
 
-Avoid routine whole-device waits. Resource lifetime and transfer synchronization should be explicit, pipelined, and timeline/fence-driven where supported by the active Minecraft/Vulkan architecture.
+Do not delete failed attempts. If later evidence changes the conclusion, add a new attempt that supersedes the old one.
 
-## 5. Repository workflow
+## Release/build rules
 
-Canonical repository: `TrissTheBoss/Obsidian`.
+- Canonical binaries come from GitHub CI/release builds against real dependencies.
+- A mocked/local JAR can be useful for internal logic but is not release compatibility evidence.
+- Versioned development JARs may be distributed from CI artifacts for runtime validation before merge/release.
+- Public releases should represent meaningful validated checkpoints.
 
-For meaningful changes:
+## Security
 
-1. Read this directory first.
-2. Inspect current `main` and relevant source/CI files.
-3. Create a focused feature/fix branch from current `main`.
-4. Make the smallest coherent change that can answer the current engineering question.
-5. Build against the exact Minecraft 26.2/Fabric toolchain.
-6. Record the attempt in `ai/ATTEMPT_LOG.md` even if it failed.
-7. Update `ai/CURRENT_STATE.md` if the project truth changed.
-8. Update `ai/DECISIONS.md` if a durable design decision changed.
-9. Remove temporary probes/debug workflows once no longer needed.
-10. Advance/publish only validated changes.
+Never store or request passwords, PATs, SSH private keys, recovery codes, session cookies, or similar secrets in the repository or AI continuity files. Use authorized integrations/OAuth where available.
 
-Do not leave unexplained diagnostic files or temporary CI workflows on `main`.
+## Handoff definition of done
 
-## 6. CI and release rules
+Before stopping a development session or handing off to another agent:
 
-The GitHub-hosted build is authoritative for compatibility with the declared project dependencies.
-
-Current build baseline:
-
-- Java 25
-- Gradle 9.5.1
-- Fabric Loom 1.17.x / project-pinned version
-- Minecraft 26.2
-- Fabric Loader 0.19.3+
-
-Release rules:
-
-- Do not publish a release from a known failing commit.
-- Diagnostic commits should use the repository's no-release convention where applicable.
-- Release JARs and source JARs should come from CI, not from an unrelated mock environment.
-- Attach/checksum release artifacts.
-- Keep release notes factual about what is and is not implemented.
-
-## 7. Logging procedure for every meaningful attempt
-
-Append a new entry to `ai/ATTEMPT_LOG.md` with:
-
-- ID
-- date/time if known
-- objective / intended effect
-- files/systems touched
-- exact action or hypothesis
-- result: SUCCESS / PARTIAL / FAILED / REVERTED / SUPERSEDED
-- evidence
-- why it worked or failed
-- side effects / lessons
-- next action
-
-If an experiment is later disproven, append a new entry referencing the old ID. Do not rewrite the old result.
-
-## 8. Handoff procedure
-
-Before ending a substantial work session, ensure `CURRENT_STATE.md` answers:
-
-- What version/phase are we at?
-- What is known to compile?
-- What is known to run on real Minecraft, if anything?
-- What is not implemented yet?
-- What is the next concrete engineering milestone?
-- What active risks/blockers exist?
-- Which branch/commit/tag is canonical?
-
-A new agent should be able to start useful work after reading only the `ai/` directory plus the source files relevant to the next task.
-
-## 9. Security
-
-Never commit credentials, GitHub tokens, passwords, SSH private keys, session cookies, recovery codes, private personal data, or other secrets to this directory or the repository.
+- code/build state must be accurately represented in `CURRENT_STATE.md`;
+- meaningful experiments must have an attempt record;
+- durable new architecture choices must be in `DECISIONS.md`;
+- temporary diagnostic files/workflows should be removed unless intentionally retained and documented;
+- unvalidated behavior must be labeled as unvalidated rather than implied successful;
+- the next concrete action should be explicit.
