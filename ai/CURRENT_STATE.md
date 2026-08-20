@@ -9,9 +9,9 @@ Last updated: 2026-08-20
 - Current public release: `v0.0.2-phase0`
 - Current merged development baseline: Phase 1 dev5, merge commit `d3c0a465cb10a648f5f1c241890b3a6eacf52b36`
 - Active development branch: `phase1/first-draw`
-- Active draft PR: #8, `Phase 1: first Obsidian-owned graphics draw`
+- Active PR: #8, `Phase 1: first Obsidian-owned graphics draw`
 - Current development version: `0.1.0-phase1-dev6`
-- Dev6 status: **compile validated; runtime pending**
+- Dev6 status: **runtime validated; pending merge with `[no-release]`**
 
 ## Reference runtime
 
@@ -52,137 +52,50 @@ Validated a device-preferred geometry arena with generation-safe handles, bounde
 
 ### Phase 1 dev5 - VALIDATED / merged PR #7
 
-Validated fixed pass orchestration and integrated GPU timestamp profiling:
+Validated fixed pass orchestration and integrated GPU timestamp profiling: one useful owned submission, zero profiler-only submissions, nonblocking timestamp retrieval, deterministic dependent GPU copy/readback, world entry, and clean shutdown. Dev5 was squash-merged as `d3c0a465cb10a648f5f1c241890b3a6eacf52b36` with `[no-release]`. Runtime evidence: `ai/attempts/A-0033-dev5-runtime-success.md`.
 
-- two-pass dependency graph;
-- one useful owned submission;
-- zero profiler-only submissions;
-- nonblocking timestamp result retrieval;
-- deterministic dependent GPU copy/readback;
-- world entry and clean shutdown;
-- exact runtime evidence in `ai/attempts/A-0033-dev5-runtime-success.md`.
+### Phase 1 dev6 - VALIDATED; pending merge through PR #8
 
-Dev5 was squash-merged as `d3c0a465cb10a648f5f1c241890b3a6eacf52b36` with `[no-release]`.
+Goal achieved: first actual Obsidian-owned graphics draw without touching the presented Minecraft framebuffer.
 
-## Phase 1 dev6 - ACTIVE; compile validated, runtime pending
+Validated implementation:
 
-Goal: prove the first actual Obsidian-owned graphics draw without changing the presented Minecraft image.
-
-### Exact Minecraft 26.2 graphics findings
-
-Exact Loom-resolved public/API and Vulkan bytecode inspection confirmed that dev6 can stay inside Blaze3D; no native Vulkan seam is justified.
-
-Public path:
-
-- `GpuDevice.createTexture(...)` and `createTextureView(...)`;
-- `GpuDevice.createBuffer(...)`;
-- `GpuDevice.precompilePipeline(RenderPipeline, ShaderSource)`;
-- `CommandEncoder.createRenderPass(...)`;
-- `CommandEncoder.copyTextureToBuffer(...)`;
-- `RenderPass.setPipeline(...)`;
-- `RenderPass.setVertexBuffer(...)`;
-- `RenderPass.setIndexBuffer(...)`;
-- `RenderPass.drawIndexed(...)`.
-
-Relevant exact constants/types:
-
-- `GpuFormat.RGBA8_UNORM`;
-- `PrimitiveTopology.TRIANGLES`;
-- `IndexType.SHORT`;
-- texture `RENDER_ATTACHMENT | COPY_SRC`;
-- vertex/index buffers `COPY_DST | VERTEX` / `COPY_DST | INDEX`;
-- readback buffer `MAP_READ | COPY_DST`;
-- `ColorTargetState(..., RGBA8_UNORM, WRITE_ALL)`;
-- `DefaultVertexFormat.POSITION` with shader semantic `Position`.
-
-Vulkan cache semantics were also inspected:
-
-- `VulkanDevice.precompilePipeline(pipeline, customShaderSource)` stores the compiled pipeline in the same identity-keyed `pipelineCache` used by `VulkanRenderPass.setPipeline` through `getOrCompilePipeline`;
-- therefore dev6 can precompile tiny Obsidian-owned shader strings during initialization and bind that exact cached pipeline later without waiting for resource reload;
-- indexed draw parameters forward as Vulkan `indexCount, instanceCount, firstIndex, vertexOffset, firstInstance`.
-
-Temporary API inspection workflow has been removed. Evidence: `ai/attempts/A-0034-dev6-first-draw-api-inspection.md`.
-
-### Implemented first draw
-
-`FirstDrawProbe` owns a one-shot private graphics validation:
-
-- 16x16 `RGBA8_UNORM` offscreen target, never presented;
-- black clear color `(0,0,0,1)`;
-- three POSITION vertices forming a large centered triangle;
-- three 16-bit indices;
-- tiny custom vertex shader with no uniforms;
-- tiny custom fragment shader outputting magenta `(1,0,1,1)`;
-- explicitly precompiled/cached graphics pipeline;
-- 1024-byte MAP_READ readback buffer.
-
-Three graph passes execute in one command stream:
-
-1. `first-draw-geometry-upload`;
-2. `first-draw-offscreen-render`;
-3. `first-draw-readback`.
-
-The same useful submission contains:
-
-- 36 vertex upload bytes;
-- 6 index upload bytes;
-- all pass timestamp writes;
-- render-target clear;
-- pipeline/VB/IB binding;
-- one `drawIndexed(3,1,0,0,0)` call;
-- texture-to-buffer readback;
-- the staging completion fence.
-
-Profiler-only submissions remain zero.
-
-Deterministic validation checks pixels far from triangle edges:
-
-- center pixel `(8,8)` must be RGBA `255/0/255/255`;
-- corner `(0,0)` must remain clear RGBA `0/0/0/255`.
-
-### Expected dev6 accounting
-
-Graph/draw:
-
-- graph passes = 3;
-- executed mask = `7`;
-- useful submissions = 1;
+- exact Minecraft 26.2 public graphics/API and Vulkan cache inspection supported staying inside Blaze3D;
+- private 16x16 `RGBA8_UNORM` target, never presented;
+- custom in-memory vertex/fragment shaders;
+- pipeline precompiled through `GpuDevice.precompilePipeline` and reused through the backend pipeline cache;
+- three POSITION vertices, three 16-bit indices;
+- graph passes: geometry upload -> offscreen indexed draw -> texture readback;
+- all uploads, timestamps, render pass, indexed draw, readback and completion fence in one useful submission;
 - profiler-only submissions = 0;
-- draw calls = 1;
-- triangles = 1;
-- pipeline valid = true;
-- pixels verified = 2.
+- deterministic pixel verification.
 
-Staging:
+Real-machine result on the reference RX 6800 XT:
 
-- payload submitted/reclaimed = `42/42` bytes;
-- vertex reservation = 36 bytes at offset 0;
-- index reservation is aligned to virtual offset 48 and occupies 6 bytes;
-- expected staging high-water = 54 bytes;
-- expected backpressure = 0;
-- pending upload batches = 0 after completion.
+- correct `0.1.0-phase1-dev6` loaded on Vulkan;
+- graphPasses=3;
+- usefulSubmissions=1;
+- pipelineValid=true;
+- drawCalls=1, triangles=1;
+- vertex/index payload=36/6 bytes, staging payload=42 bytes;
+- graph verified with executedMask=7;
+- center `(8,8)` = `255/0/255/255` magenta;
+- corner `(0,0)` = `0/0/0/255` black;
+- pixelsVerified=2;
+- timestamp queries resolved nonblockingly;
+- staging submitted/reclaimed=42/42 bytes;
+- staging high-water=54 bytes due to 16-byte alignment before the index reservation;
+- backpressure=0, pending upload batches=0;
+- device geometry arena remained completely unused/clean with one full 524288-byte free span;
+- user entered a single-player world normally;
+- shutdown after 2543 frames had no pending work;
+- process exited with code 0.
 
-Device geometry arena remains initialized but unused by this one-shot draw probe:
-
-- used/high-water/alloc/failure/retire/reclaim/stale counters = 0;
-- free spans = 1;
-- largest free span = 524288;
-- fragmentation = 0.
-
-CPU/GPU per-pass timing values are run-dependent; successful resolution matters, not exact numbers. `unavailableQueryPolls` may be zero or positive.
-
-### Compile validation
-
-- clean first-draw implementation passed GitHub Actions run `32373756653`;
-- lifecycle review identified and fixed a theoretical post-submit error boundary in `FrameGraphCommandStream.submit()`: fallible profiler software bookkeeping now occurs before actual queue submission, preventing a post-submit bookkeeping exception from sending the caller through cleanup that assumes nothing is in flight;
-- lifecycle-reviewed head `4f1c47fca49c5d60ed722031f614fa21710448fa` passed GitHub Actions run `32373926561` with build and artifact upload successful;
-- later continuity-only commits require one final exact-head CI before distribution.
-
-Implementation evidence: `ai/attempts/A-0035-dev6-first-draw-implementation.md`.
+Runtime evidence: `ai/attempts/A-0037-dev6-runtime-success.md`.
 
 ## Proven architecture boundary
 
-`Minecraft 26.2 Vulkan device -> Obsidian RendererBridge -> FrameCoordinator -> completion-gated lifetime -> bounded staging -> device-preferred arena -> FixedFrameGraph -> owned command stream -> embedded timestamps -> public Blaze3D graphics pipeline/render pass -> private offscreen draw/readback`
+`Minecraft 26.2 Vulkan device -> Obsidian RendererBridge -> FrameCoordinator -> completion-gated lifetime -> bounded staging -> device-preferred arena -> FixedFrameGraph -> owned command stream -> embedded timestamps -> public Blaze3D graphics pipeline/render pass -> verified indexed draw/readback`
 
 Obsidian still does not:
 
@@ -196,11 +109,17 @@ Obsidian still does not:
 
 ## Immediate next action
 
-1. Final-CI the exact documented dev6 head.
-2. Download and inspect the exact GitHub Actions artifact.
-3. Distribute `0.1.0-phase1-dev6` for the reference RX 6800 XT Vulkan runtime test.
-4. Runtime success requires pipeline compilation, one indexed offscreen draw, center/corner pixel verification, graph/timestamp completion, staging 42/42 with high-water 54, world entry, clean shutdown, and exit code 0.
-5. Keep PR #8 draft/unmerged until the runtime test passes.
+1. Final-CI the dev6 runtime-evidence head of PR #8.
+2. Promote and merge PR #8 with `[no-release]`.
+3. Start Phase 1 dev7 from the resulting `main` merge commit.
+4. Inspect exact Minecraft 26.2 indexed-indirect drawing support and backend semantics before implementation.
+5. Connect real `DeviceGeometryArena` allocations to a validated offscreen graphics draw rather than private one-off vertex/index buffers.
+6. Add bounded indirect-command storage, one/few indirect draws, embedded timestamps, deterministic pixel readback, completion-gated retirement and clean accounting.
+7. Keep terrain replacement inactive until dev7 passes real-machine validation.
+
+## Terrain meshing roadmap note
+
+Greedy meshing is now a required final-product direction. Detailed research/design is being added during dev7 planning. It belongs in the CPU terrain mesher after the one-chunk correctness path is established and before large-scale terrain throughput work. The preferred performance target is a bitmask/binary greedy mesher with merge keys that preserve visual/material correctness, rather than a naive per-face rectangle scan.
 
 ## Relevant durable decisions
 
@@ -211,4 +130,4 @@ Obsidian still does not:
 - D-0019/D-0020: geometry is device-preferred and allocation identity is generation-safe.
 - D-0021: timestamps live inside useful owned command streams.
 - D-0022: timestamp results are bounded/sampled because the public wrapper allocates.
-- Dev6 evidence currently supports a follow-up durable decision that the first graphics path remains on public Blaze3D rather than adding native Vulkan access.
+- D-0023: the initial graphics path remains on public Blaze3D until evidence justifies native Vulkan access.
