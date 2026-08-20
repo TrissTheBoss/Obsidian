@@ -1,6 +1,6 @@
 # Obsidian Current State
 
-Last updated: 2026-08-20
+Last updated: 2026-08-21
 
 ## Canonical repository
 
@@ -10,24 +10,25 @@ Last updated: 2026-08-20
 - Canonical long-range product/feature plan: `ai/MASTER_ROADMAP.md`
 - Phase 1 status: **COMPLETE / runtime validated through dev9**
 - Phase 1 closing merge: `61df7b8e2abc09ce387e09c9e4d6811a9ef6c40f`
-- Active development branch: `phase2/real-section-reference`
-- Active PR: #12, `Phase 2: immutable real-section snapshot and reference oracle`
-- Current development version: `0.2.0-phase2-dev1`
-- Phase 2 dev1 status: **RUNTIME VALIDATED on the reference RX 6800 XT; final CI + merge pending**
+- Phase 2 P2.1 status: **COMPLETE / runtime validated and merged**
+- P2.1 closing merge: `a714e19ce871bf73136d52f85a1780109aa851dd`
+- Active development branch: `phase2/drawable-real-section`
+- Active draft PR: #14, `Phase 2 dev2: first drawable real section`
+- Current development version: `0.2.0-phase2-dev2`
+- Active roadmap item: **P2.2 - first drawable real section**
+- Dev2 status: **implementation + exact Minecraft 26.2 API grounding + exact CI package verified; reference RX 6800 XT runtime/visual validation pending**
 
 ## Continuity model
 
-The continuity files now have explicit non-overlapping roles:
+The continuity files have explicit non-overlapping roles:
 
 - `ai/CURRENT_STATE.md` = current truth and immediate next action;
-- `ai/MASTER_ROADMAP.md` = canonical full future roadmap, phases, planned features, experiments, gates, release/compatibility direction, and roadmap-alteration procedure;
+- `ai/MASTER_ROADMAP.md` = canonical future roadmap, phases, planned features, experiments, gates, release/compatibility direction, and roadmap-alteration procedure;
 - `ai/OPERATING_MANUAL.md` = engineering and handoff procedure;
 - `ai/DECISIONS.md` = durable reasoning/policy;
 - `ai/ATTEMPT_LOG.md` + `ai/attempts/` = immutable evidence/history.
 
 Roadmap creation/governance evidence: `ai/attempts/A-0057-master-roadmap-and-governance.md`.
-
-Future agents must read the roadmap before making architectural/product planning changes and must follow its Class A-E change protocol rather than silently rewriting planned scope.
 
 ## Reference runtime
 
@@ -43,156 +44,232 @@ Future agents must read the roadmap before making architectural/product planning
 
 ## Phase 1 closing result
 
-Dev9 runtime evidence: `ai/attempts/A-0052-dev9-runtime-success.md`.
+Runtime evidence: `ai/attempts/A-0052-dev9-runtime-success.md`.
 
 Phase 1 proved the small-scale GPU-driven renderer skeleton end-to-end:
 
 `bounded persistent staging -> generation-safe device arena -> frame graph -> narrow native compute/storage seam -> GPU scene visibility -> atomic indirect compaction + visible count -> public Blaze3D indexed-indirect graphics -> deterministic readback -> completion-gated reclamation`.
 
-The reference RX 6800 XT run produced visibleCount=2 / culledCount=2, verified two visible and two culled pixels, verified all four compacted command slots including the zero tail, entered a world normally, and exited with no pending GPU work.
+This remains the infrastructure foundation for real terrain.
 
-## Phase 2 dev1 - immutable real-section snapshot/reference oracle
-
-Phase 2 intentionally begins with correctness before visible terrain replacement.
-
-### Exact Minecraft 26.2 API grounding
-
-Evidence: `ai/attempts/A-0054-phase2-section-api-inspection.md`.
-
-Key findings:
-
-- `ClientChunkCache.getChunk(x,z,ChunkStatus.FULL,false)` is the non-loading lookup; exact bytecode returns null when the chunk is unavailable.
-- `ChunkAccess.getSection(s)` and `LevelChunkSection.getBlockState(x,y,z)` expose direct loaded section state.
-- `LevelHeightAccessor` exposes build-height and section-index helpers.
-- `Block.getId(BlockState)` / `Block.stateById(int)` provide primitive state identity.
-- cached state predicates expose the conservative first support subset without model/world shape calls.
-
-The temporary inspection workflow has been removed from the clean branch.
-
-### `SectionSnapshot`
-
-- target interior: 16x16x16 = 4096 cells;
-- one-block halo in every direction: 18x18x18 = 5832 sampled cells;
-- primitive-only post-capture state: `int[] stateIds`, `byte[] classifications`, coordinates/counts/timing/fingerprint;
-- no retained ClientLevel, LevelChunk, LevelChunkSection, BlockPos, palette or other mutable live-world object;
-- capture occurs on render thread only;
-- complete 3x3 loaded chunk neighborhood is required before capture, using FULL,false lookups only;
-- target vertical section is nearest to the player's section containing both air and at least one conservative supported full cube, avoiding an empty validation stream.
-
-Dev1 classifications:
-
-- AIR;
-- SUPPORTED_FULL_CUBE: MODEL + solidRender + canOcclude + empty fluid + no block entity + no offset function;
-- UNSUPPORTED: everything else.
-
-Unsupported content is counted and conservatively omitted rather than approximated.
-
-### `ReferenceFaceMesh`
-
-- consumes only immutable primitive snapshot data;
-- deterministic one-face-per-exposed-face oracle;
-- emits only SUPPORTED_FULL_CUBE -> AIR faces;
-- supported neighbor hides face;
-- unsupported neighbor blocks emission and increments `blockedByUnsupportedFaces`;
-- canonical record = packed local xyz+direction + original BlockState ID = 8 bytes;
-- max possible stream 24576 faces / 196608 bytes, within the validated 256 KiB staging arena;
-- every emitted record is revalidated against the snapshot;
-- the same snapshot is meshed twice and both results must be content-identical.
-
-This canonical stream is intentionally independent of the eventual terrain vertex format. It is the long-lived differential correctness oracle for Phase 3 greedy meshing.
-
-### `RealSectionReferenceProbe`
-
-After the world/chunks are available:
-
-1. capture one real immutable snapshot;
-2. build/validate the reference stream twice;
-3. allocate one generation-safe DeviceGeometryArena span;
-4. stage the real canonical face bytes through the bounded persistent upload ring;
-5. copy the arena span to a readback buffer in the same useful GPU submission;
-6. retire the arena allocation behind a real completion timeline handle;
-7. nonblockingly poll normal staging/arena completion;
-8. map readback and verify every `(packedFace,stateId)` record byte-for-byte;
-9. log `worldReadsAfterSnapshot=0` as an architectural invariant.
-
-Vanilla terrain stays active and visible. Dev1 does not yet render a replacement section.
-
-Implementation evidence: `ai/attempts/A-0055-phase2-reference-snapshot-implementation.md`.
-
-Clean source-only tree after removing dev9 one-shot code and the temporary inspector passed GitHub Actions run `32418735722` with build + artifact upload SUCCESS and release SKIPPED.
-
-### Exact package verification
-
-Evidence: `ai/attempts/A-0056-phase2-dev1-final-package.md`.
-
-- documented code head: `80a518653e034200532eb0c75033b0726ef8edd5`;
-- package CI run: `32418949171`;
-- artifact ID: `9424977392`;
-- packaged version: `0.2.0-phase2-dev1`;
-- main JAR SHA-256: `3ab8c5437b73789a00ff90d0a87d0af87921bcc85a2498db96b39b3f4d7b2a23`;
-- sources SHA-256: `69f6fb34b700ee965897569afb028a8e531e1228e6368f9ff554f972fbfe90f0`;
-- required Phase 2 classes present;
-- completed dev9 one-shot probe absent.
-
-The commits after this package verification are documentation/continuity changes only; no Java/source behavior has changed since the verified dev1 JAR.
-
-### Dev1 runtime result - SUCCESS
+## Phase 2 P2.1 closing result - COMPLETE
 
 Runtime evidence: `ai/attempts/A-0058-phase2-dev1-runtime-success.md`.
 
-The reference RX 6800 XT test passed all dev1 invariants:
+Merge: PR #12 -> `a714e19ce871bf73136d52f85a1780109aa851dd`.
 
-- correct `obsidian 0.2.0-phase2-dev1` loaded on Vulkan;
-- real section captured at `(-2,4,5)` after world/player/chunks became available;
-- sampledCells=5832;
-- interiorAir=3954, interiorSupported=13, interiorUnsupported=129, totaling 4096 interior cells;
-- snapshot fingerprint `16894373850408670304`;
-- faceCount=27, quadCount=27, vertexCount=108, indexCount=162;
-- blockedByUnsupportedFaces=28;
-- mesh fingerprint `16640427735610179256`;
-- referenceBytes=216 = 27 * 8;
-- deterministicBuilds=2;
-- `worldReadsAfterSnapshot=0`;
-- usefulSubmissions=1, profilerOnlySubmissions=0;
-- gpuVerifiedBytes=216;
-- staging submitted/reclaimed=216/216 bytes, high-water=216, no backpressure;
-- arena allocation retired/reclaimed=1/1, used=0, one 524288-byte free span, fragmentation=0;
-- no pending upload/arena/generic retirements at shutdown;
-- vanilla world entry and rendering remained normal;
-- process exited with code 0.
+P2.1 permanently established:
 
-The exact section coordinates, counts, fingerprints and timings are world-dependent. The success claim is based on their internal consistency and the architectural invariants above, not on hard-coded terrain values.
+- real loaded 16^3 section capture;
+- one-block halo -> 18^3 / 5832 cells;
+- primitive-only immutable snapshot;
+- no live world reads during post-capture reference meshing;
+- conservative AIR / SUPPORTED_FULL_CUBE / UNSUPPORTED classification;
+- deterministic canonical one-face-per-exposed-face reference oracle;
+- original BlockState ID retained in each canonical reference face;
+- unsupported neighbors suppress rather than approximate output;
+- exact duplicate-build determinism;
+- bounded staging / generation-safe arena / completion-gated lifetime validation;
+- vanilla terrain remains active.
 
-## Next after dev1 runtime success
+The simple `ReferenceFaceMesh` is permanent and must remain independent of the future production greedy mesher.
 
-Phase 2 dev2 / roadmap item P2.2 should produce the first **drawable** real section for the same conservative supported subset:
+## Phase 2 dev2 / P2.2 - ACTIVE
 
-- preserve immutable snapshot/reference semantics;
-- inspect exact material/model/sprite/light APIs needed for correct drawable vertices;
-- generate real vertex/index data;
-- upload through staging/device arena;
-- create a real GPU scene record;
-- render through the already-proven visibility/indirect path;
-- retain vanilla terrain as a visual comparison oracle until Obsidian output is validated.
+Goal: produce the first actual indexed geometry derived from a real immutable section and validate its placement in the live Minecraft world before adding correct texture/material/light semantics.
 
-Broader block classes, light/AO, cutout/translucent and resource/model compatibility expand during Phase 2 before production greedy meshing.
+Planning evidence: `ai/attempts/A-0059-phase2-dev2-drawable-section-plan.md`.
 
-## Greedy meshing roadmap
+Exact Minecraft 26.2 API evidence: `ai/attempts/A-0060-phase2-dev2-render-api-inspection.md`.
 
-The complete plan is now in `ai/MASTER_ROADMAP.md`; D-0024 remains the durable greedy-meshing decision.
+Implementation/package evidence: `ai/attempts/A-0061-phase2-dev2-implementation-and-package.md`.
 
-- Phase 2: immutable snapshot + halo + simple reference oracle + correct drawable semantics;
-- Phase 3: worker-local binary/bitmask greedy mesher with reusable scratch and render-correct merge keys for material/sprite, layer, tint, light, AO, UV and special/fluid state;
-- greedy output must be differential-tested against the Phase 2 reference oracle rather than serving as its own correctness source;
-- Phase 4+: scale the Phase 1 GPU visibility/compaction architecture over the reduced greedy meshes.
+### Exact 26.2 render hook and transform path
+
+Bytecode inspection established that the P2.2 hook belongs immediately after `LevelRenderer.render(...)` inside `GameRenderer.renderLevel`, before GameRenderer switches to HUD projection and clears depth.
+
+At that point dev2 uses:
+
+- `GameRenderer.gameRenderState().levelRenderState.cameraRenderState`;
+- camera `pos` and `viewRotationMatrix`;
+- `RenderSystem.getProjectionMatrixBuffer()` for the exact active world projection;
+- `RenderSystem.getDynamicUniforms().writeTransform(...)`;
+- `GameRenderer.mainRenderTarget()` color/depth views.
+
+Section-local geometry is placed using:
+
+`viewRotation * translate(sectionOrigin - cameraPosition)`.
+
+### `DrawableSectionMesh`
+
+The drawable mesh is deliberately separate from `ReferenceFaceMesh` so the optimized/drawable representation cannot become its own correctness oracle.
+
+For each canonical reference face dev2 emits:
+
+- one drawable quad;
+- 4 vertices;
+- 6 indices;
+- section-local positions;
+- 32-bit indices;
+- one RGBA8 orientation/debug color.
+
+The orientation colors exist only to make placement/winding errors obvious during the runtime comparison. They are not Minecraft material, tint or texture semantics.
+
+32-bit indices are required: the maximum 24,576-face reference stream can produce 98,304 drawable vertices, exceeding 16-bit index range.
+
+The drawable builder:
+
+- consumes only `SectionSnapshot` + `ReferenceFaceMesh`;
+- revalidates face coverage and state identity;
+- has deterministic winding/order;
+- is built twice and must be byte/content identical;
+- performs no world reads.
+
+### Live comparison graphics path
+
+`GameRendererMixin` invokes `RealSectionDrawableProbe` after vanilla world rendering.
+
+The probe:
+
+1. captures one real immutable snapshot;
+2. builds/validates the reference oracle twice;
+3. builds/validates the drawable mesh twice;
+4. allocates generation-safe vertex/index arena spans;
+5. uploads vertex, index and one 20-byte indexed-indirect command through bounded persistent staging;
+6. uses public Blaze3D graphics only (`nativeGraphicsSeam=false`);
+7. uses Minecraft's built-in `core/position_color` shaders and exact debug bind-group contract;
+8. uses triangle-list indexed-indirect drawing with `IndexType.INT`;
+9. depth-tests with Minecraft's reversed-depth `GREATER_THAN_OR_EQUAL`, no depth write and no culling;
+10. overlays orientation-colored faces on top of the already-rendered vanilla section for a short bounded dev-only comparison window;
+11. leaves vanilla terrain active;
+12. retires both arena allocations and the indirect command resource behind real GPU completion handles;
+13. creates no profiler-only submissions.
+
+### Validation-only memory capacities
+
+P2.2 worst-case drawable bytes are larger than the tiny P2.1 canonical face stream, so dev2 uses explicit bounded validation capacities:
+
+- staging ring: 4 MiB;
+- device geometry arena: 4 MiB.
+
+These are validation capacities, not a production renderer memory-budget decision. No unbounded fallback allocation is introduced.
+
+### Dev1 cleanup
+
+The completed one-shot `RealSectionReferenceProbe` runtime class was removed from the active dev2 source after its role was superseded.
+
+The permanent correctness pieces remain:
+
+- `SectionSnapshot`;
+- `ReferenceFaceMesh`.
+
+## Exact dev2 code/package verification
+
+Exact behavior/code head before continuity-only records:
+
+`ea106324adfdb9bfdef2757edd36fbfd51bf86a9`
+
+GitHub Actions run:
+
+`32424196221`
+
+Artifact ID:
+
+`9426803061`
+
+Result:
+
+- Java 25 / Gradle 9.5.1 build: SUCCESS;
+- artifact upload: SUCCESS;
+- public release: SKIPPED.
+
+Package:
+
+- `Obsidian-0.2.0-phase2-dev2.jar`;
+- main JAR SHA-256: `a377ff9b34ae6650efcd1d694c55e08602b1ae3aaa98576440ac34afa4987cce`;
+- sources SHA-256: `3f9eb0c5a0bd56978f27739d8dd7dd9fb6ec86b1c13372cb46d198c8885a2654`.
+
+Verified present:
+
+- `GameRendererMixin`;
+- `DrawableSectionMesh`;
+- `RealSectionDrawableProbe`;
+- `IndexedIndirectCommandBuffer`;
+- `ReferenceFaceMesh`;
+- `FrameCoordinator`.
+
+Verified absent:
+
+- completed dev1 one-shot `RealSectionReferenceProbe`.
+
+Commits after `ea106324...` are continuity/documentation only unless a later attempt explicitly says otherwise.
+
+## Dev2 runtime success criteria
+
+The reference RX 6800 XT run must prove:
+
+- exact `obsidian 0.2.0-phase2-dev2` loads on Vulkan;
+- the exact GameRenderer mixin applies successfully;
+- one real 18^3 snapshot is captured;
+- `interiorAir + interiorSupported + interiorUnsupported = 4096`;
+- reference face count > 0;
+- `deterministicReferenceBuilds=2`;
+- drawable face count = reference face count;
+- drawable vertex count = face count * 4;
+- drawable index count = face count * 6;
+- `deterministicDrawableBuilds=2`;
+- `worldReadsAfterSnapshot=0` for mesh construction;
+- public comparison pipeline is valid;
+- `nativeGraphicsSeam=false`;
+- indexed-indirect live-world drawing executes;
+- orientation-colored faces visibly align with the corresponding vanilla supported full-cube faces during the short comparison window;
+- the overlay does not appear offset, rotated incorrectly, or drift relative to vanilla while the camera moves;
+- depth testing behaves sensibly against vanilla terrain;
+- `profilerOnlySubmissions=0`;
+- staging submitted bytes = `vertexBytes + indexBytes + 20`, then fully reclaimed;
+- exactly two arena allocations retire/reclaim behind completion;
+- final arena used bytes = 0;
+- final arena free spans = 1;
+- final largest free span = 4,194,304 bytes;
+- final arena fragmentation = 0;
+- indirect command resource retires/releases behind completion;
+- no pending upload/arena/generic resource retirements at clean shutdown;
+- vanilla world entry/rendering remains normal;
+- process exits code 0.
+
+Exact section coordinates, face counts, fingerprints, camera-relative origin and number of comparison draws are world/frame-rate dependent and must not be hard-coded.
+
+## Deliberate P2.2 boundary
+
+Dev2 does **not** claim:
+
+- correct Minecraft textures/sprites/material IDs/UVs/tints/render layers - P2.3;
+- correct block/sky light or ambient occlusion - P2.4;
+- broad cutout/model semantics - P2.5+;
+- production greedy meshing - Phase 3;
+- global vanilla terrain replacement;
+- real-scale scene visibility tuning - Phase 4;
+- production performance from this comparison probe.
 
 ## Immediate next action
 
-1. Run final CI on the runtime-evidence/status head of PR #12.
-2. Promote and merge PR #12 with `[no-release]`, including `MASTER_ROADMAP.md` and its governance/continuity wiring.
-3. After merge, synchronize roadmap P2.1 status to COMPLETE on `main` if the merge commit is the final validation gate.
-4. Start P2.2 from the resulting `main` commit and inspect exact Minecraft 26.2 material/model/sprite/light APIs for the first drawable real section.
+1. Run final CI on the continuity/status head of draft PR #14.
+2. Runtime-test the exact `0.2.0-phase2-dev2` JAR on the reference RX 6800 XT.
+3. Save the complete log and explicitly report whether the orientation-colored overlay aligned with vanilla terrain.
+4. Record the outcome as A-0062.
+5. Keep PR #14 draft/unmerged until runtime validation passes.
+6. If dev2 passes, synchronize P2.2 to COMPLETE and merge with `[no-release]` when explicitly authorized; then proceed to P2.3 correct texture/material identity.
 
 ## Relevant durable decisions
 
-D-0014 through D-0027 remain active. D-0024 governs the production greedy mesher. The canonical long-range feature/phase plan and the procedure for changing it now live in `ai/MASTER_ROADMAP.md` and are mandatory continuity reading.
+D-0014 through D-0027 remain active.
+
+Especially relevant:
+
+- D-0016 completion-gated lifetime;
+- D-0017 bounded/backpressured staging;
+- D-0020 generation-safe arena identity;
+- D-0023 public Blaze3D graphics first;
+- D-0024 permanent reference oracle before production binary/bitmask greedy meshing;
+- D-0025 narrow native Vulkan seam only for missing compute/storage capability;
+- D-0027 public indexed-indirect graphics remains the baseline unless profiling later justifies native indirect-count integration.
