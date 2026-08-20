@@ -264,3 +264,33 @@ Copy this section and replace placeholders. Do not edit previous entries.
 **Why it worked:** The implementation uses exact Minecraft 26.2 public GPU interfaces validated in CI and does not create a competing Vulkan device. The query result was available by the later poll in frame 1; there is no explicit GPU wait in the probe.  
 **Side effects / lessons:** This validates controlled GPU submission and lifecycle ownership, not terrain rendering. The `after 0 frame(s)` message means completion was observed within the same frame iteration, not that Obsidian performed a blocking wait. Keep routine GPU profiling integrated into owned/existing command streams rather than adding profiler-only submissions.  
 **Next action:** Merge the validated frame/GPU foundation, then continue Phase 1 with rotating frame contexts, GPU-completion tracking, deferred resource destruction, and bounded upload/staging infrastructure.
+
+---
+
+## A-0019 - Inspect exact Minecraft 26.2 GPU resource and fence APIs
+
+**Date:** 2026-08-20  
+**Objective:** Determine the exact public resource/fence semantics available for safe deferred GPU destruction before implementing Phase 1 dev2.  
+**Action:** On branch `phase1/resource-lifetime`, added a temporary GitHub Actions `javap` probe for `GpuFence`, `GpuBuffer`, `GpuBufferSlice`, `CommandEncoder`, and `GpuDevice` using the exact Loom-resolved Minecraft 26.2 client JAR; removed the probe workflow after the artifact was captured.  
+**Result:** `SUCCESS`.  
+**Intended effect:** Avoid guessing whether frame rotation, fences, mappings, or buffer closure could safely support resource retirement through Minecraft's public GPU abstraction.  
+**Actual effect:** Confirmed `CommandEncoder.createFence()`, `GpuFence.awaitCompletion(long timeoutNanos)`, `GpuDevice.createBuffer(...)`, `GpuBuffer.isClosed()/close()/slice(...)`, and `CommandEncoder.writeToBuffer(...)`.  
+**Evidence:** Draft PR #4; resource API inspection workflow run `32363250144`; inspection artifact `9404319017`; temporary workflow removed in commit `4487cdf67d49c0224673119cadbd8ac99078c613`.  
+**Why it worked:** The probe interrogated the exact dependency artifact used by the project rather than relying on another Minecraft version.  
+**Side effects / lessons:** CPU frame progression cannot be used as proof of GPU completion. Routine retirement can use `awaitCompletion(0L)` as a zero-timeout completion check. A bounded shutdown wait is acceptable, but unsafe destruction of an in-flight resource is not.  
+**Next action:** Implement preallocated frame contexts plus fence-gated deferred destruction and validate them with a tiny non-visual GPU buffer.
+
+---
+
+## A-0020 - Implement Phase 1 dev2 frame contexts and fence-gated resource lifetime
+
+**Date:** 2026-08-20  
+**Objective:** Establish safe GPU resource retirement before Obsidian begins owning terrain buffers or large upload arenas.  
+**Action:** Added `FrameContext`, `FrameContextRing`, `DeferredReleaseQueue`, and `GpuResourceLifetimeProbe`; integrated them into `FrameCoordinator`; removed the completed dev1 timestamp probe; bumped the development version to `0.1.0-phase1-dev2`. The one-shot probe allocates a 64-byte `USAGE_COPY_DST` GPU buffer, writes a small payload, creates a fence, submits once, retires the resource immediately, and lets the queue close it only after the fence reports completion.  
+**Result:** `PARTIAL` pending real RX 6800 XT runtime validation; hosted compile/build is `SUCCESS`.  
+**Intended effect:** Prove that Obsidian can rotate CPU frame contexts without conflating them with GPU completion, then safely defer destruction of a resource used by submitted GPU work without a routine render-thread wait.  
+**Actual effect:** Exact Minecraft 26.2 compilation passed. Steady-state queue polling uses `GpuFence.awaitCompletion(0L)` only; frame contexts are preallocated; queue storage begins at 64 entries and grows only when exhausted; shutdown uses a bounded 2-second completion budget and refuses unsafe destruction if completion cannot be established.  
+**Evidence:** Draft PR #4 `Phase 1: frame contexts and resource lifetime`; code head `4487cdf67d49c0224673119cadbd8ac99078c613`; Build workflow run `32363597789` succeeded. Documentation-clean head `ef5cf554cec3d0dd781c5dd7efbe1f36c0a0657d` also passed Build workflow run `32363830404`. CI artifact `9404522308`.  
+**Why:** The design uses exact 26.2 public completion/resource APIs and keeps the normal frame path nonblocking. It deliberately treats frame serials as bookkeeping only.  
+**Side effects / lessons:** The validation probe still adds one extra submission total, only to prove lifetime semantics. `DeferredReleaseQueue` currently assumes one ordered submission domain; if Obsidian later owns multiple Vulkan queues, use separate completion domains or a generalized retirement model.  
+**Next action:** User should test `0.1.0-phase1-dev2` on the reference Vulkan machine. Do not merge PR #4 until the log proves one retirement is released after fence completion, a world can be entered, and normal shutdown reports zero pending retirements.
