@@ -1,0 +1,75 @@
+name: Phase 2 Section API Inspect
+
+on:
+  push:
+    branches: [phase2/real-section-reference]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Set up Gradle 9.5.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+      - name: Inspect exact Minecraft 26.2 section/world/render-state APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle compileClientJava --stacktrace
+          mkdir -p phase2-section-inspect
+          out=phase2-section-inspect/api.txt
+          : > "$out"
+          jarfile=$(find "$HOME/.gradle/caches/fabric-loom/26.2" -type f -name 'minecraft-client*.jar' | head -n 1)
+          echo "jar=$jarfile" >> "$out"
+          classes=(
+            'net.minecraft.client.Minecraft'
+            'net.minecraft.client.multiplayer.ClientLevel'
+            'net.minecraft.client.multiplayer.ClientChunkCache'
+            'net.minecraft.world.level.chunk.LevelChunk'
+            'net.minecraft.world.level.chunk.LevelChunkSection'
+            'net.minecraft.world.level.LevelHeightAccessor'
+            'net.minecraft.world.level.BlockGetter'
+            'net.minecraft.world.level.block.state.BlockState'
+            'net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase'
+            'net.minecraft.world.level.block.RenderShape'
+            'net.minecraft.client.renderer.block.BlockRenderDispatcher'
+            'net.minecraft.client.renderer.block.ModelBlockRenderer'
+            'net.minecraft.client.renderer.LevelRenderer'
+            'net.minecraft.core.SectionPos'
+            'net.minecraft.world.level.ChunkPos'
+          )
+          for cls in "${classes[@]}"; do
+            echo "===== $cls public/constants =====" >> "$out"
+            javap -classpath "$jarfile" -public -constants "$cls" >> "$out" 2>&1 || true
+            echo >> "$out"
+            echo "===== $cls bytecode/private =====" >> "$out"
+            javap -classpath "$jarfile" -c -p "$cls" >> "$out" 2>&1 || true
+            echo >> "$out"
+          done
+          echo '===== likely section/model/light class names =====' >> "$out"
+          jar tf "$jarfile" | grep -Ei 'LevelChunkSection|ClientChunkCache|SectionPos|RenderShape|BlockState|LightEngine|LightTexture|ModelData|BlockRenderDispatcher|BakedModel|BlockModel' | sort >> "$out" || true
+          echo >> "$out"
+          echo '===== selected method references =====' >> "$out"
+          for cls in "${classes[@]}"; do
+            javap -classpath "$jarfile" -p "$cls" 2>&1 | grep -n -Ei 'getChunk|hasChunk|getSection|getSections|sectionIndex|getBlockState|isAir|canOcclude|isSolidRender|RenderShape|getRenderShape|getShadeBrightness|getLight|blockRenderer|player|level' || true
+          done
+      - name: Upload inspection artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-section-api-inspect
+          path: phase2-section-inspect/api.txt
+          if-no-files-found: error
