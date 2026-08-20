@@ -9,9 +9,9 @@ Last updated: 2026-08-20
 - Current public release: `v0.0.2-phase0`
 - Current merged development baseline: Phase 1 dev6, merge commit `355e0ed6108468c019bced9b3b229e4e494f9bab`
 - Active development branch: `phase1/arena-indirect-draw`
-- Active draft PR: #9, `Phase 1: arena-backed indirect draw`
+- Active draft PR: #9, `Phase 1: arena-backed indexed-indirect draw`
 - Current development version: `0.1.0-phase1-dev7`
-- Dev7 status: **compile validated; runtime pending**
+- Dev7 status: **runtime validated; pending final exact-head CI + merge with `[no-release]`**
 
 ## Reference runtime
 
@@ -47,109 +47,44 @@ Validated device-preferred arena suballocation, generation-safe handles, complet
 Validated fixed frame-graph pass ordering and GPU timestamps embedded inside one useful owned submission with zero profiler-only submissions.
 
 ### Phase 1 dev6 - VALIDATED / merged PR #8
-Validated the first actual Obsidian graphics draw through public Blaze3D on the RX 6800 XT: custom shaders/pipeline, vertex/index state, one indexed triangle, private RGBA8 render target, texture readback, deterministic pixel verification, integrated timestamps, world entry and clean shutdown.
+Validated the first actual Obsidian graphics draw through public Blaze3D on the RX 6800 XT: custom shaders/pipeline, vertex/index state, one indexed triangle, private RGBA8 render target, texture readback, deterministic pixel verification, integrated timestamps, world entry and clean shutdown. Merge commit: `355e0ed6108468c019bced9b3b229e4e494f9bab`.
 
-Dev6 runtime evidence: `ai/attempts/A-0037-dev6-runtime-success.md`.
-Dev6 was squash-merged as `355e0ed6108468c019bced9b3b229e4e494f9bab` with `[no-release]`.
+### Phase 1 dev7 - VALIDATED; pending merge through PR #9
 
-## Phase 1 dev7 - ACTIVE; compile validated, runtime pending
+Runtime-validated the shared geometry arena feeding the true indexed-indirect graphics path through public Blaze3D.
 
-Goal: connect the validated shared geometry arena to the real indexed-indirect draw path that future GPU visibility/compaction will target.
+Exact/API foundation:
 
-### Exact Minecraft 26.2 findings
+- public `RenderPass.drawIndexedIndirect(GpuBufferSlice, int)`;
+- Vulkan backend calls `vkCmdDrawIndexedIndirect`;
+- indirect command storage uses `USAGE_INDIRECT_PARAMETERS`;
+- command records use native 20-byte `VkDrawIndexedIndirectCommand` layout;
+- drawCount > 1 uses `multiDrawIndirect` capability;
+- lightweight `GpuFence` handles observe the encoder submission timeline, enabling independent staging and arena lifetime owners for the same useful submission without another queue submission.
 
-Exact Loom-resolved API/backend inspection proved the public path is sufficient:
+Real RX 6800 XT result:
 
-- `RenderPass.drawIndexedIndirect(GpuBufferSlice, int)` is public;
-- it requires `DeviceFeatures.drawIndirect()`;
-- draw counts greater than one also require `DeviceFeatures.multiDrawIndirect()`;
-- command storage requires `GpuBuffer.USAGE_INDIRECT_PARAMETERS`;
-- command offsets are 4-byte aligned;
-- native `VkDrawIndexedIndirectCommand` stride is 20 bytes;
-- the Vulkan backend calls `vkCmdDrawIndexedIndirect` directly;
-- the reference RX 6800 XT already reports indirect and multi-draw-indirect support.
-
-Fence inspection also proved `VulkanCommandEncoder.createFence()` creates only a Java timeline-submit-index handle. It does not create/destroy a native `VkFence`. Multiple handles created before one submit observe the same timeline completion point and can be independently owned by staging and arena lifetime tracking without another GPU submission.
-
-Evidence: `ai/attempts/A-0040-dev7-indirect-api-inspection.md`.
-
-### Implemented dev7 path
-
-`IndexedIndirectCommandBuffer`:
-
-- fixed capacity = 64 commands for validation;
-- 20 bytes per command;
-- device-preferred/non-mapped;
-- usages `COPY_DST | INDIRECT_PARAMETERS`.
-
-`ArenaIndirectDrawProbe`:
-
-- allocates 72 vertex bytes and 12 index bytes from the real `DeviceGeometryArena`;
-- uploads those spans through the validated bounded staging ring;
-- creates two 20-byte indexed-indirect commands;
-- uses one `drawIndexedIndirect(..., 2)` call to render two separated triangles;
-- uses a private 16x16 RGBA8 target, never presented;
-- reads the target back and verifies left triangle, right triangle and clear-corner pixels independently;
-- creates an additional lightweight timeline handle before the same useful submit and transfers it to arena retirement;
-- arena-retirement registration is nonblocking and post-submit failure-safe;
-- timestamps remain embedded in the useful upload/draw/readback command stream;
-- profiler-only submissions remain zero.
-
-Three graph passes:
-
-1. `arena-indirect-upload`;
-2. `arena-indexed-indirect-draw`;
-3. `arena-indirect-readback`.
-
-### Expected runtime invariants
-
-Graph/draw:
-
-- graphPasses=3;
-- executedMask=7;
-- usefulSubmissions=1;
-- profilerOnlySubmissions=0;
-- indirectCalls=1;
-- indirectCommands=2;
-- triangles=2;
+- correct `0.1.0-phase1-dev7` loaded on Vulkan;
+- indirect=true, multiDrawIndirect=true, persistentMapping=true;
+- graphPasses=3, executedMask=7;
+- usefulSubmissions=1, profilerOnlySubmissions=0;
+- indirectCalls=1, indirectCommands=2, triangles=2;
 - pipelineValid=true;
-- left `(4,8)` = magenta `255/0/255/255`;
-- right `(11,8)` = magenta `255/0/255/255`;
-- corner `(0,0)` = black `0/0/0/255`;
-- pixelsVerified=3.
+- arena-backed geometry: 72 vertex bytes + 12 index bytes;
+- indirect command payload: 40 bytes;
+- staging submitted/reclaimed=124/124 bytes, high-water=136, backpressure=0;
+- left and right triangle pixels both verified magenta, clear corner verified black, pixelsVerified=3;
+- arena allocations=2, high-water=84, retired/reclaimed=2/2, used=0 after completion;
+- freeSpans=1, largestFree=524288, fragmentation=0, no pending arena retirements;
+- world entry succeeded;
+- shutdown after 2276 frames had no pending work;
+- process exited with code 0.
 
-Staging:
-
-- vertex=72 bytes;
-- index=12 bytes;
-- indirect=40 bytes;
-- submitted/reclaimed payload=124/124 bytes;
-- expected high-water=136 bytes because reservations begin at virtual offsets 0, 80 and 96 under 16-byte alignment;
-- backpressure=0;
-- pendingUploadBatches=0.
-
-Device arena:
-
-- allocations=2;
-- payload/high-water expected=84 bytes;
-- retired=2;
-- reclaimed=2;
-- retirementBackpressure=0;
-- used=0 after completion;
-- freeSpans=1;
-- largestFree=524288;
-- fragmentation=0;
-- pendingArenaRetirementBatches=0.
-
-CPU/GPU pass timings are run-dependent; successful timestamp resolution matters, not exact values.
-
-### Compile status
-
-The cleaned/hardened dev7 implementation compiles against exact Minecraft 26.2 in GitHub Actions. Completed dev6 probe and temporary indirect API inspection workflow are absent from the clean branch. Evidence: `ai/attempts/A-0041-dev7-arena-indirect-implementation.md`.
+Runtime evidence: `ai/attempts/A-0043-dev7-runtime-success.md`.
 
 ## Proven architecture boundary
 
-`Minecraft Vulkan device -> FrameCoordinator -> real completion timeline -> bounded staging -> generation-safe device geometry arena -> FixedFrameGraph -> owned command stream -> embedded timestamps -> public Blaze3D graphics pipeline -> arena-backed indexed-indirect draw`
+`Minecraft Vulkan device -> FrameCoordinator -> real completion timeline -> bounded staging -> generation-safe device geometry arena -> FixedFrameGraph -> owned command stream -> embedded timestamps -> public Blaze3D graphics pipeline -> arena-backed multi-command indexed-indirect draw -> deterministic readback -> completion-gated arena reclamation`
 
 Obsidian still does not:
 
@@ -158,11 +93,11 @@ Obsidian still does not:
 - render actual Minecraft terrain;
 - perform routine device-wide waits;
 - rely on CPU frame count for GPU completion;
-- require native Vulkan access for the current draw path.
+- require native Vulkan access for the current graphics/indirect path.
 
 ## Terrain meshing roadmap
 
-Greedy meshing is a required final-product direction under D-0024. Research: `ai/attempts/A-0038-greedy-meshing-roadmap-research.md`.
+Greedy meshing is required under D-0024. Research: `ai/attempts/A-0038-greedy-meshing-roadmap-research.md`.
 
 - **Phase 2 - one chunk correctly:** define immutable section snapshots, neighbor halo, rendered-face/material/light/AO semantics and keep a deliberately simple reference mesher for differential correctness.
 - **Phase 3 - production CPU terrain mesher:** implement worker-local binary/bitmask greedy meshing, reusable scratch, material/layer/tint/light/AO/UV-aware merge keys, AO diagonal selection, border handling, T-junction validation, build-time/quad/byte metrics and scheduler integration.
@@ -172,12 +107,13 @@ Block ID alone is never a valid greedy merge key. Keep the simple reference mesh
 
 ## Immediate next action
 
-1. Update PR #9 with the exact API/implementation findings.
-2. Run final CI on the exact documented dev7 head.
-3. Download and inspect the CI artifact.
-4. Distribute `0.1.0-phase1-dev7` for the reference RX 6800 XT Vulkan/world test.
-5. Keep PR #9 draft/unmerged until the runtime test passes.
+1. Final-CI the dev7 runtime-evidence head of PR #9.
+2. Promote and squash-merge PR #9 with `[no-release]`.
+3. Start Phase 1 dev8 from the resulting `main` merge commit.
+4. Inspect exact Minecraft 26.2 compute pipeline, storage-buffer/read-write binding, dispatch and compute-to-indirect synchronization semantics.
+5. If public Blaze3D supports the needed path, validate compute-generated indexed-indirect command records consumed by a following graphics pass in the same owned graph/submission.
+6. Keep the validation private/offscreen and deterministic; terrain replacement remains inactive until the compute/indirect bridge is proven.
 
 ## Relevant durable decisions
 
-D-0014 through D-0023 remain active. D-0024 makes binary/bitmask greedy meshing the production Phase 3 terrain-meshing target.
+D-0014 through D-0024 remain active. Public Blaze3D remains the preferred boundary until exact evidence proves a missing capability or measured bottleneck.
