@@ -98,3 +98,10 @@ This file records durable decisions. Do not delete old decisions when they chang
 **Decision:** Obsidian must not implement normal per-frame GPU profiling by creating dedicated command encoders/submissions at both frame boundaries.  
 **Why:** Exact Minecraft 26.2 inspection showed timestamp writes are encoded through `CommandEncoder` and become GPU work through explicit `submit()`. Adding profiler-only submissions every frame could damage frame pacing and contaminate the measurement itself.  
 **Effect:** The initial Phase 1 validation uses one one-shot timestamp submission only. Long-term GPU timestamps must be integrated into command streams Obsidian already owns or into an existing submission path whose ownership/synchronization has been verified.
+
+## D-0015 - Preserve Minecraft Vulkan device ownership until evidence requires deeper takeover
+
+**Status:** ACTIVE  
+**Decision:** Phase 1 will continue using Minecraft 26.2's active `GpuDevice` and frame lifecycle rather than creating a second Vulkan device/swapchain. Reach into backend-specific Vulkan internals only when a concrete renderer requirement cannot be met through the public abstraction and the ownership/synchronization consequences have been inspected first.  
+**Why:** `0.1.0-phase1-dev1` proved on the real RX 6800 XT machine that Obsidian can observe `Minecraft.renderFrame`, submit controlled GPU commands through the existing device, retrieve timestamp results without an explicit blocking wait, enter a world, and shut down cleanly. A competing device/swapchain would add substantial lifetime, synchronization, presentation, and compatibility risk without a demonstrated need yet.  
+**Effect:** The next Phase 1 work should build frame contexts, resource retirement, staging, and profiling around the proven Minecraft-owned device boundary. Native/backend-specific access remains an evidence-driven escalation path, not the default architecture.
