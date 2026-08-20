@@ -15,148 +15,130 @@ Last updated: 2026-08-20
 
 ### Phase 0 - COMPLETE and runtime validated
 
-Phase 0 is no longer pending runtime validation. The user tested `v0.0.2-phase0` on the reference Windows 11 / Radeon RX 6800 XT machine with Minecraft configured to Vulkan.
+Phase 0 is complete on the reference Windows 11 / Radeon RX 6800 XT machine.
 
-Validated real runtime path:
+Validated runtime stack:
 
-- Prism Launcher 10.0.5.
-- Minecraft 26.2.
-- Fabric Loader 0.19.3.
-- Fabric API 0.158.0+26.2.
-- Java 25.0.1.
-- AMD Radeon RX 6800 XT detected as a discrete GPU.
-- Minecraft selected the Vulkan backend.
-- Driver string: `1.4.315 AMD proprietary driver 26.7.1 (AMD proprietary shader compiler)`.
-- Obsidian attached to the Vulkan `GpuDevice` successfully.
-- Obsidian capability reporting completed.
-- The client loaded resources, started an integrated server, created/entered a world, rendered/ran normally, saved, shut down, and exited with code 0.
+- Prism Launcher 10.0.5
+- Minecraft 26.2
+- Fabric Loader 0.19.3
+- Fabric API 0.158.0+26.2
+- Java 25.0.1
+- AMD Radeon RX 6800 XT, discrete GPU
+- Minecraft Vulkan backend
+- AMD driver string `1.4.315 AMD proprietary driver 26.7.1 (AMD proprietary shader compiler)`
 
-Observed Vulkan extensions exposed by Minecraft in that run included:
+Obsidian attached to Minecraft's Vulkan `GpuDevice`, captured device/capability metadata, reached the title screen and a single-player world, and shut down with exit code 0.
 
-- `VK_KHR_synchronization2`
-- `VK_KHR_swapchain`
-- `VK_KHR_surface`
-- `VK_KHR_win32_surface`
-- `VK_KHR_dynamic_rendering`
-- `VK_KHR_push_descriptor`
-- `VK_EXT_debug_utils`
-- `VK_EXT_vertex_attribute_divisor`
-- `VK_AMD_buffer_marker`
+Observed Vulkan extensions included `VK_KHR_synchronization2`, `VK_KHR_dynamic_rendering`, `VK_KHR_swapchain`, `VK_KHR_surface`, `VK_KHR_win32_surface`, `VK_KHR_push_descriptor`, `VK_EXT_debug_utils`, `VK_EXT_vertex_attribute_divisor`, and `VK_AMD_buffer_marker`. Minecraft/DeviceInfo also reported indirect drawing, multi-draw indirect, and persistent mapping support.
 
-Minecraft/DeviceInfo also reported indirect drawing, multi-draw indirect, and persistent mapping support.
-
-Phase 0 therefore proved the real boundary:
+Validated Phase 0 boundary:
 
 `Fabric -> Obsidian bootstrap -> Minecraft 26.2 GpuDevice -> Vulkan backend -> RX 6800 XT`
 
-## Phase 1 - ACTIVE
+## Phase 1 - ACTIVE; frame/GPU foundation runtime validated
 
-Phase 1 has started on `phase1/frame-foundation`.
-
-The first Phase 1 objective is intentionally narrow: establish a real render-frame lifecycle root and prove that Obsidian can submit non-visual GPU commands through Minecraft's active Vulkan device without yet replacing terrain or changing the rendered image.
+The first Phase 1 milestone has now passed a real Windows/Vulkan runtime test.
 
 ### Exact 26.2 API findings
 
-A temporary GitHub Actions API-inspection workflow interrogated the exact Loom-resolved Minecraft 26.2 client JAR with `javap`. The temporary workflow was removed after the interfaces were established.
+A temporary GitHub Actions inspection workflow interrogated the exact Loom-resolved Minecraft 26.2 client JAR with `javap`; the workflow was removed after use.
 
-Relevant confirmed APIs:
+Confirmed APIs used by the first milestone:
 
-- `Minecraft.renderFrame(boolean)` is available as a whole-frame lifecycle seam.
-- `GpuDevice.createCommandEncoder()`.
-- `GpuDevice.createTimestampQueryPool(int)`.
-- `CommandEncoder.writeTimestamp(GpuQueryPool, int)`.
-- `CommandEncoder.submit()`.
-- `GpuQueryPool.getValue(int)` returns `OptionalLong` so results can be polled without an explicit blocking wait.
-- `GpuQueryPool.close()`.
+- `Minecraft.renderFrame(boolean)` as the whole-frame lifecycle seam
+- `GpuDevice.createCommandEncoder()`
+- `GpuDevice.createTimestampQueryPool(int)`
+- `CommandEncoder.writeTimestamp(GpuQueryPool, int)`
+- `CommandEncoder.submit()`
+- `GpuQueryPool.getValue(int)` returning `OptionalLong` for nonblocking polling
+- `GpuQueryPool.close()`
 
-Important constraint discovered: timestamp writes live on a command encoder and submission is explicit. Creating start/end timestamp encoders every frame would add extra GPU submissions and could itself damage frame pacing. Do not implement GPU frame timing that way.
+Important constraint: timestamp writes become GPU work through explicit command submission. Routine profiler-only submissions at frame boundaries would contaminate frame pacing, so normal profiling must eventually integrate into command streams Obsidian already owns or an existing verified submission path.
 
 ### Implemented Phase 1 frame foundation
 
 Current branch code adds:
 
 - `render/frame/FrameCoordinator`
-  - one render-thread lifecycle root for future frame contexts, deferred resource retirement, uploads, render-graph work, and profiling;
-  - begin/end hooks around `Minecraft.renderFrame(boolean)`;
-  - fixed-allocation CPU frame timing collection.
+  - render-thread lifecycle root for future frame contexts, deferred destruction, uploads, render-graph work, and profiling
+  - begin/end hooks around `Minecraft.renderFrame(boolean)`
+  - fixed-allocation CPU whole-frame timing
 
 - `render/frame/FrameTimings`
-  - primitive `long[]` ring;
-  - 2048 samples by default;
-  - no per-frame allocations from the ring itself;
-  - records whole-frame CPU wall time for later percentile analysis.
+  - primitive `long[]` ring
+  - 2048 samples
+  - no per-frame allocations from the ring itself
 
 - `render/frame/GpuSubmissionProbe`
-  - one-shot only;
-  - creates a two-entry timestamp query pool;
-  - writes two timestamp commands to one command encoder;
-  - performs exactly one extra `submit()` for the entire probe;
-  - polls query results asynchronously on subsequent frames;
-  - logs completion/failure without crashing Minecraft;
-  - releases the query pool after completion or shutdown.
+  - development validation probe only
+  - creates a two-entry timestamp query pool
+  - records two timestamp commands in one encoder
+  - performs exactly one additional `submit()` for the entire process lifetime
+  - polls results without an explicit blocking wait
+  - releases its query pool after completion/shutdown
 
 - `MinecraftFrameMixin`
-  - injects at `Minecraft.renderFrame` HEAD and RETURN;
-  - calls the Phase 1 frame coordinator;
-  - invokes Obsidian shutdown from `Minecraft.close`.
+  - injects at `Minecraft.renderFrame` HEAD and RETURN
+  - invokes the frame coordinator
+  - invokes Obsidian resource cleanup from `Minecraft.close`
 
-- Bootstrap lifecycle now creates the frame coordinator only after Vulkan has been confirmed active and closes Phase 1 resources during shutdown.
+The coordinator is created only after Vulkan has been confirmed active.
 
-### Compile validation
+## Phase 1 dev1 runtime validation
 
-The implementation compiled successfully against the exact Minecraft 26.2/Fabric dependency set in GitHub Actions.
+Real test of `Obsidian-0.1.0-phase1-dev1` on 2026-08-20 succeeded.
 
-Clean branch head before continuity-doc updates:
+Observed sequence:
 
-- commit: `10a6e979a2cbfd5b8531ac98fb6cf3f00907d7aa`
-- workflow run: `32315268985`
-- result: `success`
-- build artifact upload: successful
+1. Fabric loaded `obsidian 0.1.0-phase1-dev1`.
+2. Minecraft selected Vulkan on the RX 6800 XT.
+3. Obsidian attached to the Vulkan backend and armed the Phase 1 frame foundation.
+4. `FrameCoordinator` became active with a 2048-sample CPU timing ring.
+5. `GpuSubmissionProbe` submitted exactly once on frame 1.
+6. A later nonblocking poll in the same frame iteration found both timestamp values ready: timestamp0 `20938905848`, timestamp1 `20938905908`, delta `60` ticks.
+7. Resource loading completed and the player entered a single-player world.
+8. The coordinator remained active for 2107 frames.
+9. Minecraft shut down normally and the process exited with code 0.
 
-The earlier implementation head `5add40c578325642b2c15eb66540b50e74725b15` also passed the build before the temporary API-inspection workflow was removed.
+Important interpretation: the log message `after 0 frame(s)` does not imply an explicit GPU wait. The implementation polls `GpuQueryPool.getValue(...)`; the result happened to be ready later in frame 1. No blocking query wait or device-wide idle was introduced by Obsidian.
 
-## What Phase 1 has NOT proven yet
+This proves the first controlled Obsidian GPU command path on the real reference machine:
 
-The new Phase 1 code has not yet been run on the reference Windows/Vulkan machine.
+`Minecraft render frame -> Obsidian FrameCoordinator -> Minecraft GpuDevice -> CommandEncoder -> Vulkan GPU execution -> nonblocking timestamp result`
 
-Before merging or releasing this milestone, validate `0.1.0-phase1-dev1` on the real machine and confirm:
+Terrain replacement remains intentionally inactive.
 
-1. Minecraft selects Vulkan.
-2. Obsidian logs that the Phase 1 frame coordinator is active.
-3. The one-shot GPU probe logs `submitted` once.
-4. The timestamp query later logs `completed` without blocking/crashing.
-5. The player can reach the title screen and enter a world.
-6. Shutdown logs that the frame coordinator closed cleanly.
-7. No visible rendering difference is introduced.
-8. No repeated GPU probe submissions occur.
+## Compile/build validation
 
-## Architecture boundary after this milestone
+The Phase 1 implementation has repeatedly passed GitHub Actions against the exact Minecraft 26.2/Fabric dependency set. The clean branch builds include workflow run `32315268985` and subsequent documentation-clean build run `32315487369`, both successful.
 
-Obsidian still does not own terrain rendering and does not create a second Vulkan device.
+## Architecture boundary now proven
 
-Current boundary:
+Current proven boundary:
 
-`Minecraft 26.2 Vulkan device -> Obsidian RendererBridge -> FrameCoordinator`
+`Minecraft 26.2 Vulkan device -> Obsidian RendererBridge -> FrameCoordinator -> controlled GPU submission`
 
-Obsidian can now observe the render-frame lifecycle and has a minimal path for controlled GPU command submission through Minecraft's device abstraction.
+Obsidian still does not:
 
-This is the intended foundation for the next pieces:
+- create a second Vulkan device or swapchain
+- own terrain rendering
+- submit per-frame profiler-only GPU command buffers
+- perform device-wide waits
 
-- frame-context rotation;
-- explicit resource retirement/deferred destruction;
-- upload/staging ownership;
-- profiler snapshots and percentiles;
-- render-graph scheduling;
-- eventually Obsidian-owned terrain commands.
+## Next Phase 1 milestone
 
-## Major technical lesson from the first Phase 1 probe
+The next work should turn the validated frame root into real resource-lifetime infrastructure, without changing terrain rendering yet:
 
-Do not implement per-frame GPU profiling by creating additional command submissions at both frame boundaries. That would contaminate the thing being measured.
+1. Define rotating frame contexts with monotonically increasing frame serials.
+2. Add deferred resource retirement/destruction queues keyed to safe GPU completion.
+3. Inspect the exact 26.2 fence/submission semantics needed to know when an Obsidian-owned resource is safe to reclaim.
+4. Add bounded staging/upload ownership scaffolding without issuing terrain uploads yet.
+5. Add profiler snapshot/percentile calculations off the hot path.
+6. Keep all routine frame-path allocations at zero or explicitly justified.
+7. Avoid routine `vkDeviceWaitIdle`/equivalent waits.
 
-Future GPU profiling should either:
-
-- integrate timestamps into command streams Obsidian already owns, or
-- hook an existing Minecraft submission/encoder path after exact backend ownership has been understood.
+The next success criterion should be: create/retire a small Obsidian-owned GPU resource through the frame-context/deferred-destruction system, prove it is reclaimed only after GPU completion, enter a world, and shut down cleanly.
 
 ## Reference hardware and priorities
 
@@ -169,12 +151,12 @@ Primary reference system:
 
 Priority order remains:
 
-1. 1% / 0.1% lows and frame pacing.
-2. Smooth chunk loading/streaming.
-3. Very large render-distance scaling.
-4. Average FPS.
-5. Sensible RAM/VRAM use.
+1. 1% / 0.1% lows and frame pacing
+2. smooth chunk loading/streaming
+3. very large render-distance scaling
+4. average FPS
+5. sensible RAM/VRAM use
 
-## Immediate next action
+## Immediate handoff instruction
 
-Build/download the clean `0.1.0-phase1-dev1` PR artifact and run it on the same Vulkan test instance used for Phase 0. Record the log result in `ai/ATTEMPT_LOG.md` before deciding whether this frame-foundation milestone is ready to merge.
+PR #3 is ready to be finalized after recording the successful dev1 runtime test. Merge the validated frame/GPU foundation, then continue Phase 1 with frame contexts and deferred GPU resource lifetime management. Do not expand into terrain replacement until resource ownership/synchronization is proven on the real Vulkan backend.
