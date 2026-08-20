@@ -106,9 +106,16 @@ This file records durable decisions. Do not delete old decisions when they chang
 **Why:** `0.1.0-phase1-dev1` proved on the real RX 6800 XT machine that Obsidian can observe `Minecraft.renderFrame`, submit controlled GPU commands through the existing device, retrieve timestamp results without an explicit blocking wait, enter a world, and shut down cleanly. A competing device/swapchain would add substantial lifetime, synchronization, presentation, and compatibility risk without a demonstrated need yet.  
 **Effect:** The next Phase 1 work should build frame contexts, resource retirement, staging, and profiling around the proven Minecraft-owned device boundary. Native/backend-specific access remains an evidence-driven escalation path, not the default architecture.
 
-## D-0016 - Frame rotation never substitutes for GPU completion
+## D-0016 - GPU resource reclamation is completion-gated, never frame-count-gated
 
 **Status:** ACTIVE  
-**Decision:** A rotating frame-context slot or elapsed frame count must never, by itself, authorize GPU resource reuse or destruction. Resource retirement must be tied to an explicit completion primitive for the submission domain that last used the resource.  
-**Why:** CPU frame progression and GPU completion are decoupled under load. Assuming “N frames have passed” would eventually create use-after-free/reuse hazards precisely during the heavy streaming conditions Obsidian is designed to handle. Minecraft 26.2 exposes `GpuFence` and zero-timeout completion checks through the public GPU abstraction, so Phase 1 can establish this rule without backend-specific Vulkan access.  
-**Effect:** `FrameContextRing` is bookkeeping only. `DeferredReleaseQueue` gates destruction with `GpuFence.awaitCompletion(0L)` during normal frames. Shutdown may perform only a bounded wait; if completion cannot be established, Obsidian must prefer leaking/delegating cleanup to device teardown over destroying an in-flight resource.
+**Decision:** Frame-context rotation and frame serials are bookkeeping only. Obsidian may reclaim or destroy a resource only after a GPU completion primitive associated with the last submission that uses it reports completion, or after another synchronization mechanism has been specifically proven equivalent for that resource.  
+**Why:** CPU frame advancement does not prove that the GPU has finished consuming commands/resources from previous frames. Dev2 validated `GpuFence.awaitCompletion(0L)` as a safe nonblocking steady-state completion check on Minecraft 26.2's Vulkan device.  
+**Effect:** Deferred destruction, staging-ring reclamation, arena frees, descriptor reuse, and future upload-region reuse must be tied to real completion state. Ring slot reuse alone must never release GPU-owned memory.
+
+## D-0017 - Staging/upload memory must be bounded and backpressured
+
+**Status:** ACTIVE  
+**Decision:** The default upload path will use a fixed-capacity staging arena/ring with explicit reclamation after GPU completion. When insufficient safe space exists, the system must apply bounded backpressure or defer uploads rather than allocate unbounded temporary upload buffers.  
+**Why:** Chunk streaming at large render distances can produce bursts that would otherwise create allocation spikes, memory growth, and frame-time instability. The project's first priority is tail latency, not maximizing instantaneous upload throughput at any cost.  
+**Effect:** Phase 1 upload work must expose capacity/high-water/backpressure metrics, batch copy commands where practical, and make upload admission sensitive to currently reclaimable staging capacity.
