@@ -3,6 +3,8 @@ name: Inspect Phase 2 Dev2 APIs
 on:
   push:
     branches: [phase2/drawable-real-section-inspect]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
