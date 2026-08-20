@@ -119,3 +119,10 @@ This file records durable decisions. Do not delete old decisions when they chang
 **Decision:** The default upload path will use a fixed-capacity staging arena/ring with explicit reclamation after GPU completion. When insufficient safe space exists, the system must apply bounded backpressure or defer uploads rather than allocate unbounded temporary upload buffers.  
 **Why:** Chunk streaming at large render distances can produce bursts that would otherwise create allocation spikes, memory growth, and frame-time instability. The project's first priority is tail latency, not maximizing instantaneous upload throughput at any cost.  
 **Effect:** Phase 1 upload work must expose capacity/high-water/backpressure metrics, batch copy commands where practical, and make upload admission sensitive to currently reclaimable staging capacity.
+
+## D-0018 - Do not use Mojang MappableRingBuffer as Obsidian's hot-path staging policy
+
+**Status:** ACTIVE  
+**Decision:** Obsidian may use Minecraft 26.2's public `GpuBuffer`, persistent mapping, copy, and fence abstractions, but it will not delegate hot-path upload admission/reuse policy to Mojang's `StagingBuffer.PersistentlyMapped` / `MappableRingBuffer` implementation.  
+**Why:** Exact 26.2 bytecode inspection showed `MappableRingBuffer.currentBuffer()` waits with `GpuFence.awaitCompletion(Long.MAX_VALUE)` when a rotated slot is still busy. That correctness strategy can turn upload-ring reuse into an effectively unbounded render-thread stall, directly conflicting with Obsidian's tail-latency priorities.  
+**Effect:** Obsidian owns a fixed-capacity persistently mapped staging ring with explicit nonblocking fence polling and backpressure. When safe space is unavailable, upload work is deferred rather than waiting indefinitely. Mojang's low-level device/buffer API remains the backend boundary.

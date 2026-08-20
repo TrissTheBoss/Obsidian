@@ -3,23 +3,25 @@ package dev.obsidian.render.frame;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.obsidian.render.resource.DeferredReleaseQueue;
-import dev.obsidian.render.resource.GpuResourceLifetimeProbe;
+import dev.obsidian.render.upload.GpuUploadProbe;
+import dev.obsidian.render.upload.StagingUploadArena;
 
 /**
  * Render-thread Phase 1 lifecycle root.
  *
- * <p>This owns preallocated CPU frame metadata/timing plus the first explicit
- * GPU resource-retirement path. Future uploads, render-graph work, profiler
- * collection, and renderer-owned resources should attach here rather than
- * creating unrelated lifecycle hooks.</p>
+ * <p>This owns preallocated frame metadata/timing, generic deferred resource
+ * retirement, and the bounded staging/upload foundation. Terrain rendering is
+ * still intentionally outside Obsidian at this milestone.</p>
  */
 public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
+    private static final int VALIDATION_STAGING_BYTES = 256 * 1024;
 
     private final FrameTimings cpuFrameTimings = new FrameTimings();
     private final FrameContextRing frameContexts = new FrameContextRing();
     private final DeferredReleaseQueue deferredReleases = new DeferredReleaseQueue();
-    private final GpuResourceLifetimeProbe resourceLifetimeProbe;
+    private final StagingUploadArena stagingUploads;
+    private final GpuUploadProbe uploadProbe;
 
     private FrameContext activeFrame;
     private long frameIndex;
@@ -27,7 +29,28 @@ public final class FrameCoordinator implements AutoCloseable {
     private boolean closed;
 
     public FrameCoordinator(GpuDevice device) {
-        resourceLifetimeProbe = new GpuResourceLifetimeProbe(device, deferredReleases);
+        StagingUploadArena arena = null;
+        GpuUploadProbe probe = null;
+        try {
+            arena = new StagingUploadArena(
+                    device,
+                    () -> "Obsidian Phase 1 bounded staging ring",
+                    VALIDATION_STAGING_BYTES);
+            probe = new GpuUploadProbe(device, arena);
+        } catch (RuntimeException e) {
+            if (arena != null) {
+                try {
+                    arena.close();
+                } catch (RuntimeException ignored) {
+                    // Preserve the creation failure as the useful diagnostic.
+                }
+            }
+            LOG.log(System.Logger.Level.ERROR,
+                    "Phase 1 bounded staging initialization failed; Minecraft will continue for diagnosis.",
+                    e);
+        }
+        stagingUploads = arena;
+        uploadProbe = probe;
     }
 
     public void beginFrame() {
@@ -42,11 +65,15 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 1 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}; frame slots are bookkeeping only and GPU safety is fence-gated.",
-                    frameContexts.size(), cpuFrameTimings.capacity());
+                    "Phase 1 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, stagingCapacity={2}; GPU safety and staging reuse are completion-gated.",
+                    frameContexts.size(),
+                    cpuFrameTimings.capacity(),
+                    stagingUploads == null ? 0 : stagingUploads.capacityBytes());
         }
 
-        resourceLifetimeProbe.submit(frameIndex);
+        if (uploadProbe != null) {
+            uploadProbe.submit(frameIndex);
+        }
     }
 
     public void endFrame() {
@@ -65,7 +92,12 @@ public final class FrameCoordinator implements AutoCloseable {
         }
 
         deferredReleases.poll();
-        resourceLifetimeProbe.poll(frameIndex);
+        if (stagingUploads != null) {
+            stagingUploads.pollReclaims();
+        }
+        if (uploadProbe != null) {
+            uploadProbe.poll(frameIndex);
+        }
     }
 
     public long frameIndex() {
@@ -80,12 +112,16 @@ public final class FrameCoordinator implements AutoCloseable {
         return cpuFrameTimings;
     }
 
-    public GpuResourceLifetimeProbe.State resourceLifetimeProbeState() {
-        return resourceLifetimeProbe.state();
-    }
-
     public int pendingRetirements() {
         return deferredReleases.pendingCount();
+    }
+
+    public int pendingUploadBatches() {
+        return stagingUploads == null ? 0 : stagingUploads.pendingBatches();
+    }
+
+    public GpuUploadProbe.State uploadProbeState() {
+        return uploadProbe == null ? GpuUploadProbe.State.FAILED : uploadProbe.state();
     }
 
     @Override
@@ -96,12 +132,22 @@ public final class FrameCoordinator implements AutoCloseable {
         }
         closed = true;
 
+        if (stagingUploads != null) {
+            stagingUploads.close();
+        }
+        if (uploadProbe != null) {
+            uploadProbe.close();
+        }
         deferredReleases.close();
-        resourceLifetimeProbe.close();
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 1 frame coordinator closed after {0} frame(s): retiredResources={1}, releasedResources={2}, pending={3}.",
+                "Phase 1 frame coordinator closed after {0} frame(s): stagingSubmittedBytes={1}, stagingReclaimedBytes={2}, stagingHighWater={3}, stagingBackpressureEvents={4}, pendingUploadBatches={5}, retiredResources={6}, releasedResources={7}, pendingRetirements={8}.",
                 frameIndex,
+                stagingUploads == null ? 0L : stagingUploads.submittedBytes(),
+                stagingUploads == null ? 0L : stagingUploads.reclaimedBytes(),
+                stagingUploads == null ? 0L : stagingUploads.highWaterBytes(),
+                stagingUploads == null ? 0L : stagingUploads.backpressureEvents(),
+                stagingUploads == null ? 0 : stagingUploads.pendingBatches(),
                 deferredReleases.retiredCount(),
                 deferredReleases.releasedCount(),
                 deferredReleases.pendingCount());
