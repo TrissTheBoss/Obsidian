@@ -2,6 +2,7 @@ package dev.obsidian.render.graph;
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.buffers.GpuFence;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderPass;
@@ -19,7 +20,7 @@ import java.util.function.Supplier;
  * One Obsidian-owned useful command stream with graph ordering and timestamps.
  *
  * <p>The stream submits through the bounded staging batch owner so uploads,
- * render passes, copies, timestamp writes, and the completion fence can share
+ * render passes, copies, timestamp writes, and completion tracking can share
  * one deliberate GPU submission. Profiling never creates a submission of its
  * own.</p>
  */
@@ -122,8 +123,22 @@ public final class FrameGraphCommandStream {
     }
 
     /**
-     * Submits exactly once through the staging arena, which owns the resulting
-     * completion fence and staging-range reclamation.
+     * Creates another lightweight completion handle for the submission being recorded.
+     *
+     * <p>Exact Minecraft 26.2 Vulkan inspection shows each handle captures the
+     * encoder timeline submit index; it does not allocate a native VkFence.
+     * Multiple handles created before one submit therefore observe the same GPU
+     * completion point and may be owned independently by staging/arena lifetime code.</p>
+     */
+    public GpuFence createCompletionFence() {
+        RenderSystem.assertOnRenderThread();
+        ensureRecording();
+        return encoder.createFence();
+    }
+
+    /**
+     * Submits exactly once through the staging arena, which owns its own
+     * completion handle and staging-range reclamation.
      *
      * <p>All fallible software bookkeeping is completed before queue submission
      * so a post-submit exception cannot incorrectly route the caller through a
@@ -162,7 +177,7 @@ public final class FrameGraphCommandStream {
         recording = false;
     }
 
-    /** True only after the same useful submission's staging fence completed. */
+    /** True only after the same useful submission's staging completion handle resolved. */
     public boolean isSubmissionComplete() {
         return submittedBatchOrdinal != 0L
                 && staging.reclaimedBatches() >= submittedBatchOrdinal;
