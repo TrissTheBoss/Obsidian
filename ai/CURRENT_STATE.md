@@ -19,7 +19,7 @@ Last updated: 2026-08-21
 - Active branch: `phase2/material-texture-identity`
 - Active draft PR: #16, `Phase 2 dev3: texture and material identity`
 - Current development version: `0.2.0-phase2-dev3`
-- P2.3 status: **exact Minecraft 26.2 API grounded + implementation complete + CI/package verified; reference RX 6800 XT runtime/visual validation pending**
+- P2.3 status: **RUNTIME + HUMAN VISUAL VALIDATED on the reference RX 6800 XT; final exact-head CI and explicit merge authorization pending**
 
 ## Continuity model
 
@@ -66,7 +66,7 @@ P2.2 established deterministic real indexed geometry, exact section/camera place
 
 The permanent P2.1 reference oracle remains independent of all later optimized/materialized representations.
 
-## P2.3 / dev3 - ACTIVE
+## P2.3 / dev3 - RUNTIME + HUMAN VISUAL VALIDATED
 
 Planning: `ai/attempts/A-0067-phase2-dev3-material-identity-plan.md`.
 
@@ -74,7 +74,9 @@ Exact Minecraft 26.2 API evidence: `ai/attempts/A-0068-phase2-dev3-material-api-
 
 Implementation/package evidence: `ai/attempts/A-0069-phase2-dev3-implementation-and-package.md`.
 
-### Exact 26.2 model/material contract now used
+Runtime + human visual evidence: `ai/attempts/A-0070-phase2-dev3-runtime-success.md`.
+
+### Exact 26.2 model/material contract used
 
 Hosted Loom inspection proved the active path is:
 
@@ -86,7 +88,7 @@ Temporary inspection PR #17 was closed without merge after A-0068 recorded the f
 
 ### Immutable material extraction
 
-New `SectionMaterialSnapshot` is the only P2.3 stage allowed to query live model/tint/resource state.
+`SectionMaterialSnapshot` is the only P2.3 stage allowed to query live model/tint/resource state.
 
 For each permanent reference face it:
 
@@ -103,11 +105,11 @@ For each permanent reference face it:
 - retains only immutable values after capture, never live model/quad/sprite/world objects;
 - captures a model-set/blocks-atlas resource epoch so stale materialized geometry is rejected before draw.
 
-Two material captures must be content-identical in the validation probe.
+Two material captures are required to be content-identical in the validation probe.
 
 ### Pure textured mesh
 
-New `MaterializedSectionMesh` consumes only `SectionSnapshot`, `ReferenceFaceMesh` and `SectionMaterialSnapshot`.
+`MaterializedSectionMesh` consumes only `SectionSnapshot`, `ReferenceFaceMesh` and `SectionMaterialSnapshot`.
 
 It performs no live Minecraft world/model/resource reads and emits:
 
@@ -121,7 +123,7 @@ The exact tint remains stored independently; the 3/4 modulation exists only so t
 
 ### Live textured comparison
 
-New `RealSectionMaterialProbe` is now the active `FrameCoordinator` path.
+`RealSectionMaterialProbe` is the active `FrameCoordinator` path.
 
 It preserves the proven P2.2 placement/lifetime system and adds:
 
@@ -139,70 +141,68 @@ It preserves the proven P2.2 placement/lifetime system and adds:
 
 The completed P2.2 `RealSectionDrawableProbe` remains in source as historical/proven diagnostic code but is no longer the active coordinator path.
 
-### Validation-only capacity
+### Runtime result
 
-Dev3 remains within the explicit validation capacities:
+Reference RX 6800 XT validation passed the machine and human gates.
 
-- staging ring: 4 MiB;
-- device geometry arena: 4 MiB.
+The tester reported no visible issues: recognizable Minecraft textures, no observed UV mirroring/rotation/stretch, no alignment/drift issue while moving or turning, and no obviously wrong tint issue.
 
-Worst-case POSITION_TEX_COLOR + 32-bit index data for the permanent reference maximum remains below 3 MiB. These values are validation capacities, not production renderer memory budgets.
+All six sustained comparison passes completed. The final pass logged:
+
+- `referenceFaces=142`;
+- `materializedFaces=87`;
+- `rejectedMaterialFaces=55`, with `87 + 55 = 142`;
+- `drawableVertices=348 = 87 * 4`;
+- `drawableIndices=522 = 87 * 6`;
+- `materialCount=2`;
+- `tintedFaces=78`, `tintWorldQueries=78`;
+- duplicate deterministic reference/material/drawable builds;
+- `worldReadsAfterMaterialCapture=0`;
+- `pipelineValid=true`;
+- `nativeGraphicsSeam=false`;
+- `indexedIndirect=true`;
+- `textured=true`;
+- `blocksAtlasBound=true`;
+- stable resource epoch through the comparison draws;
+- `profilerOnlySubmissions=0`.
+
+Final aggregate lifetime state:
+
+- staging submitted/reclaimed `63360/63360` bytes;
+- staging backpressure events `0`;
+- arena allocations/retired/reclaimed `12/12/12`;
+- arena allocation failures `0`;
+- arena used bytes `0`;
+- one full `4194304` byte free span;
+- fragmentation `0`;
+- indirect resources retired/released `6/6`;
+- pending upload/arena/resource retirements all `0`;
+- process exit code `0`.
+
+Terrain/material counts and fingerprints are runtime evidence, not hard-coded success values.
+
+### Block-edit observation
+
+The tester broke one block while the validation overlay was active and estimated that the stale overlay disappeared about 0.3 seconds later.
+
+This is expected for the temporary dev3 validation harness, which holds one immutable snapshot/materialized mesh for a bounded comparison pass before reclaiming and recapturing. The log proves the change was picked up at the next pass boundary: passes 1-5 had `interiorSupported=82` / `interiorAir=4014`, while pass 6 had `interiorSupported=81` / `interiorAir=4015` and new snapshot/reference/material/drawable fingerprints.
+
+This delay is **not** a production renderer latency target. Event-driven block update, neighbor invalidation and section rebuild scheduling remain P2.6 scope. Do not add ad-hoc dev3 invalidation solely to shorten the validation overlay's stale interval.
 
 ## Dev3 CI/package evidence
 
-Exact behavior/code head before documentation-only synchronization: `a7ae05ba8da391c052804d08b5a9ed4546c3311c`.
+Exact behavior/code head before documentation-only runtime synchronization: `a7ae05ba8da391c052804d08b5a9ed4546c3311c`.
 
-GitHub Actions run `32428077000`:
+Earlier exact CI run `32428260342` on continuity-synchronized head `022a58cffb056aeca2408acafc9724fc6dc425d6` passed Java 25 / Gradle 9.5.1 and artifact upload with public release skipped.
 
-- Java 25 / Gradle 9.5.1 build: SUCCESS;
-- artifact upload: SUCCESS;
-- public release: SKIPPED.
-
-Artifact ID: `9428132378`.
-
-Package:
+Validated package:
 
 - `Obsidian-0.2.0-phase2-dev3.jar`;
 - main JAR SHA-256: `7eb4cc26ad48ba10e986cd2069720a56f6f4079ec724dec6223ee6dd25376e58`;
 - sources SHA-256: `03d6ab63ce81fe96d88148d5f3b6b078d87f0bef252957a5d1a42ecca9d4e818`;
 - metadata: exactly `obsidian 0.2.0-phase2-dev3`.
 
-Package inspection confirmed `SectionMaterialSnapshot`, `MaterializedSectionMesh` and `RealSectionMaterialProbe` are present and that active `FrameCoordinator` constructs the new dev3 probe. Bytecode also confirms `GUI_TEXTURED`, `POSITION_TEX_COLOR`, blocks-atlas identity and `Sampler0` are present in the active path.
-
-## Dev3 runtime success criteria
-
-The reference RX 6800 XT run must prove:
-
-- exact `obsidian 0.2.0-phase2-dev3` loads on Vulkan;
-- existing GameRenderer world hook applies normally;
-- P2.1 snapshot/reference duplicate determinism remains intact;
-- `deterministicMaterialCaptures=2`;
-- at least one conservative SOLID reference face materializes;
-- every rejected reference face is explicitly accounted for by the material rejection counters;
-- materialized face count = accepted material faces;
-- drawable vertices = materialized faces * 4;
-- drawable indices = materialized faces * 6;
-- `deterministicDrawableBuilds=2`;
-- `worldReadsAfterMaterialCapture=0` for pure mesh construction;
-- public textured pipeline is valid;
-- `nativeGraphicsSeam=false`;
-- indexed-indirect live drawing executes;
-- blocks atlas remains bound and resource epoch remains stable through each comparison pass;
-- the visible overlay uses recognizable Minecraft block textures rather than orientation colors;
-- supported-face UVs are not mirrored, rotated incorrectly or stretched relative to vanilla;
-- geometry remains perfectly world/camera aligned while moving;
-- supported tinted faces, when encountered, have sensible tint identity;
-- brightness/AO differences are ignored for this gate because P2.4 remains intentionally absent;
-- all 6 visual passes complete;
-- `profilerOnlySubmissions=0`;
-- staging fully reclaims;
-- all arena allocations retire/reclaim behind completion;
-- indirect resources retire/release behind completion;
-- final arena used=0, one full 4 MiB free span, fragmentation=0;
-- no pending upload/arena/resource retirements at clean shutdown;
-- process exits code 0.
-
-Exact world coordinates, terrain counts, material counts, rejection counts and fingerprints are world/resource-pack dependent and must not be hard-coded.
+A final exact-head CI run is required after A-0070/current-state synchronization before merge authorization can be acted on.
 
 ## Deliberate P2.3 boundary
 
@@ -211,6 +211,7 @@ Dev3 does **not** claim:
 - block/sky lighting or ambient occlusion - P2.4;
 - broad cutout/non-full/custom-model support - P2.5+;
 - production greedy meshing - Phase 3;
+- event-driven section/block update lifecycle - P2.6;
 - global vanilla terrain replacement;
 - production-scale visibility/performance - Phase 4+.
 
@@ -218,12 +219,11 @@ Unsupported cases remain explicit rather than silently approximated.
 
 ## Immediate next action
 
-1. Run final exact-head Java 25 / Gradle 9.5.1 CI after continuity/PR synchronization.
-2. Runtime-test the exact `0.2.0-phase2-dev3` artifact on the reference RX 6800 XT.
-3. Enter a normal world, allow the five-second arm delay, then inspect the six-pass textured overlay while moving/turning the camera.
-4. Explicitly report texture visibility, UV orientation/mirroring/stretch, geometry alignment and any obviously wrong tint. Ignore lighting/AO brightness differences for dev3.
-5. Save the complete Prism log and record the result immutably.
-6. Keep PR #16 draft/unmerged until this gate passes.
+1. Run final exact-head Java 25 / Gradle 9.5.1 CI after A-0070/current-state/PR evidence synchronization.
+2. If green, P2.3 is technically ready to merge but remains unmerged until explicit user merge authorization.
+3. After an authorized `[no-release]` merge, perform the Class-A `CURRENT_STATE.md` / `MASTER_ROADMAP.md` completion sync.
+4. Next planned semantic milestone after P2.3 closes is **P2.4 - block/sky lighting and ambient occlusion correctness**.
+5. Preserve the block-edit stale-overlay observation for P2.6 lifecycle/rebuild design rather than folding it into P2.4.
 
 ## Relevant durable decisions
 
