@@ -1,0 +1,95 @@
+name: Inspect Phase 2 Dev4 APIs
+
+on:
+  push:
+    branches: [phase2/lighting-ao-correctness-inspect]
+  pull_request:
+    branches: [main]
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+      - name: Inspect exact dev4 lighting AO contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle classes --stacktrace
+          cat > /tmp/obsidian-inspect.init.gradle <<'EOF'
+          allprojects {
+            afterEvaluate { p ->
+              if (p == rootProject) {
+                tasks.register('printClientCompileClasspath') {
+                  doLast { println sourceSets.client.compileClasspath.files.collect { it.absolutePath }.join(File.pathSeparator) }
+                }
+              }
+            }
+          }
+          EOF
+          gradle -q -I /tmp/obsidian-inspect.init.gradle printClientCompileClasspath | tail -n 1 > /tmp/cp
+          CP="$(cat /tmp/cp)"
+          mkdir -p inspection
+          cat > inspection/target-classes.txt <<'EOF'
+          net.minecraft.client.renderer.block.ModelBlockRenderer
+          net.minecraft.client.renderer.block.BlockRenderDispatcher
+          net.minecraft.client.renderer.chunk.SectionCompiler
+          net.minecraft.client.renderer.chunk.ChunkSectionLayer
+          net.minecraft.client.renderer.LevelRenderer
+          net.minecraft.client.renderer.LightTexture
+          net.minecraft.client.renderer.RenderPipelines
+          net.minecraft.client.renderer.block.dispatch.BlockStateModel
+          net.minecraft.client.resources.model.geometry.BakedQuad
+          net.minecraft.client.resources.model.geometry.BakedQuad$MaterialInfo
+          net.minecraft.world.level.BlockAndTintGetter
+          net.minecraft.world.level.LightLayer
+          net.minecraft.world.level.block.state.BlockState
+          net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase
+          com.mojang.blaze3d.vertex.DefaultVertexFormat
+          com.mojang.blaze3d.vertex.VertexConsumer
+          com.mojang.blaze3d.systems.RenderPass
+          com.mojang.blaze3d.systems.RenderSystem
+          EOF
+          : > inspection/public-api.txt
+          : > inspection/bytecode.txt
+          while IFS= read -r CLASS; do
+            echo "=== $CLASS ===" >> inspection/public-api.txt
+            javap -classpath "$CP" -public "$CLASS" >> inspection/public-api.txt 2>&1 || true
+            echo >> inspection/public-api.txt
+            echo "=== $CLASS ===" >> inspection/bytecode.txt
+            javap -classpath "$CP" -c -p "$CLASS" >> inspection/bytecode.txt 2>&1 || true
+            echo >> inspection/bytecode.txt
+          done < inspection/target-classes.txt
+
+          : > inspection/discovered-classes.txt
+          tr ':' '\n' < /tmp/cp | while IFS= read -r JAR; do
+            if [ -f "$JAR" ] && [[ "$JAR" == *.jar ]]; then
+              jar tf "$JAR" 2>/dev/null | grep -E '^net/minecraft/(client/renderer|world/level)/.*(Light|light|Ambient|ambient|Occlusion|occlusion|ModelBlockRenderer|SectionCompiler|VertexConsumer|ChunkSectionLayer).*\.class$' >> inspection/discovered-classes.txt || true
+            fi
+          done
+          sort -u inspection/discovered-classes.txt | head -n 300 > inspection/discovered-classes-bounded.txt
+          sed -E 's#/#.#g; s#\.class$##' inspection/discovered-classes-bounded.txt > inspection/discovered-class-names.txt
+          : > inspection/discovered-bytecode.txt
+          while IFS= read -r CLASS; do
+            echo "=== $CLASS ===" >> inspection/discovered-bytecode.txt
+            javap -classpath "$CP" -c -p "$CLASS" >> inspection/discovered-bytecode.txt 2>&1 || true
+            echo >> inspection/discovered-bytecode.txt
+          done < inspection/discovered-class-names.txt
+
+          grep -n -E 'getLightColor|lightCoordsWithEmission|LightTexture|LightLayer|block\(|sky\(|pack\(|getBrightness|getRawBrightness|brightness|shade|Shade|ambient|Ambient|occlusion|Occlusion|viewBlocking|usesShapeForLightOcclusion|calculateShape|calculateShapeByLight|putBlockBakedQuad|putBulkData|lightmap|LIGHTMAP|Sampler2|UV2|POSITION.*LIGHT|BLOCK|SOLID|quad|diagonal|vertexRemapping|recalculateWinding' inspection/bytecode.txt inspection/discovered-bytecode.txt > inspection/key-grep.txt || true
+
+          grep -n -E 'ModelBlockRenderer|Ambient|Occlusion|LightTexture|LightLayer|SectionCompiler|VertexConsumer|DefaultVertexFormat|RenderPipelines' inspection/public-api.txt > inspection/public-key-grep.txt || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase2-dev4-lighting-ao-inspection-${{ github.sha }}
+          if-no-files-found: error
+          path: inspection/
