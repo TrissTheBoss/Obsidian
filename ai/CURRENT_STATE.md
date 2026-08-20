@@ -9,8 +9,9 @@ Last updated: 2026-08-20
 - Current public release: `v0.0.2-phase0`
 - Current merged development baseline: Phase 1 dev4, merge commit `7d2e92c9838192d7f85377fa022d7f5327345643`
 - Active development branch: `phase1/frame-graph-profiler`
-- Active draft PR: #7, `Phase 1: frame graph and integrated GPU profiler`
+- Active PR: #7, `Phase 1: frame graph and integrated GPU profiler`
 - Current development version: `0.1.0-phase1-dev5`
+- Dev5 status: **runtime validated; pending merge with `[no-release]`**
 
 ## Reference runtime
 
@@ -47,98 +48,63 @@ Validated bounded persistent staging, batched buffer copies, explicit backpressu
 
 ### Phase 1 dev4 - VALIDATED and merged through PR #6
 
-Validated reusable device-preferred GPU geometry storage/suballocation on the real RX 6800 XT machine: generation-safe handles, bounded allocation failure, multi-frame real-fence retirement, safe physical span reuse, stale-handle rejection, deterministic readback, full free-span coalescing, world entry, and clean shutdown.
+Validated reusable device-preferred GPU geometry storage/suballocation: packed `(slot,generation)` identities, bounded allocation failure, multi-frame real-fence retirement, exact span reuse only after completion, stale-handle rejection, deterministic readback, complete free-span coalescing, world entry, and clean shutdown.
 
-Dev4 was squash-merged as `7d2e92c9838192d7f85377fa022d7f5327345643` with `[no-release]`. Runtime evidence is in `ai/attempts/A-0029-dev4-runtime-success.md`.
+Dev4 was squash-merged as `7d2e92c9838192d7f85377fa022d7f5327345643` with `[no-release]`. Runtime evidence is `ai/attempts/A-0029-dev4-runtime-success.md`.
 
-## Phase 1 dev5 - ACTIVE; CI validated, runtime pending
+### Phase 1 dev5 - VALIDATED; pending merge through PR #7
 
-Goal: establish Obsidian-owned pass orchestration and GPU profiling before terrain rendering begins.
+Dev5 establishes Obsidian-owned pass orchestration and integrated GPU timestamp profiling before terrain rendering.
 
-### Exact Minecraft 26.2 timestamp findings
+Implemented:
 
-Exact Loom-resolved bytecode/API inspection confirmed:
+- `FixedFrameGraph`: fixed 16-pass maximum; initialization-time pass definitions/dependency masks; primitive timing/execution arrays; no per-execution graph-node allocation; dependency/order validation.
+- `GpuTimestampProfiler`: two timestamp slots/pass; timestamps encoded around useful work; `timestampPeriod` conversion; nonblocking availability polling; poll/unavailable metrics.
+- `FrameGraphCommandStream`: one owned `CommandEncoder` for the validation graph; graph ordering, timestamps, staging upload, dependent copy, and completion fence all share the useful submission; profiler-only submissions remain zero.
+- `FrameGraphProbe`: pass 0 stages deterministic 256 bytes; pass 1 depends on pass 0 and copies that range to a second destination in the same command stream; both ranges are verified.
 
-- `GpuDevice.createTimestampQueryPool(int)` returns `com.mojang.blaze3d.systems.GpuQueryPool`.
-- `GpuQueryPool` exposes `size()`, `getValue(int)`, `getValues(int,int)`, and `close()`.
-- `CommandEncoder.writeTimestamp(GpuQueryPool,int)` records timestamp work into a command encoder.
-- `DeviceInfo.timestampPeriod()` provides the timestamp tick-to-nanosecond conversion.
-- Minecraft's Vulkan query result path requests availability and does not use the Vulkan WAIT flag; unavailable results become empty optionals rather than blocking.
-- `VulkanCommandEncoder.writeTimestamp` host-resets the exact query slot with `vkResetQueryPool` before recording `vkCmdWriteTimestamp2KHR`, so query-slot reuse does not require a separate reset submission on the current backend.
-- the public `getValues` API allocates an `OptionalLong[]` and result wrappers. It is nonblocking but must not become an every-frame hot-path allocation source.
-- Obsidian enforces timestamp query indices inside `[0, pool.size())` regardless of permissive-looking Java bytecode bounds.
+Exact Minecraft 26.2 findings remain:
 
-The temporary API inspection workflow has been removed. Findings are preserved in `ai/attempts/A-0030-dev5-framegraph-api-inspection.md`.
+- timestamp query classes are under `com.mojang.blaze3d.systems`;
+- Vulkan query retrieval is availability-based and does not use the WAIT flag;
+- `VulkanCommandEncoder.writeTimestamp` resets the exact query slot before `vkCmdWriteTimestamp2KHR`;
+- public `GpuQueryPool.getValues()` is nonblocking but allocates result wrappers, so continuous production collection remains bounded/sampled under D-0022.
 
-### Implemented `FixedFrameGraph`
+#### Dev5 compile/package result
 
-- maximum 16 passes;
-- initialization-time pass definitions and dependency masks;
-- primitive arrays for CPU begin/last/total timing and execution counts;
-- no per-execution graph-node allocation;
-- dependency/order validation and all-pass completion validation.
+- exact pre-runtime-evidence source/docs head `33fc90941b4b728195f641060173d74328e2556f` passed GitHub Actions run `32371507539` on Java 25 / Gradle 9.5.1;
+- artifact upload succeeded;
+- CI JAR reported `0.1.0-phase1-dev5`;
+- graph/profiler classes were present and completed `DeviceArenaProbe` was absent;
+- test JAR SHA-256: `e62044f9556f97c90888ed2bcef36e784cb039126bd3c5cd10e358ed104bfe7e`.
 
-### Implemented `GpuTimestampProfiler`
+#### Dev5 real-machine result - SUCCESS
 
-- two timestamp slots per pass;
-- start/end timestamps encoded around useful pass work;
-- tick conversion through `timestampPeriod`;
-- nonblocking result availability polling;
-- poll/unavailable counters;
-- dev5 validation is one-shot; production repeated result collection is bounded/sampled by D-0022.
+The user tested the exact CI-built dev5 JAR on the reference Windows 11 / RX 6800 XT Vulkan machine.
 
-### Implemented `FrameGraphCommandStream`
+Observed:
 
-- uses the validated bounded staging batch admission path;
-- owns one `CommandEncoder` per graph execution;
-- combines graph ordering, CPU pass timing, GPU timestamp writes, upload copies, and dependent copies in the same command stream;
-- submits exactly once through `StagingUploadArena.submitBatch`, so useful work, timestamps, and completion fence are in the same submission;
-- profiler-only submissions are zero;
-- timestamp results are polled only after that same useful submission is known complete.
-
-### Implemented `FrameGraphProbe`
-
-Two-pass nonvisual graph:
-
-1. `validation-upload`: stage deterministic 256-byte data into destination `[0,256)`.
-2. `validation-dependent-copy`: depends on pass 0 and GPU-copies `[0,256)` to `[512,768)` in the same command stream.
-
-Expected runtime invariants:
-
+- correct dev5 build loaded and attached to Vulkan;
+- context slots = 3;
+- staging capacity = 262144 bytes;
+- device arena capacity = 524288 bytes;
 - graph passes = 2;
-- executed mask = `3`;
-- one declared dependency;
-- useful submissions = 1;
-- profiler-only submissions = 0;
-- staging submitted/reclaimed = `256/256` bytes;
-- staging high-water = 256;
-- staging backpressure = 0;
-- deterministic verification covers 512 bytes total;
-- CPU/GPU pass times and total GPU time are reported but exact values are hardware/run dependent;
-- unavailable query polls may be zero or positive and are not themselves a failure;
-- device arena remains initialized but unused by this probe: usage/allocation/retirement counters remain zero, free spans=1, largest free=`524288`, fragmentation=0.
+- graph submission on frame 1: passes=2, dependencies=1, usefulSubmissions=1, stagingPayloadBytes=256, profilerOnlySubmissions=0, timestampPeriod=10 ns/tick;
+- graph verification on frame 1: executedMask=3, queryPolls=1, unavailablePolls=0, usefulSubmissions=1, profilerOnlySubmissions=0, copiedBytes=512;
+- CPU and GPU pass timings resolved successfully. Logger output uses locale grouping (`315.500` means 315500 ns, etc.); these values validate timing plumbing and are not renderer benchmarks;
+- staging submitted/reclaimed = 256/256 bytes, high-water=256, backpressure=0, pending=0;
+- device arena remained intentionally unused/clean: all usage/allocation/retirement counters 0, freeSpans=1, largestFree=524288, fragmentation=0;
+- user entered a single-player world normally;
+- shutdown after 2649 frames reported `graphResult=VERIFIED`, one useful submission, zero profiler-only submissions, no pending GPU work;
+- process exited with code 0.
 
-### CI/package status
+Runtime evidence: `ai/attempts/A-0033-dev5-runtime-success.md`.
 
-- initial dev5 implementation compiled successfully against Java 25 / Gradle 9.5.1 / exact Minecraft 26.2;
-- completed dev4 probe and temporary API workflow were removed;
-- shutdown diagnostics preserve the graph result before probe close;
-- cleaned/documented head `c2cead6b41e010f9a00e151ad8635acf80662f4e` passed GitHub Actions run `32371303571` with build and artifact upload successful;
-- the resulting CI JAR was inspected: version is `0.1.0-phase1-dev5`, all four graph/profiler classes and `FrameCoordinator` are present, and `DeviceArenaProbe` is absent;
-- evidence is recorded in `ai/attempts/A-0032-dev5-final-ci-package.md`.
-
-This file and A-0032 are continuity-only changes after that verified build. Run one final CI on this exact documentation head before distributing the canonical dev5 test artifact.
-
-Evidence:
-
-- `ai/attempts/A-0030-dev5-framegraph-api-inspection.md`
-- `ai/attempts/A-0031-dev5-framegraph-profiler-implementation.md`
-- `ai/attempts/A-0032-dev5-final-ci-package.md`
-- decisions D-0021 and D-0022 in `ai/DECISIONS.md`.
+An observational vanilla behavior was also captured: Mojang's Chunk Sections UBO reactively grew through capacities 2 -> 4 -> 8 -> 16 -> 32 -> 64 -> 128 -> 256 -> 512 -> 1024 -> 2048 during world entry. This is future profiling evidence only and is not currently attributed as a performance defect.
 
 ## Proven architecture boundary
 
-`Minecraft 26.2 Vulkan device -> Obsidian RendererBridge -> FrameCoordinator -> frame contexts -> completion-gated lifetime -> bounded persistent staging -> device-preferred arena -> FixedFrameGraph -> owned command stream -> useful submission with embedded timestamp ranges`
+`Minecraft 26.2 Vulkan device -> Obsidian RendererBridge -> FrameCoordinator -> frame contexts -> completion-gated lifetime -> bounded persistent staging -> device-preferred arena -> generation-safe suballocation -> FixedFrameGraph -> owned command stream -> useful submission with embedded timestamp ranges`
 
 Obsidian still does not:
 
@@ -147,21 +113,25 @@ Obsidian still does not:
 - infer GPU completion from CPU frame count;
 - perform routine device-wide waits;
 - poll allocating timestamp-result wrappers every frame;
-- upload or draw actual chunk meshes.
+- issue an Obsidian-owned graphics draw;
+- upload/draw actual chunk meshes.
 
-## Dev5 real-machine success criteria
+## Immediate action
 
-On the Windows 11 / RX 6800 XT Vulkan instance:
+1. Final-CI the runtime-evidence head of PR #7.
+2. Promote and merge PR #7 with `[no-release]`.
+3. Create Phase 1 dev6 branch from the resulting `main` merge commit.
+4. Inspect exact Minecraft 26.2 graphics shader/pipeline/render-pass/texture/readback APIs and Vulkan backend behavior before implementation.
+5. Implement the first Obsidian-owned graphics draw as an offscreen/nonvisual validation if the public abstraction supports a deterministic readback target cleanly.
+6. Dev6 should prove shader resource/compilation path, graphics pipeline creation, vertex/index state, render-target ownership, an actual draw call, deterministic output verification, graph-integrated CPU/GPU timing, safe lifetime/completion handling, world entry, and clean shutdown.
+7. Keep terrain replacement inactive until dev6 passes real-machine validation.
 
-1. `obsidian 0.1.0-phase1-dev5` loads.
-2. Frame coordinator reports context slots=3, staging capacity=262144, device arena capacity=524288, graph passes=2.
-3. Graph submission reports passes=2, dependencies=1, usefulSubmissions=1, stagingPayloadBytes=256, profilerOnlySubmissions=0.
-4. The useful submission completes without an explicit routine wait.
-5. Timestamp results become available; pass/total GPU nanoseconds are reported.
-6. Graph verification reports executedMask=3 and copiedBytes=512.
-7. Both destination ranges verify byte-for-byte.
-8. Staging finishes with submitted/reclaimed=256/256, high-water=256, backpressure=0, pending=0.
-9. Device-arena counters remain unused/clean and the full 524288-byte free span remains intact.
-10. User enters a world normally and shutdown reports `graphResult=VERIFIED`, usefulSubmissions=1, profilerOnlySubmissions=0, no pending GPU work, and process exit code 0.
+## Relevant durable decisions
 
-Terrain replacement remains intentionally inactive until this orchestration/profiling layer passes the same real-machine validation loop.
+- D-0014: profiling must not create routine extra GPU submissions.
+- D-0015: preserve Minecraft Vulkan device/swapchain ownership until evidence demands deeper access.
+- D-0016: GPU resource reclamation is completion-gated, never frame-count-gated.
+- D-0017/D-0018: staging is bounded/backpressured and does not use Mojang's blocking ring policy.
+- D-0019/D-0020: geometry is device-preferred and allocation identity is generation-safe.
+- D-0021: profiling timestamps live inside owned useful command streams.
+- D-0022: timestamp result collection is bounded/sampled because the public wrapper allocates.
