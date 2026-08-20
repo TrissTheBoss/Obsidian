@@ -126,3 +126,17 @@ This file records durable decisions. Do not delete old decisions when they chang
 **Decision:** Obsidian may use Minecraft 26.2's public `GpuBuffer`, persistent mapping, copy, and fence abstractions, but it will not delegate hot-path upload admission/reuse policy to Mojang's `StagingBuffer.PersistentlyMapped` / `MappableRingBuffer` implementation.  
 **Why:** Exact 26.2 bytecode inspection showed `MappableRingBuffer.currentBuffer()` waits with `GpuFence.awaitCompletion(Long.MAX_VALUE)` when a rotated slot is still busy. That correctness strategy can turn upload-ring reuse into an effectively unbounded render-thread stall, directly conflicting with Obsidian's tail-latency priorities.  
 **Effect:** Obsidian owns a fixed-capacity persistently mapped staging ring with explicit nonblocking fence polling and backpressure. When safe space is unavailable, upload work is deferred rather than waiting indefinitely. Mojang's low-level device/buffer API remains the backend boundary.
+
+## D-0019 - Geometry arenas are non-mapped and device-preferred
+
+**Status:** ACTIVE  
+**Decision:** Normal Obsidian geometry storage uses non-mapped Minecraft `GpuBuffer` objects with copy-destination/source and geometry usage flags. Host mapping is kept in the staging/readback paths, not on the long-lived geometry arena.  
+**Why:** Exact Minecraft 26.2 Vulkan bytecode inspection shows `VulkanGpuBuffer.Direct` begins with VMA's automatic device-preferred allocation policy and adds host-visible/coherent constraints only when mapping usage is requested; MAP_READ/client-storage paths are explicitly host-preferred. This lets Obsidian keep geometry on the backend's device-preferred path while preserving the Minecraft-owned device boundary.  
+**Effect:** CPU writes go through `StagingUploadArena`; geometry arenas do not expose persistent CPU mappings. Use the wording `device-preferred` in portable code/docs because unified-memory devices may legitimately choose a shared heap even though discrete GPUs normally select device-local memory.
+
+## D-0020 - Arena allocation identity is generation-safe and reuse is completion-gated
+
+**Status:** ACTIVE  
+**Decision:** Device-arena allocations are referenced by handles containing both a metadata slot and generation. A freed offset or slot may be reused only after the last-use completion fence has completed; reuse advances the slot generation so stale handles are rejected.  
+**Why:** Offset-only handles can silently alias newly allocated geometry after fragmentation/reuse, creating corruption that is difficult to diagnose. CPU frame progression also does not prove the GPU has finished with a span.  
+**Effect:** Arena access validates `(slot,generation,state)` before producing a buffer slice. Pending-free allocations are unavailable immediately but their spans remain occupied until completion. Retirement metadata is preallocated and steady-state retirement performs no temporary heap allocation. Future scene records should store generation-safe arena handles rather than raw offsets as their authoritative ownership token.
