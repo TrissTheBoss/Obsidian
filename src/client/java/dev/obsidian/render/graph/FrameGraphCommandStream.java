@@ -127,9 +127,9 @@ public final class FrameGraphCommandStream {
      * evidence-justified backend interop seam.
      *
      * <p>Minecraft 26.2 exposes no public compute pipeline/dispatch/storage-buffer
-     * API, so dev8 needs to insert one Vulkan compute command buffer into this
-     * same owned submission. Callers must not submit, end, replace, or retain the
-     * encoder and must return control before the next graph operation.</p>
+     * API, so Obsidian may insert narrowly scoped Vulkan compute command buffers
+     * into this same owned submission. Callers must not submit, end, replace, or
+     * retain the encoder and must return control before the next graph operation.</p>
      */
     public CommandEncoder backendInteropEncoder() {
         RenderSystem.assertOnRenderThread();
