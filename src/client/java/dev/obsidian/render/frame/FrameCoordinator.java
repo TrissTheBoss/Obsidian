@@ -2,7 +2,7 @@ package dev.obsidian.render.frame;
 
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
-import dev.obsidian.render.draw.ComputeIndirectDrawProbe;
+import dev.obsidian.render.draw.VisibilityCompactionProbe;
 import dev.obsidian.render.memory.DeviceGeometryArena;
 import dev.obsidian.render.resource.DeferredReleaseQueue;
 import dev.obsidian.render.upload.StagingUploadArena;
@@ -18,7 +18,7 @@ public final class FrameCoordinator implements AutoCloseable {
     private final DeferredReleaseQueue deferredReleases = new DeferredReleaseQueue();
     private final StagingUploadArena stagingUploads;
     private final DeviceGeometryArena deviceArena;
-    private final ComputeIndirectDrawProbe computeIndirectProbe;
+    private final VisibilityCompactionProbe visibilityProbe;
 
     private FrameContext activeFrame;
     private long frameIndex;
@@ -28,7 +28,7 @@ public final class FrameCoordinator implements AutoCloseable {
     public FrameCoordinator(GpuDevice device) {
         StagingUploadArena staging = null;
         DeviceGeometryArena arena = null;
-        ComputeIndirectDrawProbe probe = null;
+        VisibilityCompactionProbe probe = null;
         try {
             staging = new StagingUploadArena(
                     device,
@@ -38,7 +38,7 @@ public final class FrameCoordinator implements AutoCloseable {
                     device,
                     () -> "Obsidian Phase 1 device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
-            probe = new ComputeIndirectDrawProbe(device, staging, arena);
+            probe = new VisibilityCompactionProbe(device, staging, arena);
         } catch (RuntimeException e) {
             if (probe != null) {
                 try {
@@ -62,11 +62,11 @@ public final class FrameCoordinator implements AutoCloseable {
                 }
             }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 1 compute-indirect initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 1 visibility-compaction initialization failed; Minecraft will continue for diagnosis.", e);
         }
         stagingUploads = staging;
         deviceArena = arena;
-        computeIndirectProbe = probe;
+        visibilityProbe = probe;
     }
 
     public void beginFrame() {
@@ -81,16 +81,16 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 1 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, stagingCapacity={2}, deviceArenaCapacity={3}, graphPasses={4}; dev8 uses native compute only for GPU indirect generation, graphics remain public Blaze3D, GPU safety/reuse are completion-gated, profiler-only submissions are forbidden.",
+                    "Phase 1 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, stagingCapacity={2}, deviceArenaCapacity={3}, graphPasses={4}; dev9 uses GPU scene visibility + command compaction, native compute only, public fixed-count Blaze3D indirect graphics with zeroed tail slots, GPU safety/reuse are completion-gated, profiler-only submissions are forbidden.",
                     frameContexts.size(),
                     cpuFrameTimings.capacity(),
                     stagingUploads == null ? 0 : stagingUploads.capacityBytes(),
                     deviceArena == null ? 0L : deviceArena.capacityBytes(),
-                    computeIndirectProbe == null ? 0 : computeIndirectProbe.graph().passCount());
+                    visibilityProbe == null ? 0 : visibilityProbe.graph().passCount());
         }
 
-        if (computeIndirectProbe != null) {
-            computeIndirectProbe.submit(frameIndex);
+        if (visibilityProbe != null) {
+            visibilityProbe.submit(frameIndex);
         }
     }
 
@@ -116,8 +116,8 @@ public final class FrameCoordinator implements AutoCloseable {
         if (deviceArena != null) {
             deviceArena.pollRetirements();
         }
-        if (computeIndirectProbe != null) {
-            computeIndirectProbe.poll(frameIndex);
+        if (visibilityProbe != null) {
+            visibilityProbe.poll(frameIndex);
         }
     }
 
@@ -145,8 +145,8 @@ public final class FrameCoordinator implements AutoCloseable {
         return deviceArena == null ? 0 : deviceArena.pendingRetirementBatches();
     }
 
-    public ComputeIndirectDrawProbe.State computeIndirectProbeState() {
-        return computeIndirectProbe == null ? ComputeIndirectDrawProbe.State.FAILED : computeIndirectProbe.state();
+    public VisibilityCompactionProbe.State visibilityProbeState() {
+        return visibilityProbe == null ? VisibilityCompactionProbe.State.FAILED : visibilityProbe.state();
     }
 
     @Override
@@ -157,14 +157,14 @@ public final class FrameCoordinator implements AutoCloseable {
         }
         closed = true;
 
-        ComputeIndirectDrawProbe.State drawStateBeforeClose =
-                computeIndirectProbe == null ? ComputeIndirectDrawProbe.State.FAILED : computeIndirectProbe.state();
+        VisibilityCompactionProbe.State visibilityStateBeforeClose =
+                visibilityProbe == null ? VisibilityCompactionProbe.State.FAILED : visibilityProbe.state();
 
         if (stagingUploads != null) {
             stagingUploads.close();
         }
-        if (computeIndirectProbe != null) {
-            computeIndirectProbe.close();
+        if (visibilityProbe != null) {
+            visibilityProbe.close();
         }
         if (deviceArena != null) {
             deviceArena.close();
@@ -172,18 +172,19 @@ public final class FrameCoordinator implements AutoCloseable {
         deferredReleases.close();
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 1 frame coordinator closed after {0} frame(s): computeIndirectResult={1}, graphPasses={2}, usefulSubmissions={3}, profilerOnlySubmissions=0, computeDispatches={4}, indirectCalls={5}, indirectCommands={6}, triangles={7}, nativeComputeSeam=true, nativeGraphicsSeam=false, pipelineValid={8}, queryPolls={9}, unavailableQueryPolls={10}, stagingSubmittedBytes={11}, stagingReclaimedBytes={12}, stagingHighWater={13}, stagingBackpressureEvents={14}, pendingUploadBatches={15}, arenaUsedBytes={16}, arenaHighWater={17}, arenaAllocations={18}, arenaAllocationFailures={19}, arenaRetired={20}, arenaReclaimed={21}, arenaRetirementBackpressureEvents={22}, arenaStaleHandleRejections={23}, arenaFreeSpans={24}, arenaLargestFree={25}, arenaFragmentationPermille={26}, pendingArenaRetirementBatches={27}, retiredResources={28}, releasedResources={29}, pendingRetirements={30}.",
+                "Phase 1 frame coordinator closed after {0} frame(s): visibilityResult={1}, graphPasses={2}, usefulSubmissions={3}, profilerOnlySubmissions=0, computeDispatches={4}, candidates=4, visibleCount={5}, culledCount={6}, indirectCalls={7}, publicIndirectSlots={8}, nativeComputeSeam=true, nativeGraphicsSeam=false, indirectCountConsumed=false, pipelineValid={9}, queryPolls={10}, unavailableQueryPolls={11}, stagingSubmittedBytes={12}, stagingReclaimedBytes={13}, stagingHighWater={14}, stagingBackpressureEvents={15}, pendingUploadBatches={16}, arenaUsedBytes={17}, arenaHighWater={18}, arenaAllocations={19}, arenaAllocationFailures={20}, arenaRetired={21}, arenaReclaimed={22}, arenaRetirementBackpressureEvents={23}, arenaStaleHandleRejections={24}, arenaFreeSpans={25}, arenaLargestFree={26}, arenaFragmentationPermille={27}, pendingArenaRetirementBatches={28}, retiredResources={29}, releasedResources={30}, pendingRetirements={31}.",
                 frameIndex,
-                drawStateBeforeClose,
-                computeIndirectProbe == null ? 0 : computeIndirectProbe.graph().passCount(),
-                computeIndirectProbe == null ? 0L : computeIndirectProbe.stream().submissionCount(),
-                computeIndirectProbe == null ? 0L : computeIndirectProbe.computeDispatches(),
-                computeIndirectProbe == null ? 0L : computeIndirectProbe.indirectCalls(),
-                computeIndirectProbe == null ? 0L : computeIndirectProbe.indirectCommandsExecuted(),
-                computeIndirectProbe == null ? 0L : computeIndirectProbe.triangles(),
-                computeIndirectProbe != null && computeIndirectProbe.pipelineValid(),
-                computeIndirectProbe == null ? 0L : computeIndirectProbe.profiler().pollCount(),
-                computeIndirectProbe == null ? 0L : computeIndirectProbe.profiler().unavailablePolls(),
+                visibilityStateBeforeClose,
+                visibilityProbe == null ? 0 : visibilityProbe.graph().passCount(),
+                visibilityProbe == null ? 0L : visibilityProbe.stream().submissionCount(),
+                visibilityProbe == null ? 0L : visibilityProbe.computeDispatches(),
+                visibilityProbe == null ? 0 : visibilityProbe.visibleCount(),
+                visibilityProbe == null ? 0 : visibilityProbe.culledCount(),
+                visibilityProbe == null ? 0L : visibilityProbe.indirectCalls(),
+                visibilityProbe == null ? 0L : visibilityProbe.publicIndirectSlots(),
+                visibilityProbe != null && visibilityProbe.pipelineValid(),
+                visibilityProbe == null ? 0L : visibilityProbe.profiler().pollCount(),
+                visibilityProbe == null ? 0L : visibilityProbe.profiler().unavailablePolls(),
                 stagingUploads == null ? 0L : stagingUploads.submittedBytes(),
                 stagingUploads == null ? 0L : stagingUploads.reclaimedBytes(),
                 stagingUploads == null ? 0L : stagingUploads.highWaterBytes(),
