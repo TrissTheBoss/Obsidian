@@ -127,16 +127,23 @@ This file records durable decisions. Do not delete old decisions when they chang
 **Why:** Exact 26.2 bytecode inspection showed `MappableRingBuffer.currentBuffer()` waits with `GpuFence.awaitCompletion(Long.MAX_VALUE)` when a rotated slot is still busy. That correctness strategy can turn upload-ring reuse into an effectively unbounded render-thread stall, directly conflicting with Obsidian's tail-latency priorities.  
 **Effect:** Obsidian owns a fixed-capacity persistently mapped staging ring with explicit nonblocking fence polling and backpressure. When safe space is unavailable, upload work is deferred rather than waiting indefinitely. Mojang's low-level device/buffer API remains the backend boundary.
 
-## D-0019 - Geometry arenas are non-mapped and device-preferred
+## D-0019 - Geometry arenas use non-mapped device-preferred backing buffers
 
 **Status:** ACTIVE  
-**Decision:** Normal Obsidian geometry storage uses non-mapped Minecraft `GpuBuffer` objects with copy-destination/source and geometry usage flags. Host mapping is kept in the staging/readback paths, not on the long-lived geometry arena.  
-**Why:** Exact Minecraft 26.2 Vulkan bytecode inspection shows `VulkanGpuBuffer.Direct` begins with VMA's automatic device-preferred allocation policy and adds host-visible/coherent constraints only when mapping usage is requested; MAP_READ/client-storage paths are explicitly host-preferred. This lets Obsidian keep geometry on the backend's device-preferred path while preserving the Minecraft-owned device boundary.  
-**Effect:** CPU writes go through `StagingUploadArena`; geometry arenas do not expose persistent CPU mappings. Use the wording `device-preferred` in portable code/docs because unified-memory devices may legitimately choose a shared heap even though discrete GPUs normally select device-local memory.
+**Decision:** Obsidian geometry arenas use non-mapped `GpuBuffer` backing storage and receive data through the staging system.  
+**Why:** Exact Minecraft 26.2 `VulkanGpuBuffer.Direct` inspection showed VMA starts from an automatic device-preferred policy and adds host-visible/coherent requirements only for map usages. Avoiding mapping flags therefore preserves the backend's device-preferred path while keeping CPU writes in the bounded staging subsystem.  
+**Effect:** Portable documentation says device-preferred rather than guaranteeing literal discrete VRAM. Geometry/metadata arenas should not be host-mapped by default.
 
-## D-0020 - Arena allocation identity is generation-safe and reuse is completion-gated
+## D-0020 - Arena allocation identity is slot plus generation, never raw offset
 
 **Status:** ACTIVE  
-**Decision:** Device-arena allocations are referenced by handles containing both a metadata slot and generation. A freed offset or slot may be reused only after the last-use completion fence has completed; reuse advances the slot generation so stale handles are rejected.  
-**Why:** Offset-only handles can silently alias newly allocated geometry after fragmentation/reuse, creating corruption that is difficult to diagnose. CPU frame progression also does not prove the GPU has finished with a span.  
-**Effect:** Arena access validates `(slot,generation,state)` before producing a buffer slice. Pending-free allocations are unavailable immediately but their spans remain occupied until completion. Retirement metadata is preallocated and steady-state retirement performs no temporary heap allocation. Future scene records should store generation-safe arena handles rather than raw offsets as their authoritative ownership token.
+**Decision:** GPU arena allocations are referenced through stable handles containing slot/generation identity and state validation. Raw byte offsets are data locations, not ownership tokens.  
+**Why:** Dev4 deliberately freed B, reused the exact same physical offset and metadata slot for D, advanced the generation, and successfully rejected the old B handle. Without generation validation, stale scene metadata could silently reference another chunk's geometry after reuse.  
+**Effect:** All future scene/database references to arena allocations must retain generation-safe handles or an equivalent validated identity mechanism.
+
+## D-0021 - Frame graph profiling timestamps live inside owned command streams
+
+**Status:** ACTIVE  
+**Decision:** Starting with Phase 1 dev5, GPU timestamp ranges for normal profiling must be encoded around work inside Obsidian-owned command streams/submissions. The frame graph may expose timestamped pass ranges, but it must not create extra submissions solely to obtain profiler samples.  
+**Why:** Dev1 established timestamp capability, while dev3/dev4 established real owned upload/copy submissions. Obsidian now has a natural place to measure GPU work without contaminating frame pacing with profiler-only queue submissions.  
+**Effect:** Dev5 should introduce fixed-capacity graph/pass metadata, submission-count metrics, nonblocking timestamp result polling, and a validation graph whose profiling is part of the same command stream that performs useful copy/validation work.
