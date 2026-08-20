@@ -3,6 +3,8 @@ name: Inspect Phase 2 Dev3 APIs
 on:
   push:
     branches: [phase2/material-texture-identity-inspect]
+  pull_request:
+    branches: [main]
 
 jobs:
   inspect:
