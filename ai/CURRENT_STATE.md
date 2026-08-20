@@ -11,7 +11,7 @@ Last updated: 2026-08-20
 - Active development branch: `phase1/compute-indirect`
 - Active draft PR: #10, `Phase 1: compute-generated indexed-indirect commands`
 - Current development version: `0.1.0-phase1-dev8`
-- Dev8 status: **runtime validated on the reference RX 6800 XT; pending final exact-head CI and merge with `[no-release]`**
+- Dev8 status: **runtime validated on the reference RX 6800 XT; exact runtime-evidence head `f761ee70f7e8c5e5ce4ccf661357058d71cd6266` pending final CI + merge with `[no-release]`**
 
 ## Reference runtime
 
