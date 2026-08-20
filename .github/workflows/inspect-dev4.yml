@@ -20,7 +20,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.5.1'
-      - name: Inspect exact dev4 lighting AO contracts
+      - name: Inspect exact final dev4 contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -40,32 +40,19 @@ jobs:
           CP="$(cat /tmp/cp)"
           mkdir -p inspection
           cat > inspection/target-classes.txt <<'EOF'
-          net.minecraft.client.renderer.block.ModelBlockRenderer
-          net.minecraft.client.renderer.block.BlockModelLighter
-          net.minecraft.client.renderer.block.BlockModelLighter$Cache
-          net.minecraft.client.renderer.block.BlockModelLighter$AdjacencyInfo
-          net.minecraft.client.renderer.block.BlockModelLighter$AmbientVertexRemap
+          net.minecraft.world.level.BlockAndLightGetter
+          net.minecraft.world.level.BlockGetter
+          net.minecraft.client.multiplayer.ClientLevel
           net.minecraft.client.renderer.block.BlockAndTintGetter
-          net.minecraft.client.renderer.chunk.SectionCompiler
-          net.minecraft.client.renderer.chunk.ChunkSectionLayer
-          net.minecraft.client.renderer.chunk.RenderSectionRegion
+          net.minecraft.client.renderer.chunk.ChunkSectionsToRender
+          net.minecraft.client.renderer.chunk.ChunkSectionLayerGroup
           net.minecraft.client.renderer.LevelRenderer
-          net.minecraft.client.renderer.Lightmap
           net.minecraft.client.renderer.GameRenderer
-          net.minecraft.client.renderer.RenderPipelines
-          net.minecraft.client.renderer.BindGroupLayouts
-          net.minecraft.client.resources.model.geometry.BakedQuad
-          net.minecraft.client.resources.model.geometry.BakedQuad$MaterialInfo
-          net.minecraft.world.level.LightLayer
-          net.minecraft.world.level.CardinalLighting
-          net.minecraft.world.level.block.state.BlockState
-          net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase
-          net.minecraft.util.LightCoordsUtil
-          com.mojang.blaze3d.vertex.DefaultVertexFormat
-          com.mojang.blaze3d.vertex.VertexConsumer
-          com.mojang.blaze3d.vertex.QuadInstance
-          com.mojang.blaze3d.systems.RenderPass
-          com.mojang.blaze3d.systems.RenderSystem
+          net.minecraft.client.renderer.Lightmap
+          com.mojang.blaze3d.systems.SamplerCache
+          com.mojang.blaze3d.textures.GpuSampler
+          com.mojang.blaze3d.textures.AddressMode
+          com.mojang.blaze3d.textures.FilterMode
           EOF
           : > inspection/public-api.txt
           : > inspection/bytecode.txt
@@ -77,11 +64,9 @@ jobs:
             javap -classpath "$CP" -c -p "$CLASS" >> inspection/bytecode.txt 2>&1 || true
             echo >> inspection/bytecode.txt
           done < inspection/target-classes.txt
-
-          grep -n -E 'getLightCoords|blend|smoothBlend|smoothWeightedBlend|block\(|sky\(|pack\(|setLightCoords|setColor|prepareQuadAmbientOcclusion|prepareQuadFlat|getShadeBrightness|cardinalLighting|byFace|lightEmission|Sampler2|Lightmap|getTextureView|bindTexture|SOLID_BLOCK|SOLID_TERRAIN|BLOCK|UV2|MATRICES_PROJECTION|FOG|SAMPLER0_SAMPLER2' inspection/bytecode.txt > inspection/key-grep.txt || true
-          grep -n -E 'BlockModelLighter|BlockAndTintGetter|LightCoordsUtil|QuadInstance|Lightmap|CardinalLighting|GameRenderer|RenderPipelines|BindGroupLayouts|DefaultVertexFormat' inspection/public-api.txt > inspection/public-key-grep.txt || true
+          grep -n -E 'renderGroup|Sampler2|lightmap|levelLightmap|createSampler|chunkLayerSampler|bindTexture|getSampler|getLightEngine|getBlockState|getFluidState|getMinY|getHeight|cardinalLighting|FilterMode|AddressMode' inspection/bytecode.txt > inspection/key-grep.txt || true
       - uses: actions/upload-artifact@v4
         with:
-          name: phase2-dev4-targeted-inspection-${{ github.sha }}
+          name: phase2-dev4-final-inspection-${{ github.sha }}
           if-no-files-found: error
           path: inspection/
