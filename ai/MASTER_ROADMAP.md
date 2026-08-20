@@ -405,19 +405,33 @@ Human visual validation confirmed the orientation-colored Obsidian geometry was 
 
 P2.2 deliberately does not claim P2.3 material/texture/UV/tint semantics or P2.4 light/AO correctness.
 
-#### P2.3 — Correct textures/material identity — PLANNED
+#### P2.3 — Correct textures/material identity — COMPLETE
 
-Goals:
+Validated milestone: `0.2.0-phase2-dev3`.
 
-- atlas/sprite identity for supported model cubes;
-- UV mapping semantics;
-- tint/color path;
-- material/render-layer classification;
-- resource reload invalidation;
-- stable material IDs or tables suitable for async meshes;
-- texture/resource lifetime across reloads.
+Closing merge: `667230f51222746083efe89c72265d80ac9d3929`.
 
-Resource-pack/custom-model support may remain incomplete initially, but failures must be explicit rather than silently rendering incorrect geometry.
+Runtime evidence: `ai/attempts/A-0070-phase2-dev3-runtime-success.md`.
+
+Completed contract:
+
+- exact Minecraft 26.2 `BlockStateModelSet -> BlockStateModel -> BlockStateModelPart -> BakedQuad` grounding;
+- vanilla-seeded model-part selection using `BlockState.getSeed(worldPos)`;
+- exact baked UV decoding and canonical face-corner mapping;
+- block-atlas/sprite/material identity capture;
+- world-context tint capture;
+- explicit material/render-layer classification and unsupported-case rejection counts;
+- deterministic renderer-owned material IDs suitable for immutable post-capture mesh work;
+- model-set/blocks-atlas resource epoch validation before draw;
+- pure `MaterializedSectionMesh` construction with zero live world/model/resource reads after material capture;
+- public textured Blaze3D indexed-indirect comparison with the live blocks atlas bound as `Sampler0`;
+- completion-gated vertex/index/indirect retirement with full reclamation.
+
+Reference RX 6800 XT validation completed all six textured comparison passes. Human validation reported no visible texture, UV orientation/stretch, alignment/drift, or obvious tint issues for the supported subset. Machine evidence also confirmed deterministic reference/material/drawable builds, explicit accepted/rejected face accounting, `worldReadsAfterMaterialCapture=0`, `pipelineValid=true`, `nativeGraphicsSeam=false`, `textured=true`, stable resource epoch checks, zero profiler-only submissions, bounded staging, and full completion-gated reclamation.
+
+The validation overlay briefly retained a stale block after a block break until the next bounded pass recapture; the log proved the following pass incorporated the edit. This is acceptable for the temporary probe but is not a production latency target. Event-driven block/neighbor invalidation and rebuild scheduling remain P2.6 scope.
+
+P2.3 deliberately does not claim P2.4 light/AO correctness, P2.5 broad cutout/non-full/custom-model support, or P2.6 production section-update lifecycle.
 
 #### P2.4 — Lighting and ambient occlusion correctness — PLANNED
 
@@ -457,6 +471,8 @@ Goals:
 - safe replacement of live GPU allocations;
 - multiple rebuilds of the same section;
 - generation/version identity carried end to end.
+
+P2.3 runtime validation observed that the bounded one-shot comparison mesh could remain visible briefly after a block break until the next pass recaptured the section. P2.6 must replace that validation-only behavior with event-driven dirtying/invalidation and rebuild scheduling appropriate for production responsiveness.
 
 #### P2.7 — Multi-section integration — PLANNED
 
@@ -890,8 +906,8 @@ This section is a product-level checklist. Phase sections above describe sequenc
 - [PLANNED] Cutout terrain.
 - [PLANNED] Lighting.
 - [PLANNED] Ambient occlusion.
-- [PLANNED] Tint/biome color.
-- [PLANNED] Resource/material identity.
+- [COMPLETE foundation] Tint/biome color identity for the conservative supported SOLID subset.
+- [COMPLETE foundation] Resource/material/sprite/UV identity for the conservative supported SOLID subset.
 - [PLANNED] Fluids/translucent terrain.
 - [PLANNED] Section rebuild/update/unload lifecycle.
 - [PLANNED] Multi-section persistent scene ownership.
@@ -1355,6 +1371,13 @@ Before handoff, verify:
 
 This is a concise index, **not** the evidence log. Detailed reasoning belongs in attempts/decisions.
 
+### 2026-08-21 — P2.3 Class-A status synchronization
+
+- synchronized P2.3 to COMPLETE after exact Minecraft 26.2 API grounding, implementation/package CI, reference RX 6800 XT runtime validation, human texture/UV/alignment/tint validation, and merge `667230f51222746083efe89c72265d80ac9d3929`;
+- marked conservative supported-subset material/sprite/UV and tint identity foundations complete;
+- preserved the observed validation-overlay block-edit recapture delay as P2.6 lifecycle/rebuild work rather than changing phase ordering;
+- left P2.4 as the next planned milestone without changing later phase ordering, product scope, or durable architecture.
+
 ### 2026-08-21 — P2.2 Class-A status synchronization
 
 - synchronized P2.1 to COMPLETE with its runtime evidence and merge SHA;
@@ -1380,7 +1403,9 @@ Current position at the time of this revision:
 - Phase 2: ACTIVE.
 - P2.1: COMPLETE / `0.2.0-phase2-dev1`.
 - P2.2: COMPLETE / `0.2.0-phase2-dev2`, first drawable real section with human-validated world/camera alignment.
-- Next planned milestone: P2.3, correct texture/material identity for the supported terrain subset.
+- P2.3: COMPLETE / `0.2.0-phase2-dev3`, correct texture/material/UV/tint identity for the conservative supported SOLID subset with human-validated textured alignment.
+- Next planned milestone: P2.4, block/sky lighting and ambient occlusion correctness.
+- P2.6 retains event-driven block/neighbor invalidation and rebuild scheduling; the dev3 validation-overlay recapture delay is not a production target.
 - Phase 3 production binary/bitmask greedy meshing remains planned after Phase 2 establishes correct render semantics.
 
 Always verify the live details in `ai/CURRENT_STATE.md` before acting on this final section because active milestone state changes more frequently than the long-range plan.
