@@ -7,121 +7,157 @@ Last updated: 2026-08-20
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
 - Current public release: `v0.0.2-phase0`
-- Validated Phase 1 foundation merge: `5fffaae19f47b78393cc79aa7c11884ff1b54694`
 - Active development branch: `phase1/resource-lifetime`
 - Active draft PR: #4, `Phase 1: frame contexts and resource lifetime`
-- Current development version: `0.1.0-phase1-dev2`
+- Current Phase 1 development version: `0.1.0-phase1-dev2`
 
-## Phase 0 - COMPLETE
+## Phase status
 
-Phase 0 is compile- and runtime-validated on Windows 11 / AMD Radeon RX 6800 XT with Minecraft 26.2 Vulkan, Fabric Loader 0.19.3, Fabric API 0.158.0+26.2, and Java 25.0.1.
+### Phase 0 - COMPLETE and runtime validated
 
-## Phase 1 dev1 - VALIDATED AND MERGED
+Phase 0 is complete on the reference Windows 11 / Radeon RX 6800 XT machine.
 
-`0.1.0-phase1-dev1` proved the first controlled Obsidian GPU command path through Minecraft's real Vulkan device:
+Validated runtime stack:
 
-`Minecraft.renderFrame -> FrameCoordinator -> GpuDevice -> CommandEncoder -> Vulkan GPU execution -> nonblocking timestamp result`
+- Prism Launcher 10.0.5
+- Minecraft 26.2
+- Fabric Loader 0.19.3
+- Fabric API 0.158.0+26.2
+- Java 25.0.1
+- AMD Radeon RX 6800 XT, discrete GPU
+- Minecraft Vulkan backend
+- AMD driver string `1.4.315 AMD proprietary driver 26.7.1 (AMD proprietary shader compiler)`
 
-Real RX 6800 XT validation succeeded: one probe submission on frame 1, timestamp completion observed without an explicit blocking wait, world entry succeeded, coordinator remained active for 2107 frames, and Minecraft exited with code 0.
+Obsidian attached to Minecraft's Vulkan `GpuDevice`, captured device/capability metadata, reached the title screen and a single-player world, and shut down with exit code 0.
 
-PR #3 was squash-merged to `main` as `5fffaae19f47b78393cc79aa7c11884ff1b54694` using `[no-release]`; dev1 remains a development milestone rather than a public release.
+## Phase 1 - ACTIVE
 
-Durable constraints established by dev1:
+### Milestone 1: frame/GPU foundation - VALIDATED and merged
 
-- keep Minecraft's existing Vulkan device/swapchain ownership until a concrete requirement proves deeper takeover is necessary;
-- do not create routine profiler-only GPU submissions;
-- frame-critical paths should remain allocation-free or explicitly justified.
+Validated in `0.1.0-phase1-dev1` on the real Windows 11 / RX 6800 XT machine:
 
-## Phase 1 dev2 - COMPILE VALIDATED, RUNTIME TEST PENDING
+- `Minecraft.renderFrame(boolean)` lifecycle hook works at runtime.
+- fixed-allocation CPU frame timing ring runs continuously.
+- Obsidian can create a `CommandEncoder` through Minecraft's active Vulkan `GpuDevice`.
+- a one-shot timestamp command submission completed successfully without an explicit blocking wait.
+- no competing Vulkan device or swapchain is created.
+- world entry and clean shutdown succeeded.
 
-Goal: prove safe GPU resource lifetime management before terrain owns any GPU memory.
+This milestone was merged through PR #3.
 
-### Exact Minecraft 26.2 API findings
+### Milestone 2: frame contexts and GPU resource lifetime - VALIDATED
 
-A temporary GitHub Actions `javap` probe inspected the exact Loom-resolved client JAR and was removed afterward.
+Development version: `0.1.0-phase1-dev2`.
 
-Confirmed relevant APIs:
-
-- `GpuDevice.createBuffer(Supplier<String>, int usage, long size)`
-- `GpuBuffer.USAGE_COPY_DST`
-- `GpuBuffer.slice(...)`
-- `GpuBuffer.isClosed()` / `GpuBuffer.close()`
-- `CommandEncoder.writeToBuffer(...)`
-- `CommandEncoder.createFence()`
-- `CommandEncoder.submit()`
-- `GpuFence.awaitCompletion(long timeoutNanos)` / `GpuFence.close()`
-
-Routine retirement polling uses `GpuFence.awaitCompletion(0L)`, so Obsidian does not intentionally wait for the GPU during normal frames.
-
-### Implemented dev2 infrastructure
-
-- `FrameContext`
-  - preallocated per-slot CPU frame metadata;
-  - monotonically increasing frame serial;
-  - explicitly not a GPU-completion signal.
+Implemented:
 
 - `FrameContextRing`
-  - three preallocated rotating slots by default;
-  - no per-frame allocation;
-  - slot rotation never implies a resource is safe to reuse/destroy.
+  - three preallocated frame slots;
+  - monotonically increasing serials;
+  - zero per-frame allocation from the ring itself;
+  - frame rotation is bookkeeping only and never treated as proof of GPU completion.
 
 - `DeferredReleaseQueue`
-  - fence-gated FIFO retirement queue for one ordered submission domain;
-  - initial capacity 64, only grows when exhausted;
-  - steady-state polling uses zero-timeout fence checks;
-  - closes a resource and its fence only after completion;
-  - bounded 2-second shutdown cleanup; if completion cannot be established, it refuses unsafe destruction and leaves the resource for Minecraft device shutdown.
+  - owns resources waiting for GPU-safe destruction;
+  - normal-frame polling uses `GpuFence.awaitCompletion(0L)` only;
+  - resources remain alive while the fence is incomplete;
+  - retirement/release counters are retained for diagnostics;
+  - shutdown uses a bounded completion budget and does not intentionally destroy still-in-flight resources.
 
 - `GpuResourceLifetimeProbe`
-  - one-shot, non-visual validation;
-  - creates a 64-byte `USAGE_COPY_DST` GPU buffer;
-  - writes a small payload through one command encoder;
-  - creates a fence, submits once, and immediately retires the buffer to `DeferredReleaseQueue`;
-  - expects the queue to close the buffer only after the fence signals;
-  - keeps the upload `ByteBuffer` alive until release to avoid CPU-source-lifetime ambiguity.
+  - one-shot validation only;
+  - allocates a 64-byte Obsidian-owned GPU buffer;
+  - writes data and records a real fence through Minecraft 26.2's command encoder;
+  - submits once;
+  - immediately retires the buffer into `DeferredReleaseQueue`;
+  - destroys it only after the fence reports completion.
 
-- `FrameCoordinator`
-  - now rotates frame contexts;
-  - polls deferred retirement at frame end;
-  - reports retired/released/pending resource counts at shutdown.
+Exact Minecraft 26.2 API inspection confirmed:
 
-The validated dev1 timestamp probe was removed; dev2 replaces it with the resource-lifetime validation probe.
+- `CommandEncoder.createFence()`.
+- `GpuFence.awaitCompletion(long timeoutNanos)` and `close()`.
+- `GpuBuffer.close()` / `isClosed()`.
+- normal steady-state retirement can therefore poll fences with timeout `0L` rather than waiting.
 
-### Build evidence
+### dev2 real-machine runtime result
 
-Draft PR #4 is based on `main` merge `5fffaae19f47b78393cc79aa7c11884ff1b54694`.
+Real test on 2026-08-20 succeeded using Windows 11 / RX 6800 XT / Minecraft 26.2 Vulkan.
 
-Exact resource API inspection workflow run `32363250144` completed successfully. The temporary inspection workflow was removed from the development branch.
+Observed sequence:
 
-Dev2 code head `4487cdf67d49c0224673119cadbd8ac99078c613` passed GitHub Actions workflow run `32363597789` on Java 25 / Gradle 9.5.1, including artifact upload. The release job was intentionally skipped.
+1. Fabric loaded `obsidian 0.1.0-phase1-dev2`.
+2. Minecraft selected Vulkan on the RX 6800 XT.
+3. Obsidian attached successfully and armed the resource-lifetime foundation.
+4. `FrameCoordinator` reported `contextSlots=3` and explicitly logged that GPU safety is fence-gated.
+5. The 64-byte resource-lifetime probe submitted and retired its buffer on frame 1 with `pendingRetirements=1`.
+6. A later zero-timeout fence poll in the same frame iteration reported completion; the buffer was released safely.
+7. The player entered a single-player world and normal chunk/resource loading continued.
+8. Shutdown after 1647 frames reported `retiredResources=1, releasedResources=1, pending=0`.
+9. Process exit code was 0.
 
-## Dev2 runtime validation still required
+Important interpretation: `released on frame 1 after 0 frame(s)` does not mean Obsidian blocked. The release path uses a zero-timeout fence poll; the submitted work simply completed before the later poll during the same frame iteration.
 
-Before PR #4 may be merged, test `Obsidian-0.1.0-phase1-dev2` on the reference Vulkan machine and confirm:
+This proves the resource-lifetime boundary:
 
-1. correct dev2 version loads;
-2. Minecraft uses Vulkan on the RX 6800 XT;
-3. frame coordinator reports three context slots and fence-gated GPU safety;
-4. resource lifetime probe submits/retires exactly once;
-5. the deferred queue later releases the resource after fence completion;
-6. a world can be entered normally;
-7. shutdown reports `retiredResources=1`, `releasedResources=1`, `pending=0`;
-8. process exits with code 0 and no rendering anomaly is observed.
+`Obsidian resource -> Minecraft GpuDevice submission -> real GpuFence -> DeferredReleaseQueue -> destruction only after completion`
 
-Failure evidence to preserve includes probe failure, never-released retirement, nonzero pending count at normal shutdown, validation errors, or a crash.
-
-## Architecture boundary
+## Architecture boundary now proven
 
 Current proven boundary:
 
-`Minecraft 26.2 Vulkan device -> Obsidian RendererBridge -> FrameCoordinator -> controlled GPU submission`
+`Minecraft 26.2 Vulkan device -> Obsidian RendererBridge -> FrameCoordinator -> frame-context bookkeeping -> controlled GPU submission -> fence-gated resource retirement`
 
-Dev2 is testing the next boundary:
+Obsidian still does not:
 
-`controlled GPU submission -> explicit fence completion -> safe deferred resource destruction`
+- create a second Vulkan device or swapchain;
+- own terrain rendering;
+- infer GPU completion from frame count;
+- perform routine device-wide waits;
+- allocate or upload terrain geometry.
 
-Obsidian still does not create a second Vulkan device/swapchain or replace terrain rendering.
+## Next Phase 1 milestone
 
-## Next after dev2 validation
+Build bounded staging/upload ownership before terrain uses the system.
 
-After real runtime validation and merge, continue Phase 1 with bounded staging/upload infrastructure and off-hot-path profiler snapshots/percentiles. Do not move terrain ownership onto Obsidian until resource lifetime and upload synchronization are proven.
+Required pieces:
+
+1. Inspect the exact Minecraft 26.2 buffer mapping/copy interfaces used for host-visible upload and device-local copy destinations.
+2. Implement a fixed-capacity staging ring or equivalent bounded staging arena.
+3. Suballocate aligned upload slices without per-upload heap churn on the hot path.
+4. Batch copy commands into owned submissions rather than issuing many tiny submissions.
+5. Reclaim staging space only when the submission fence/completion primitive is safe.
+6. Apply backpressure when the ring is full instead of allocating unbounded temporary buffers.
+7. Keep shutdown bounded and safe.
+8. Add counters for bytes staged, bytes submitted, high-water usage, stalls/backpressure events, and reclaimed bytes.
+9. Validate with a small non-visual upload/copy workload on the RX 6800 XT before terrain data enters the path.
+
+Target success criterion:
+
+- write deterministic bytes into bounded host-visible staging storage;
+- copy them into an Obsidian-owned GPU destination through Minecraft's active Vulkan device;
+- submit in a controlled batch;
+- fence the submission;
+- reclaim the staging region only after completion;
+- retire the destination safely;
+- enter a world and shut down with no pending resources or staging allocations.
+
+## Reference hardware and priorities
+
+Primary reference system:
+
+- Windows 11
+- AMD Radeon RX 6800 XT, 16 GB VRAM
+- AMD Ryzen 5 5600X
+- 16 GB DDR4-2666
+
+Priority order remains:
+
+1. 1% / 0.1% lows and frame pacing
+2. smooth chunk loading/streaming
+3. very large render-distance scaling
+4. average FPS
+5. sensible RAM/VRAM use
+
+## Immediate handoff instruction
+
+PR #4 is runtime validated and can be merged after the successful dev2 test is recorded in the append-only attempt history. Continue Phase 1 on a fresh branch with bounded staging/upload infrastructure. Do not begin terrain replacement until staging ownership, copy batching, and fence-gated reclamation have passed the same real-machine validation loop.
