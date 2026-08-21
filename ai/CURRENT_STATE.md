@@ -23,11 +23,11 @@ Last updated: 2026-08-21
 - P2.6 draft PR: #25
 - P2.6 version: `0.2.0-phase2-dev6`
 - P2.6 status: **corrected event bridge runtime-proven for edits/resource reload with zero drops; required tracked-neighborhood chunk unload/load coverage still not exercised; unmerged**
-- Forward stacked work: **P2.7 - multi-section integration implemented as a stacked candidate, not merge-eligible before P2.6 closure**
+- Forward stacked milestone: **P2.7 - multi-section integration runtime + human visual validated, but blocked from merge by P2.6 and explicit dev7 merge authorization**
 - P2.7 stacked branch: `phase2/multi-section-scene`
 - P2.7 stacked draft PR: #27 (base `phase2/section-lifecycle-rebuild`)
-- P2.7 temporary exact-CI PR: #28 (base `main`, never merge; use only to trigger exact CI)
-- Current development version on stacked branch: `0.2.0-phase2-dev7`
+- P2.7 version: `0.2.0-phase2-dev7`
+- Latest runtime + human visual validated development version: `0.2.0-phase2-dev7`
 - Last fully runtime-validated and merged development version: `0.2.0-phase2-dev5`
 
 ## Continuity model
@@ -108,26 +108,27 @@ The run did **not** exercise the required tracked-neighborhood unload/return pat
 
 P2.6 remains unmerged. The user's standing dev6 merge authorization remains conditional on a corrected-package run that actually produces nonzero tracked-neighborhood chunk unload/load counters and `lifecycleGateReady=true`.
 
-## P2.7 / dev7 - stacked multi-section implementation candidate
+## P2.7 / dev7 - runtime + human visual validated, stacked and unmerged
 
 Evidence:
 
 - architecture: `ai/attempts/A-0085-phase2-dev7-multi-section-scene-plan.md`;
 - initial implementation/package: `ai/attempts/A-0086-phase2-dev7-implementation-and-package.md`;
 - validation-gate refinement: `ai/attempts/A-0087-phase2-dev7-runtime-gate-refinement.md`;
-- refined exact package: `ai/attempts/A-0088-phase2-dev7-refined-package.md`.
+- refined exact package: `ai/attempts/A-0088-phase2-dev7-refined-package.md`;
+- reference runtime success: `ai/attempts/A-0089-phase2-dev7-runtime-success.md`.
 
-P2.7 is intentionally developed on top of the corrected dev6 head while P2.6 awaits its final runtime coverage. It must not merge ahead of P2.6.
+P2.7 was intentionally developed on top of the corrected dev6 head while P2.6 awaits its final fixed-target chunk-lifecycle coverage. It must not merge ahead of P2.6.
 
-### Candidate scene architecture
+### Validated scene architecture
 
-`RealMultiSectionSceneProbe` introduces a fixed renderer-owned 3x3 horizontal scene table:
+`RealMultiSectionSceneProbe` owns a fixed renderer-side 3x3 horizontal scene table:
 
 - maximum 9 section records at one selected section Y;
-- center selected from the existing useful near-player snapshot path;
+- center selected from the useful near-player snapshot path;
 - neighboring records use X/Z offsets `-1..+1`;
-- each eligible record reuses the proven P2.6 `RealSectionLifecycleProbe` for exact immutable capture, generalized SOLID/CUTOUT mesh semantics, bounded upload, public indexed-indirect draw and completion-gated retirement;
-- at least 3 simultaneous LIVE records and 2 horizontally adjacent pairs are required for the validation scene to become READY;
+- each eligible record reuses the P2.6 `RealSectionLifecycleProbe` for exact immutable capture, generalized SOLID/CUTOUT mesh semantics, bounded upload, public indexed-indirect draw and completion-gated retirement;
+- at least 3 simultaneous LIVE records and 2 horizontally adjacent pairs are required for READY;
 - scene recenters when the player exits the current +/-1-section X/Z window.
 
 ### Multi-section validity domain
@@ -153,59 +154,67 @@ All current records share one scene generation/event-sequence domain. P2.7 delib
 
 Whole-window invalidation is a correctness-first P2.7 boundary, not the intended production scheduling policy. Phase 3 still owns per-section async scheduling, worker pools, cancellation/versioning, reusable worker-local scratch and binary/bitmask greedy meshing.
 
-### Exact refined compile/package evidence
+### Exact compile/package evidence
 
-A-0086 first established the multi-section implementation and packaged bytecode. A-0087 then refined the runtime gate so scene recenter is mandatory and chunk lifecycle counters are diagnostic for P2.7 rather than a duplicate P2.6 closure requirement.
-
-Refined head `4adcfaacd6af7d63c07fa3be90a2997c74f41801` passed exact Java 25 / Gradle 9.5.1 run `32502112980`, artifact `9453894478`:
+Final pre-runtime frozen head `ad44432d278111fc8b025925b8f49df4b7071531` passed exact Java 25 / Gradle 9.5.1 run `32502272101`, artifact `9453954988`:
 
 - Java 25 / Gradle 9.5.1: SUCCESS;
 - Build: SUCCESS;
 - artifact upload: SUCCESS;
 - public release: SKIPPED.
 
-Refined package:
+Validated package:
 
 - `Obsidian-0.2.0-phase2-dev7.jar` SHA-256 `59dde49b210b802fdd88e1bbc2da7a9eae9b7be045b9c760ae1adc3827599725`;
 - sources SHA-256 `c1ebbe080fa5262cb77d4a4ff48c805712880100126f05611ed99fa163d76c57`;
 - metadata exactly `obsidian 0.2.0-phase2-dev7`.
 
-Packaged bytecode confirms active `FrameCoordinator -> RealMultiSectionSceneProbe`, scene radius `1`, record capacity `9`, halo radius `2`, no event ring, unchanged public SOLID/CUTOUT indexed-indirect graphics, and refined shutdown marker `chunkLifecycleCountersDiagnostic=true` with `nativeGraphicsSeam=false`.
+Packaged bytecode confirms active `FrameCoordinator -> RealMultiSectionSceneProbe`, scene radius `1`, record capacity `9`, halo radius `2`, no event ring, public SOLID/CUTOUT indexed-indirect graphics, and shutdown marker `chunkLifecycleCountersDiagnostic=true` with `nativeGraphicsSeam=false`.
 
-A-0088 and this `CURRENT_STATE` synchronization are documentation-only changes after the inspected refined behavior package. One final exact-head CI/package equality check is pending before reference handoff.
+### Runtime + human visual success
 
-### Refined dev7 validation gate
+The reference Vulkan/RX 6800 XT run passed the refined P2.7 gate and the user reported the result looked completely fine.
 
-The reference runtime must show:
+Shutdown evidence:
 
-- `sceneReadyTransitions >= 2`;
-- `sceneRebuilds >= 1`;
-- `maxLiveRecords >= 3`;
-- `maxAdjacentPairs >= 2`;
-- `cameraRecenterEvents >= 1`;
-- nonzero exact dirty events;
-- nonzero successful resource-reload events;
+- `sceneGateReady=true`;
+- `hardFailure=false`;
+- `sceneGeneration=30`;
+- `sceneReadyTransitions=16`;
+- `sceneRebuilds=15`;
+- `recordInstalls=144`;
+- `maxLiveRecords=9`;
+- `maxAdjacentPairs=12`;
+- `cameraRecenterEvents=2`;
+- `dirtyEvents=709`, `playerDirtyEvents=342`;
+- `resourceReloadEvents=1`;
 - `droppedLifecycleEvents=0`;
-- zero stale scene/probe installs;
-- bounded staging/arena behavior and complete reclamation;
-- normal exit code `0` and shutdown `sceneGateReady=true`.
+- `staleSceneRejections=0`;
+- `probeStaleInstallRejections=0`;
+- `uploadAdmissionDeferrals=0`;
+- `retirementBackpressureEvents=0`;
+- `retirementRegistrationFailures=0`;
+- staging submitted/reclaimed `11,087,992 / 11,087,992` bytes with zero backpressure and zero pending batches;
+- arena allocations `288`, failures `0`, retired/reclaimed `288 / 288`, used bytes `0`, fragmentation `0`, zero pending retirement batches;
+- deferred resources retired/released `144 / 144`, pending `0`;
+- process exit code `0`.
 
-Chunk load/unload counters remain diagnostics and relevant invalidation signals, but P2.6 separately owns the mandatory fixed-target chunk lifecycle closure gate.
+The run observed `section-dirty|world-change|resource-reload|scene-recenter`. Chunk load/unload counters were `0/0`, which is expected to remain diagnostic only for P2.7 after A-0087. P2.6 separately retains the mandatory fixed-target chunk lifecycle closure requirement.
 
-Human oracle: simultaneous neighboring overlay sections must not show persistent duplicate/missing shared borders during camera motion; no stale old-window geometry may persist after edit/reload/recenter. A temporary whole-window blank interval while rebuilding is acceptable for this correctness milestone.
+Human oracle passed: no persistent duplicate/missing shared borders or stale old-window geometry were reported.
 
 ## Merge authorization
 
 - Dev6: user has standing merge authorization only after its required runtime machine gate passes.
-- Dev7: no merge authorization has yet been granted. Keep PR #27 draft even after compile/package success until its runtime/human gate and an explicit merge authorization are both present.
+- Dev7: runtime + human validation is complete, but **no explicit dev7 merge authorization has been granted**. Keep PR #27 draft and unmerged.
 
 ## Immediate next action
 
-1. Run one final exact-head CI on the documentation-synchronized dev7 head through temporary PR #28.
-2. Confirm final JAR/sources are byte-identical to the A-0088 refined package.
-3. Close PR #28 without merge and deliver the dev7 runtime-test JAR.
-4. Runtime-test simultaneous neighboring records, shared borders, edit rebuild, F3+T rebuild, and at least one camera scene recenter; require `sceneGateReady=true` and full reclamation.
-5. Independently, P2.6 still needs one corrected fixed-target run that actually exercises tracked-neighborhood unload/return before PR #25 can merge under its standing authorization.
+1. Complete P2.6's corrected fixed-target reference run with actual tracked-neighborhood chunk unload **and** reload/return so `lifecycleGateReady=true`.
+2. If P2.6 passes, record immutable success evidence and merge PR #25 under the user's standing authorization, then Class-A synchronize `main`.
+3. Rebase/retarget the already validated dev7 PR #27 from the old dev6 branch onto the synchronized `main`, preserving P2.7 behavior.
+4. Run exact-head CI after the stack is flattened and confirm the dev7 behavior artifact remains equivalent in scope.
+5. Merge dev7 only after explicit user authorization; then Class-A synchronize P2.7 completion before starting the next roadmap milestone.
 
 ## Relevant durable decisions
 
