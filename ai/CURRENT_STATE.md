@@ -16,8 +16,12 @@ Last updated: 2026-08-21
 - Phase 2 P2.4: **COMPLETE / runtime + human visual validated and merged** — closing merge `fa0d40182cd0bc29a526b28a8b2b3b43fc8fc8ba`
 - P2.4 Class-A sync merge: `a6d7d2ff96948910e22b2ab4e3e5212408ef97c2`
 - Phase 2 P2.5: **COMPLETE / runtime + human visual validated and merged** — closing merge `c17f7c6146678e18cacabc44d85c67413a040f73`
+- P2.5 Class-A sync merge: `306d74fdf2428af93feac2ce5e49296d508d9d2d`
 - Current product phase: **Phase 2 - real-section correctness and renderer semantics**
-- Next milestone: **P2.6 - section lifecycle and rebuild correctness**
+- Active milestone: **P2.6 - section lifecycle and rebuild correctness**
+- Active branch: `phase2/section-lifecycle-rebuild`
+- Current development version: `0.2.0-phase2-dev6`
+- P2.6 status: **ACTIVE / exact Minecraft 26.2 lifecycle-event API grounding first**
 - Last runtime-validated development version: `0.2.0-phase2-dev5`
 
 ## Continuity model
@@ -56,50 +60,58 @@ P2.3 established exact baked sprite/UV/material/tint identity for the conservati
 
 P2.4 established exact Minecraft 26.2 block/sky light, directional shade and ambient-occlusion semantics through immutable capture + exact BLOCK/lightmap drawing.
 
-P2.5 established exact broader Minecraft MODEL semantics without weakening the permanent cube oracle. `SectionBakedQuadSnapshot` captures vanilla's finished `ModelBlockRenderer.tesselateBlock(...) -> BlockQuadOutput` results for accepted blocks, including arbitrary/general/multi-quad geometry, block offsets, shape-culling outcome, UVs, final AO/shade/tint colors, packed light, direction and SOLID/CUTOUT material identity. Unsupported/translucent/wrong-atlas blocks are rejected atomically rather than partially rendered. `BakedSectionMesh` deterministically groups immutable captured quads into public SOLID and CUTOUT BLOCK-format indexed-indirect passes.
-
-P2.5 runtime evidence: `ai/attempts/A-0079-phase2-dev5-runtime-success.md`.
+P2.5 established exact generalized vanilla MODEL semantics for the accepted SOLID/CUTOUT domain through `ModelBlockRenderer.tesselateBlock(...) -> BlockQuadOutput`, immutable arbitrary quad capture and deterministic layered BLOCK-format public indexed-indirect drawing. Runtime evidence: `ai/attempts/A-0079-phase2-dev5-runtime-success.md`.
 
 ## P2.5 / dev5 - COMPLETE
 
 Closing merge: `c17f7c6146678e18cacabc44d85c67413a040f73`.
+Class-A sync merge: `306d74fdf2428af93feac2ce5e49296d508d9d2d`.
+Validated version: `0.2.0-phase2-dev5`.
 
-Evidence chain:
+Reference validation completed six sustained SOLID+CUTOUT passes on the RX 6800 XT with deterministic generalized capture/builds, exact public BLOCK/lightmap pipelines, full completion-gated reclamation and process exit 0. The user reported everything looked fine.
 
-- A-0076: P2.5 plan;
-- A-0077: exact Minecraft 26.2 model/cutout API inspection;
-- A-0078: implementation + package/CI evidence;
-- A-0079: reference RX 6800 XT runtime + human visual success.
+## P2.6 / dev6 - ACTIVE
 
-Final validated package: `Obsidian-0.2.0-phase2-dev5.jar`, SHA-256 `68e393636e0ca216c99b3253033f701ac38aad6ba373538430a910cce238d42e`.
+Plan: `ai/attempts/A-0080-phase2-dev6-section-lifecycle-plan.md`.
 
-Reference validation completed six sustained passes with stable section `(64,4,8)`: 626 generalized quads = 321 SOLID + 305 CUTOUT, 2504 vertices, 3756 indices, deterministic duplicate capture/builds, `worldReadsAfterGeneralizedCapture=0`, `cubeOraclePreserved=true`, one-block-halo sufficiency for captured culling/light samples, valid public SOLID/CUTOUT pipelines, exact `ALPHA_CUTOUT=0.5`, public indexed-indirect drawing, bound blocks atlas/lightmap, `nativeGraphicsSeam=false`, zero profiler-only submissions and full completion-gated staging/arena/resource reclamation. Process exited 0. The user reported everything looked fine.
-
-P2.5 deliberately does not claim leaves force-opaque support, translucent/fluid terrain, production-scale global terrain replacement, event-driven update lifecycle, persistent multi-section ownership or production greedy meshing.
-
-## P2.6 - NEXT
-
-Canonical goals from `MASTER_ROADMAP.md`:
+Canonical goals:
 
 - section load;
 - section unload;
 - block update invalidation;
 - neighbor-border invalidation;
 - resource reload invalidation;
-- stale async result rejection;
+- stale async/result rejection;
 - safe replacement of live GPU allocations;
 - multiple rebuilds of the same section;
 - generation/version identity carried end to end.
 
-P2.3 exposed the concrete lifecycle defect this milestone must eliminate: a validation overlay could briefly retain stale geometry after a block edit until the next bounded recapture. P2.6 must replace that one-shot/pass-based behavior with event-driven dirtying, versioned rebuild scheduling and safe replacement/unload behavior while retaining the immutable snapshot/capture boundary and completion-gated GPU lifetime rules.
+Concrete defect being eliminated: P2.3/dev3 proved that a pass-based validation overlay could remain stale briefly after a block break until the next recapture. P2.6 replaces that validation-only behavior with event-driven dirtying, versioned rebuild/install and safe completion-gated replacement/unload.
+
+### Required architecture
+
+- renderer-owned section generation increments on relevant invalidation;
+- immutable capture/build/upload/install carries generation identity;
+- stale generations are rejected before becoming live;
+- block/light changes on a border conservatively invalidate every section whose one-block halo can contain the changed cell;
+- live replacement is atomic at the renderer record level;
+- old GPU geometry/resource ownership retires only after completion;
+- unload/world teardown prevents stale reinstall and retires live ownership;
+- model/atlas resource epoch remains part of validity and resource reload forces rebuild;
+- the lifecycle identity must later be usable across asynchronous Phase 3 worker boundaries without redesign.
+
+### Exact Minecraft 26.2 grounding required before implementation
+
+Inspect the exact client paths/APIs for client chunk/section load and unload, block-state updates, light notifications, vanilla render-section dirty propagation, resource/model reload, world replacement/disconnect and thread affinity. Prefer exact Fabric events only when they cover the required semantics; otherwise use narrow version-grounded mixins. Do not rely on older-version API memory.
 
 ## Immediate next action
 
-1. Merge this Class-A status synchronization with `[no-release]` after exact-head CI.
-2. Branch P2.6/dev6 from the synchronized `main`.
-3. Record an immutable P2.6 plan before implementation.
-4. Inspect exact Minecraft 26.2 client hooks/APIs for section load/unload, block/light updates, neighbor-border implications and resource reload lifecycle before choosing injection/event seams.
-5. Keep dev6 draft/unmerged until its exact CI and required runtime validation pass; dev6 requires fresh explicit merge authorization when its gate is satisfied.
+1. Open the dev6 draft PR.
+2. Mark P2.6 ACTIVE in the roadmap on the dev6 branch.
+3. Run hosted exact Minecraft 26.2 lifecycle API/bytecode inspection before choosing event/mixin seams.
+4. Record exact findings immutably before implementation.
+5. Implement the smallest one-section generation-safe event-driven lifecycle proof.
+6. Keep dev6 draft/unmerged until exact CI and required runtime validation pass. Fresh explicit merge authorization is required for dev6.
 
 ## Relevant durable decisions
 
