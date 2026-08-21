@@ -3,6 +3,9 @@ name: One-shot P2.4 continuity sync
 on:
   push:
     branches: [phase2/p2-4-status-sync]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
@@ -136,7 +139,7 @@ The permanent P2.1 reference oracle remains independent of all later optimized/m
 - closing merge: `fa0d40182cd0bc29a526b28a8b2b3b43fc8fc8ba`;
 - exact API inspection: A-0072;
 - implementation/package: A-0073;
-- first machine-clean/copanar visual ambiguity: A-0074;
+- first machine-clean/coplanar visual ambiguity: A-0074;
 - final runtime + human visual success: A-0075;
 - six sustained visual passes complete;
 - exact vanilla `BlockModelLighter` used as the lighting/AO correctness oracle;
