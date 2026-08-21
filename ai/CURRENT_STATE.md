@@ -21,7 +21,7 @@ Last updated: 2026-08-21
 - Active branch: `phase2/lighting-ao-correctness`
 - Active draft PR: #19, `Phase 2 dev4: lighting and ambient occlusion correctness`
 - Current development version: `0.2.0-phase2-dev4`
-- P2.4 status: **exact Minecraft 26.2 API grounded + implementation complete + CI/package verified; reference RX 6800 XT runtime/human visual validation pending**
+- P2.4 status: **RUNTIME + HUMAN VISUAL VALIDATED / MERGE AUTHORIZED / exact-head CI pending after evidence sync**
 
 ## Continuity model
 
@@ -57,19 +57,23 @@ P2.2 established deterministic indexed real geometry, exact section/camera place
 
 P2.3 established exact Minecraft 26.2 baked sprite/UV/tint/material identity for the conservative supported SOLID full-cube path. Runtime/human evidence is `ai/attempts/A-0070-phase2-dev3-runtime-success.md`.
 
+P2.4 now establishes exact Minecraft 26.2 block/sky-light, directional shade and ambient-occlusion semantics for that supported subset through an immutable lighting capture and public BLOCK/lightmap drawing path. Runtime/human success evidence is `ai/attempts/A-0075-phase2-dev4-runtime-success.md`.
+
 The permanent P2.1 reference oracle remains independent of all later materialized/optimized representations.
 
-## P2.4 / dev4 - ACTIVE
+## P2.4 / dev4 - VALIDATED / MERGE PENDING
 
 Evidence:
 
 - plan: `ai/attempts/A-0071-phase2-dev4-lighting-ao-plan.md`;
 - exact 26.2 API/bytecode inspection: `ai/attempts/A-0072-phase2-dev4-lighting-ao-api-inspection.md`;
-- implementation/package: `ai/attempts/A-0073-phase2-dev4-implementation-and-package.md`.
+- implementation/package: `ai/attempts/A-0073-phase2-dev4-implementation-and-package.md`;
+- first machine-clean but visually ambiguous coplanar-overlay run: `ai/attempts/A-0074-phase2-dev4-runtime-visual-retest-needed.md`;
+- final runtime + human visual success: `ai/attempts/A-0075-phase2-dev4-runtime-success.md`.
 
 Temporary inspection PR #20 was closed without merge.
 
-### Exact 26.2 lighting contract now used
+### Exact 26.2 lighting contract used
 
 Minecraft 26.2 uses public `BlockModelLighter` + `QuadInstance` for block light/AO results and `Lightmap` rather than the older `LightTexture` assumption.
 
@@ -87,11 +91,13 @@ Exact directional shade comes from `CardinalLighting.byFace(direction)` when bak
 
 Exact `BlockModelLighter` bytecode for the P2.3 canonical unit-face subset samples only coordinates at most one block away from the source block on each axis. The existing local `-1..16` / 18^3 section snapshot therefore contains every block-state neighbor needed for supported-face AO at section borders.
 
+The final retest crossed from section `(63,5,6)` to `(64,5,6)` on pass 6 and remained deterministic/verified, providing runtime border evidence for this supported subset.
+
 This proof does not automatically extend to future P2.5 non-full/general/custom geometry.
 
 ### Immutable lighting capture
 
-New `SectionLightingSnapshot`:
+`SectionLightingSnapshot`:
 
 - render-thread only;
 - validates section/reference/material/resource identity;
@@ -101,11 +107,11 @@ New `SectionLightingSnapshot`:
 - records AO-vs-flat identity and light ranges;
 - retains no live world/model/light-engine objects.
 
-Two captures must be content-identical in the validation probe.
+Two captures were content-identical in every validation pass.
 
 ### Pure BLOCK-format mesh
 
-New `LitSectionMesh` consumes only immutable Obsidian captures and emits exact `DefaultVertexFormat.BLOCK` layout:
+`LitSectionMesh` consumes only immutable Obsidian captures and emits exact `DefaultVertexFormat.BLOCK` layout:
 
 - float3 Position;
 - RGBA8 Color;
@@ -116,11 +122,13 @@ New `LitSectionMesh` consumes only immutable Obsidian captures and emits exact `
 
 Pure mesh construction performs zero world/model/light-engine/resource reads. Exact unmodulated color/light remains retained for validation. Only emitted RGB is uniformly multiplied by 3/4 to distinguish the comparison overlay; packed light is unchanged.
 
+The final human-retention build also moved only the validation overlay face positions outward by `1/512` block along the face normal to avoid coplanar depth fighting with vanilla. This is presentation-only and is not part of the canonical geometry oracle or a production rendering rule.
+
 Worst-case reference geometry + indices remains `3,342,336` bytes, below the existing 4 MiB dev-validation capacity.
 
 ### Live lit comparison
 
-New `RealSectionLightingProbe` is the active `FrameCoordinator` path. It preserves P2.2/P2.3 upload/placement/lifetime behavior and adds:
+`RealSectionLightingProbe` is the active `FrameCoordinator` path. It preserves P2.2/P2.3 upload/placement/lifetime behavior and adds:
 
 - duplicate deterministic lighting captures;
 - duplicate deterministic lit drawable builds;
@@ -139,57 +147,49 @@ New `RealSectionLightingProbe` is the active `FrameCoordinator` path. It preserv
 
 Completed older probes remain in source as historical diagnostics and are inactive.
 
-## Dev4 CI/package evidence
+## Dev4 runtime result
 
-Behavior head before documentation-only synchronization: `e973e6fd80d9bd009383385e3a0713a2abf78932`.
+The final visual retest loaded exact `obsidian 0.2.0-phase2-dev4` on the reference Vulkan RX 6800 XT runtime and completed all six passes.
 
-GitHub Actions run `32431204825`:
+Passes 1-5, section `(63,5,6)`:
 
-- Java 25 / Gradle 9.5.1: SUCCESS;
-- artifact upload: SUCCESS;
-- public release: SKIPPED.
+- reference faces `637`;
+- lit/materialized faces `490`;
+- AO faces `490`, flat faces `0`;
+- block light `0..0`, sky light `0..15`;
+- vertices `1960`, indices `2940`;
+- duplicate reference/material/lighting/drawable builds all deterministic `2/2`;
+- `worldReadsAfterLightingCapture=0`;
+- `oneBlockHaloSufficient=true`.
 
-Artifact ID: `9429131700`.
+Pass 6, neighboring section `(64,5,6)`:
 
-Package:
+- reference faces `321`;
+- lit/materialized faces `165`;
+- AO faces `165`, flat faces `0`;
+- block light `0..0`, sky light `15..15`;
+- vertices `660`, indices `990`;
+- duplicate reference/material/lighting/drawable builds all deterministic `2/2`;
+- `worldReadsAfterLightingCapture=0`;
+- `oneBlockHaloSufficient=true`.
 
-- `Obsidian-0.2.0-phase2-dev4.jar`;
-- SHA-256 `0982465d0f917c7a65c21c5e3331a4a25f85299181321a91915d03839a3db5e3`;
-- sources SHA-256 `f8505544fa6e07c8421ba458510499ba41ca10907965b427188f99226d22a3e8`;
-- metadata exactly `obsidian 0.2.0-phase2-dev4`.
+Final shutdown:
 
-Packaged bytecode confirms active `FrameCoordinator -> RealSectionLightingProbe`, `SOLID_BLOCK`, `DefaultVertexFormat.BLOCK`, `Sampler2`, `GameRenderer.levelLightmap()`, clamp-to-edge LINEAR sampler and public `drawIndexedIndirect`.
-
-## Dev4 runtime success criteria
-
-The reference RX 6800 XT run must prove:
-
-- exact `obsidian 0.2.0-phase2-dev4` loads on Vulkan;
-- deterministic reference/material/lighting/drawable duplicates;
-- at least one supported lit face;
-- exact materialized/light/drawable face accounting;
-- vertices = faces * 4 and indices = faces * 6;
-- block and sky light ranges are logged from real packed values;
-- AO/flat counts match the sampled world/settings without hard-coded expectations;
-- `worldReadsAfterLightingCapture=0` for pure mesh construction;
-- `oneBlockHaloSufficient=true` under the exact supported-subset bytecode proof;
+- `lightingSectionResult=VERIFIED`;
+- completed visual passes `6`;
 - `pipelineValid=true`;
 - `nativeGraphicsSeam=false`;
 - `indexedIndirect=true`;
-- blocks atlas and level lightmap are bound;
-- resource epoch stays stable during each pass;
-- texture/geometry/UV alignment remains correct;
-- relative block/sky lighting, directional face shade and AO corner darkening agree visually with vanilla, ignoring the deliberate uniform 3/4 RGB comparison modulation;
-- all six visual passes complete;
+- blocks atlas + lightmap bound;
 - `profilerOnlySubmissions=0`;
-- staging fully reclaims;
-- all arena allocations retire/reclaim behind completion;
-- indirect resources retire/release;
-- final arena used=0, one full 4 MiB free span, fragmentation=0;
-- no pending upload/arena/resource retirements;
-- process exits 0.
+- staging submitted/reclaimed `355760/355760`;
+- arena allocations/failures `12/0`;
+- arena retired/reclaimed `12/12`;
+- final arena used `0`, one full `4194304`-byte free span, fragmentation `0`;
+- indirect/deferred resources retired/released/pending `6/6/0`;
+- process exit code `0`.
 
-World-dependent counts, light values and fingerprints are runtime evidence, not hard-coded success values.
+Human verdict: the retest works; exact presentation fine tuning may happen later. The human gate is accepted.
 
 ## P2.3 block-edit observation retained for P2.6
 
@@ -207,12 +207,10 @@ Dev4 does **not** claim:
 
 ## Immediate next action
 
-1. Run final exact-head Java 25 / Gradle 9.5.1 CI after continuity/PR synchronization.
-2. Runtime-test the exact dev4 artifact on the reference RX 6800 XT.
-3. After the five-second arm delay, inspect all six passes in mixed lighting while moving/turning.
-4. Judge relative light level, directional face shading, AO corner darkening, texture/UV identity and world/camera alignment. Ignore the uniform 3/4 comparison darkening.
-5. Save the complete Prism log and record the result immutably.
-6. Keep PR #19 draft/unmerged until this gate passes.
+1. Run exact-head Java 25 / Gradle 9.5.1 CI after A-0075/current-state evidence synchronization.
+2. Merge PR #19 under the user's explicit authorization if the exact head remains mergeable and green.
+3. Perform the normal Class-A `main` status/roadmap sync marking P2.4 COMPLETE and P2.5 next.
+4. Begin P2.5/dev5 from synchronized `main`, with exact Minecraft 26.2 API grounding before broadening model/material semantics.
 
 ## Relevant durable decisions
 
