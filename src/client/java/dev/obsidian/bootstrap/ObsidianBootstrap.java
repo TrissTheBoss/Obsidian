@@ -73,7 +73,7 @@ public final class ObsidianBootstrap {
             LOG.log(System.Logger.Level.DEBUG, "Backend description: {0}", caps.backendDescription());
         }
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 2 dev4 lighting/AO probe armed. P2.1 geometry, P2.2 placement and P2.3 exact material/UV/tint identity remain the correctness foundation; dev4 captures exact Minecraft 26.2 BlockModelLighter per-corner light/AO/shade results on the render thread, freezes them into immutable renderer-owned data, emits the public BLOCK vertex format, and overlays a deliberately uniformly darkened lightmapped comparison while vanilla terrain remains active. Broad block semantics and event-driven lifecycle remain later milestones.");
+                "Obsidian Phase 2 dev5 broader MODEL semantics probe armed. The permanent P2.1 cube oracle remains independent; dev5 calls exact Minecraft 26.2 ModelBlockRenderer on the render thread and freezes vanilla-emitted arbitrary directional/general quads after culling, offsets, AO/light and tint. Accepted blocks must emit only blocks-atlas SOLID/CUTOUT quads; leaves, fluids, block entities, translucent and unsupported-material blocks remain explicit rejects. The pure renderer-owned mesh groups SOLID and CUTOUT into separate public BLOCK/lightmap indexed-indirect comparison passes while vanilla terrain remains active. Event-driven lifecycle remains P2.6 and translucent/fluid terrain remains Phase 6.");
     }
 
     public static void onFrameStart() {
