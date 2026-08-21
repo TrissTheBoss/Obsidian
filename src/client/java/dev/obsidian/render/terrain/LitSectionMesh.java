@@ -9,8 +9,11 @@ import java.util.Arrays;
  *
  * <p>Vertex layout exactly matches {@code DefaultVertexFormat.BLOCK}:
  * float3 Position, RGBA8 Color, float2 UV0, signed-short2 UV2/light = 28 bytes.
- * Exact unmodulated ARGB AO/tint/shade colors and packed light are retained;
- * only the emitted RGB is uniformly multiplied by 3/4 for human comparison.</p>
+ * Exact unmodulated ARGB AO/tint/shade colors and packed light are retained.
+ * The validation-only drawable applies two presentation aids: emitted RGB is
+ * uniformly multiplied by 3/4, and each face is moved outward by 1/512 block
+ * along its normal so the coplanar overlay does not depth-fight with vanilla.
+ * Neither aid changes the permanent P2.1 geometry oracle or P2.4 light data.</p>
  */
 public final class LitSectionMesh {
     public static final int VERTICES_PER_FACE = 4;
@@ -19,6 +22,7 @@ public final class LitSectionMesh {
     public static final int BYTES_PER_INDEX = Integer.BYTES;
     public static final int COMPARISON_COLOR_NUMERATOR = 3;
     public static final int COMPARISON_COLOR_DENOMINATOR = 4;
+    public static final float COMPARISON_NORMAL_OFFSET = 1.0f / 512.0f;
 
     public static final int MAX_VERTEX_BYTES = ReferenceFaceMesh.MAX_FACES * VERTICES_PER_FACE * BYTES_PER_VERTEX;
     public static final int MAX_INDEX_BYTES = ReferenceFaceMesh.MAX_FACES * INDICES_PER_FACE * BYTES_PER_INDEX;
@@ -172,6 +176,7 @@ public final class LitSectionMesh {
         hash = hashLong(hash, reference.fingerprint());
         hash = hashLong(hash, materials.fingerprint());
         hash = hashLong(hash, lighting.fingerprint());
+        hash = hashInt(hash, Float.floatToRawIntBits(COMPARISON_NORMAL_OFFSET));
         hash = hashInt(hash, emittedFaces);
 
         LitSectionMesh mesh = new LitSectionMesh(
@@ -211,8 +216,23 @@ public final class LitSectionMesh {
             throw new IllegalStateException("P2.4 lit mesh array accounting mismatch");
         }
 
+        float[] expectedPositions = new float[VERTICES_PER_FACE * 3];
         for (int face = 0; face < faceCount; face++) {
             int referenceFace = sourceReferenceFaces[face];
+            int packed = reference.packedFace(referenceFace);
+            int x = packed & 0xF;
+            int y = (packed >>> 4) & 0xF;
+            int z = (packed >>> 8) & 0xF;
+            int direction = (packed >>> 12) & 0x7;
+            int positionOffset = face * VERTICES_PER_FACE * 3;
+            writeFacePositions(expectedPositions, 0, x, y, z, direction);
+            for (int i = 0; i < expectedPositions.length; i++) {
+                if (Float.floatToRawIntBits(positions[positionOffset + i])
+                        != Float.floatToRawIntBits(expectedPositions[i])) {
+                    throw new IllegalStateException("P2.4 lit mesh comparison position mismatch");
+                }
+            }
+
             int vertexOffset = face * VERTICES_PER_FACE;
             int uvOffset = face * VERTICES_PER_FACE * 2;
             for (int corner = 0; corner < VERTICES_PER_FACE; corner++) {
@@ -302,21 +322,64 @@ public final class LitSectionMesh {
     }
 
     private static void writeFacePositions(float[] out, int offset, int x, int y, int z, int direction) {
-        float x0 = x, y0 = y, z0 = z;
-        float x1 = x + 1.0f, y1 = y + 1.0f, z1 = z + 1.0f;
+        float x0 = x;
+        float y0 = y;
+        float z0 = z;
+        float x1 = x + 1.0f;
+        float y1 = y + 1.0f;
+        float z1 = z + 1.0f;
+        float d = COMPARISON_NORMAL_OFFSET;
         switch (direction) {
-            case 0 -> { put(out, offset, x0,y0,z0); put(out, offset+3, x0,y0,z1); put(out, offset+6, x0,y1,z1); put(out, offset+9, x0,y1,z0); }
-            case 1 -> { put(out, offset, x1,y0,z1); put(out, offset+3, x1,y0,z0); put(out, offset+6, x1,y1,z0); put(out, offset+9, x1,y1,z1); }
-            case 2 -> { put(out, offset, x0,y0,z1); put(out, offset+3, x0,y0,z0); put(out, offset+6, x1,y0,z0); put(out, offset+9, x1,y0,z1); }
-            case 3 -> { put(out, offset, x0,y1,z0); put(out, offset+3, x0,y1,z1); put(out, offset+6, x1,y1,z1); put(out, offset+9, x1,y1,z0); }
-            case 4 -> { put(out, offset, x1,y0,z0); put(out, offset+3, x0,y0,z0); put(out, offset+6, x0,y1,z0); put(out, offset+9, x1,y1,z0); }
-            case 5 -> { put(out, offset, x0,y0,z1); put(out, offset+3, x1,y0,z1); put(out, offset+6, x1,y1,z1); put(out, offset+9, x0,y1,z1); }
+            case 0 -> {
+                float px = x0 - d;
+                put(out, offset, px, y0, z0);
+                put(out, offset + 3, px, y0, z1);
+                put(out, offset + 6, px, y1, z1);
+                put(out, offset + 9, px, y1, z0);
+            }
+            case 1 -> {
+                float px = x1 + d;
+                put(out, offset, px, y0, z1);
+                put(out, offset + 3, px, y0, z0);
+                put(out, offset + 6, px, y1, z0);
+                put(out, offset + 9, px, y1, z1);
+            }
+            case 2 -> {
+                float py = y0 - d;
+                put(out, offset, x0, py, z1);
+                put(out, offset + 3, x0, py, z0);
+                put(out, offset + 6, x1, py, z0);
+                put(out, offset + 9, x1, py, z1);
+            }
+            case 3 -> {
+                float py = y1 + d;
+                put(out, offset, x0, py, z0);
+                put(out, offset + 3, x0, py, z1);
+                put(out, offset + 6, x1, py, z1);
+                put(out, offset + 9, x1, py, z0);
+            }
+            case 4 -> {
+                float pz = z0 - d;
+                put(out, offset, x1, y0, pz);
+                put(out, offset + 3, x0, y0, pz);
+                put(out, offset + 6, x0, y1, pz);
+                put(out, offset + 9, x1, y1, pz);
+            }
+            case 5 -> {
+                float pz = z1 + d;
+                put(out, offset, x0, y0, pz);
+                put(out, offset + 3, x1, y0, pz);
+                put(out, offset + 6, x1, y1, pz);
+                put(out, offset + 9, x0, y1, pz);
+            }
             default -> throw new IllegalStateException("Invalid P2.4 face direction: " + direction);
         }
     }
 
     private static void put(float[] out, int offset, float x, float y, float z) {
-        out[offset] = x; out[offset + 1] = y; out[offset + 2] = z;
+        out[offset] = x;
+        out[offset + 1] = y;
+        out[offset + 2] = z;
     }
 
     private static long hashInt(long hash, int value) {
