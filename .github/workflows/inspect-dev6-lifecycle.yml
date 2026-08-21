@@ -41,24 +41,21 @@ jobs:
           mkdir -p inspection-dev6
 
           cat > inspection-dev6/classes.txt <<'EOF'
+          net.minecraft.client.renderer.extract.LevelExtractor
           net.minecraft.client.multiplayer.ClientLevel
           net.minecraft.client.multiplayer.ClientChunkCache
+          net.minecraft.client.multiplayer.ClientChunkCache$Storage
           net.minecraft.client.multiplayer.ClientPacketListener
           net.minecraft.client.renderer.LevelRenderer
+          net.minecraft.client.renderer.ViewArea
           net.minecraft.client.renderer.chunk.SectionRenderDispatcher
           net.minecraft.client.renderer.chunk.SectionRenderDispatcher$RenderSection
-          net.minecraft.client.renderer.chunk.SectionCompiler
+          net.minecraft.world.level.Level
           net.minecraft.world.level.lighting.LevelLightEngine
-          net.minecraft.world.level.lighting.LayerLightEventListener
           net.minecraft.client.resources.model.ModelManager
           net.minecraft.client.Minecraft
           net.minecraft.server.packs.resources.ReloadableResourceManager
           net.minecraft.server.packs.resources.PreparableReloadListener
-          net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents
-          net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientWorldEvents
-          net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
-          net.fabricmc.fabric.api.resource.ResourceManagerHelper
-          net.fabricmc.fabric.api.resource.SimpleSynchronousResourceReloadListener
           EOF
 
           : > inspection-dev6/api.txt
@@ -72,16 +69,17 @@ jobs:
             echo >> inspection-dev6/code.txt
           done < inspection-dev6/classes.txt
 
+          : > inspection-dev6/discovered-names.txt
+          : > inspection-dev6/fabric-event-names.txt
           tr ':' '\n' < /tmp/cp | while IFS= read -r JAR; do
             if [ -f "$JAR" ] && [[ "$JAR" == *.jar ]]; then
-              jar tf "$JAR" 2>/dev/null | grep -E '(^net/minecraft/client/.*(Chunk|Section|LevelRenderer|RenderSection|Light|Reload|ModelManager).*\.class$)|(^net/minecraft/world/level/lighting/.*\.class$)|(^net/fabricmc/fabric/api/client/.*(Chunk|World|Block|Light).*Event.*\.class$)|(^net/fabricmc/fabric/api/resource/.*Reload.*\.class$)' || true
+              jar tf "$JAR" 2>/dev/null | grep -E '(^net/minecraft/client/.*(Chunk|Section|LevelExtractor|LevelRenderer|ViewArea|Light|Reload|ModelManager).*\.class$)|(^net/minecraft/world/level/lighting/.*\.class$)' || true
+              jar tf "$JAR" 2>/dev/null | grep -E '^net/fabricmc/fabric/api/.*(Chunk|World|Block|Light|Reload|Resource|Lifecycle).*\.class$' >> inspection-dev6/fabric-event-names.txt || true
             fi
           done | sort -u > inspection-dev6/discovered-names.txt
+          sort -u -o inspection-dev6/fabric-event-names.txt inspection-dev6/fabric-event-names.txt
 
-          grep -n -E 'setBlock|setBlocksDirty|setSectionDirty|setSectionDirtyWithNeighbors|blockChanged|onBlock|light|Light|dirty|Dirty|invalidate|unload|drop|replaceWithPacketData|replaceBiomes|updateViewCenter|updateViewRadius|onChunk|ChunkEvents|WorldEvents|disconnect|clearLevel|setLevel|reload|Reload|resource|Resource|generation|version|section|Section|RenderSection' inspection-dev6/code.txt > inspection-dev6/key-grep.txt || true
-
-          # Also inventory exact Fabric client lifecycle event class names from the resolved classpath.
-          grep -E '^net/fabricmc/fabric/api/client/.*Event.*\.class$|^net/fabricmc/fabric/api/resource/.*Reload.*\.class$' inspection-dev6/discovered-names.txt > inspection-dev6/fabric-event-names.txt || true
+          grep -n -E 'setBlockDirty|blockChanged|setSectionDirty|setSectionDirtyWithNeighbors|setSectionRangeDirty|setBlock|dirty|Dirty|invalidate|unload|drop\(|onChunkLoaded|replaceWithPacketData|setLevel|disconnect|clearLevel|reload|Reload|apply|barrier|resource|Resource|RenderSection|reset\(' inspection-dev6/code.txt > inspection-dev6/key-grep.txt || true
 
       - uses: actions/upload-artifact@v4
         with:
