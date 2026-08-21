@@ -23,10 +23,10 @@ Last updated: 2026-08-21
 - P2.6 draft PR: #25
 - P2.6 version: `0.2.0-phase2-dev6`
 - P2.6 status: **corrected event bridge runtime-proven for edits/resource reload with zero drops; required tracked-neighborhood chunk unload/load coverage still not exercised; unmerged**
-- Forward stacked work: **P2.7 - multi-section integration implementation started, not merge-eligible before P2.6 closure**
+- Forward stacked work: **P2.7 - multi-section integration implemented as a stacked candidate, not merge-eligible before P2.6 closure**
 - P2.7 stacked branch: `phase2/multi-section-scene`
 - P2.7 stacked draft PR: #27 (base `phase2/section-lifecycle-rebuild`)
-- P2.7 temporary exact-CI PR: #28 (base `main`, never merge)
+- P2.7 temporary exact-CI PR: #28 (base `main`, never merge; reopen only to trigger exact CI)
 - Current development version on stacked branch: `0.2.0-phase2-dev7`
 - Last fully runtime-validated and merged development version: `0.2.0-phase2-dev5`
 
@@ -110,7 +110,11 @@ P2.6 remains unmerged. The user's standing dev6 merge authorization remains cond
 
 ## P2.7 / dev7 - stacked multi-section implementation candidate
 
-Evidence/plan: `ai/attempts/A-0085-phase2-dev7-multi-section-scene-plan.md`.
+Evidence:
+
+- architecture: `ai/attempts/A-0085-phase2-dev7-multi-section-scene-plan.md`;
+- implementation/package inspection: `ai/attempts/A-0086-phase2-dev7-implementation-and-package.md`;
+- validation-gate refinement: `ai/attempts/A-0087-phase2-dev7-runtime-gate-refinement.md`.
 
 P2.7 is intentionally developed on top of the corrected dev6 head while P2.6 awaits its final runtime coverage. It must not merge ahead of P2.6.
 
@@ -148,20 +152,31 @@ All current records share one scene generation/event-sequence domain. P2.7 delib
 
 Whole-window invalidation is a correctness-first P2.7 boundary, not the intended production scheduling policy. Phase 3 still owns per-section async scheduling, worker pools, cancellation/versioning, reusable worker-local scratch and binary/bitmask greedy meshing.
 
-### Dev7 validation gate
+### Exact compile/package evidence before A-0087 refinement
 
-After exact compile/package validation, the reference runtime must show:
+Head `0d3bc525fe63a1cd6a7339e24e89613ddbb8d612` passed exact Java 25 / Gradle 9.5.1 run `32501595352`; artifact `9453702048` was package/bytecode inspected. Evidence-only head `c4dc0fe4f2eee7478d0adec01a8b7eefccaf55c7` then passed exact-head run `32501800495`, artifact `9453781057`, and was byte-identical to the inspected package.
+
+That inspected package proved the active coordinator/scene owner, scene radius `1`, record capacity `9`, halo radius `2`, no event ring, and unchanged public SOLID/CUTOUT indexed-indirect graphics path.
+
+A-0087 subsequently changed only the dev7 runtime closure contract/instruction string in `FrameCoordinator`: chunk load/unload remain observed/logged/invalidation-relevant but are no longer mandatory for P2.7 closure because scene recenter moves the tracking domain. A fresh exact CI/package check is required for that refined candidate before handoff.
+
+### Refined dev7 validation gate
+
+The reference runtime must show:
 
 - `sceneReadyTransitions >= 2`;
 - `sceneRebuilds >= 1`;
 - `maxLiveRecords >= 3`;
 - `maxAdjacentPairs >= 2`;
 - `cameraRecenterEvents >= 1`;
-- nonzero dirty/resource/chunk-unload/chunk-load events;
+- nonzero exact dirty events;
+- nonzero successful resource-reload events;
 - `droppedLifecycleEvents=0`;
 - zero stale scene/probe installs;
 - bounded staging/arena behavior and complete reclamation;
 - normal exit code `0` and shutdown `sceneGateReady=true`.
+
+Chunk load/unload counters remain diagnostics and relevant invalidation signals, but P2.6 separately owns the mandatory fixed-target chunk lifecycle closure gate.
 
 Human oracle: simultaneous neighboring overlay sections must not show persistent duplicate/missing shared borders during camera motion; no stale old-window geometry may persist after edit/reload/recenter. A temporary whole-window blank interval while rebuilding is acceptable for this correctness milestone.
 
@@ -172,12 +187,11 @@ Human oracle: simultaneous neighboring overlay sections must not show persistent
 
 ## Immediate next action
 
-1. Run exact Java 25 / Gradle 9.5.1 CI on the current dev7 head through temporary main-targeting PR #28.
-2. Fix any exact Minecraft 26.2 compile/API failures without changing the stated P2.7 boundary unless evidence requires it.
-3. On successful behavior CI, inspect the packaged JAR bytecode/metadata and record immutable implementation/package evidence.
-4. Close temporary PR #28 without merge.
-5. Deliver a dev7 runtime-test JAR while keeping canonical PR #27 stacked/draft.
-6. Independently, P2.6 still needs one corrected run that exercises far travel + tracked-neighborhood unload/return before PR #25 can merge under its standing authorization.
+1. Reopen temporary PR #28 to run exact Java 25 / Gradle 9.5.1 CI on the A-0087-refined dev7 head.
+2. Inspect the final package and confirm active multi-section bytecode plus the refined runtime gate.
+3. Close PR #28 without merge and deliver the dev7 runtime-test JAR.
+4. Runtime-test simultaneous neighboring records, shared borders, edit rebuild, F3+T rebuild, and at least one camera scene recenter; require `sceneGateReady=true` and full reclamation.
+5. Independently, P2.6 still needs one corrected fixed-target run that actually exercises tracked-neighborhood unload/return before PR #25 can merge under its standing authorization.
 
 ## Relevant durable decisions
 
