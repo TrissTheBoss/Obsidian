@@ -458,18 +458,33 @@ Reference RX 6800 XT validation completed all six passes with deterministic refe
 
 P2.4 deliberately does not claim P2.5 broad opaque/cutout/non-full model semantics or P2.6 event-driven section lifecycle.
 
-#### P2.5 — Broader opaque/cutout block semantics — PLANNED
+#### P2.5 — Broader opaque/cutout block semantics — COMPLETE
 
-Expand support deliberately:
+Validated milestone: `0.2.0-phase2-dev5`.
 
-- ordinary full cubes;
-- axis-aligned simple model cases;
-- cutout vegetation/model classes where architecture allows;
-- tinted blocks;
-- biome-dependent color inputs;
-- selected non-full model cases only after exact semantics are understood.
+Closing merge: `c17f7c6146678e18cacabc44d85c67413a040f73`.
 
-Unsupported cases must remain observable in metrics.
+Runtime evidence: `ai/attempts/A-0079-phase2-dev5-runtime-success.md`.
+
+Completed contract:
+
+- exact Minecraft 26.2 `ModelBlockRenderer.tesselateBlock(...) -> BlockQuadOutput` grounding used as the render-thread correctness seam;
+- vanilla-seeded selected model parts, block offsets, directional and `getQuads(null)` general quads, shape-based directional culling, AO/flat lighting and tint are captured after vanilla has resolved them;
+- immutable `SectionBakedQuadSnapshot` stores arbitrary four-vertex geometry, exact UVs, final AO/shade/tint colors, packed block/sky light, baked direction, source block/state and exact SOLID/CUTOUT material identity;
+- entire blocks are rejected atomically if any emitted quad is translucent, wrong-atlas or otherwise unsupported rather than partially rendering an incorrect result;
+- leaves remain explicitly unsupported in this first proof because vanilla's force-opaque leaves mode is a separate compiler policy outside the chosen callback;
+- the permanent P2.1 `ReferenceFaceMesh` cube oracle remains unchanged and independent;
+- exact inspection proved the selected arbitrary-quad culling/light/AO neighborhood still fits the existing one-block halo;
+- pure `BakedSectionMesh` construction performs zero post-capture live world/model/light/resource reads and deterministically groups quads into contiguous SOLID then CUTOUT ranges;
+- exact `DefaultVertexFormat.BLOCK` is retained with public blocks-atlas + level-lightmap bindings;
+- public `SOLID_BLOCK` and `CUTOUT_BLOCK` indexed-indirect comparison paths are used, with exact `ALPHA_CUTOUT=0.5` for CUTOUT;
+- bounded 4 MiB staging and 4 MiB device geometry arena remain sufficient for the validation proof;
+- completion-gated geometry/indirect lifetime fully reclaims before reuse;
+- `nativeGraphicsSeam=false` and zero profiler-only submissions remain true.
+
+Reference RX 6800 XT validation completed all six passes with stable deterministic generalized capture/mesh fingerprints. The sampled section produced 626 generalized quads = 321 SOLID + 305 CUTOUT, 2504 vertices and 3756 indices, with `worldReadsAfterGeneralizedCapture=0`, `cubeOraclePreserved=true`, one-block-halo sufficiency, `pipelineValid=true`, bound blocks atlas/lightmap, full completion-gated staging/arena/resource reclamation and process exit 0. Human validation reported that everything looked fine, including the broader SOLID/CUTOUT comparison.
+
+P2.5 deliberately does not claim leaves force-opaque support, translucent/fluid terrain, P2.6 event-driven lifecycle, P2.7 persistent multi-section ownership or Phase 3 production greedy meshing.
 
 #### P2.6 — Section lifecycle and rebuild correctness — PLANNED
 
@@ -1384,6 +1399,14 @@ Before handoff, verify:
 
 This is a concise index, **not** the evidence log. Detailed reasoning belongs in attempts/decisions.
 
+### 2026-08-21 — P2.5 Class-A status synchronization
+
+- synchronized P2.5 to COMPLETE after exact Minecraft 26.2 model/cutout API grounding, generalized SOLID/CUTOUT implementation/package CI, reference RX 6800 XT runtime validation, human visual validation, and merge `c17f7c6146678e18cacabc44d85c67413a040f73`;
+- recorded the vanilla `ModelBlockRenderer -> BlockQuadOutput` generalized-quad correctness seam and preserved the independent P2.1 cube oracle;
+- recorded public SOLID/CUTOUT BLOCK-format indexed-indirect validation with exact cutout alpha, bounded memory and completion-gated reclamation;
+- kept leaves force-opaque policy, translucent/fluid terrain, event-driven lifecycle and persistent multi-section ownership in their existing later scopes;
+- left P2.6 as the next planned milestone without changing later phase ordering, product scope, or durable architecture.
+
 ### 2026-08-21 — P2.4 Class-A status synchronization
 
 - synchronized P2.4 to COMPLETE after exact Minecraft 26.2 lighting/AO API grounding, implementation/package CI, reference RX 6800 XT runtime validation, human visual validation, and merge `fa0d40182cd0bc29a526b28a8b2b3b43fc8fc8ba`;
@@ -1426,8 +1449,9 @@ Current position at the time of this revision:
 - P2.2: COMPLETE / `0.2.0-phase2-dev2`, first drawable real section with human-validated world/camera alignment.
 - P2.3: COMPLETE / `0.2.0-phase2-dev3`, correct texture/material/UV/tint identity for the conservative supported SOLID subset with human-validated textured alignment.
 - P2.4: COMPLETE / `0.2.0-phase2-dev4`, exact block/sky light, directional shade and AO semantics for the conservative supported SOLID subset with human-validated lightmapped comparison.
-- Next planned milestone: P2.5, broader opaque/cutout block semantics.
-- P2.6 retains event-driven block/neighbor/light invalidation and rebuild scheduling; bounded validation-overlay recapture delay is not a production target.
+- P2.5: COMPLETE / `0.2.0-phase2-dev5`, exact vanilla-emitted generalized MODEL semantics for accepted SOLID/CUTOUT blocks with human-validated layered comparison.
+- Next planned milestone: P2.6, section lifecycle and rebuild correctness.
+- P2.6 owns event-driven section/block/neighbor/light/resource invalidation, versioned rebuild scheduling, stale-result rejection and safe live GPU replacement; bounded validation-overlay recapture delay is not a production target.
 - Phase 3 production binary/bitmask greedy meshing remains planned after Phase 2 establishes correct render semantics.
 
 Always verify the live details in `ai/CURRENT_STATE.md` before acting on this final section because active milestone state changes more frequently than the long-range plan.
