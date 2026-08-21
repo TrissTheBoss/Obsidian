@@ -433,17 +433,30 @@ The validation overlay briefly retained a stale block after a block break until 
 
 P2.3 deliberately does not claim P2.4 light/AO correctness, P2.5 broad cutout/non-full/custom-model support, or P2.6 production section-update lifecycle.
 
-#### P2.4 — Lighting and ambient occlusion correctness — PLANNED
+#### P2.4 — Lighting and ambient occlusion correctness — COMPLETE
 
-Goals:
+Validated milestone: `0.2.0-phase2-dev4`.
 
-- block light;
-- sky light;
-- per-corner light as required by the chosen format;
-- vanilla-intent AO behavior for supported block classes;
-- AO diagonal selection based on corner values;
-- halo data sufficient for border lighting/AO without live worker world reads;
-- deterministic reference representation that Phase 3 can compare against.
+Closing merge: `fa0d40182cd0bc29a526b28a8b2b3b43fc8fc8ba`.
+
+Runtime evidence: `ai/attempts/A-0075-phase2-dev4-runtime-success.md`.
+
+Completed contract:
+
+- exact Minecraft 26.2 `BlockModelLighter` / `QuadInstance` grounding;
+- exact block/sky packed-light capture including baked material emission;
+- exact directional shade and ambient-occlusion corner results for the supported full-cube subset;
+- deterministic immutable `SectionLightingSnapshot` with no retained live world/model/light objects;
+- pure `LitSectionMesh` construction in exact `DefaultVertexFormat.BLOCK` layout with zero post-light-capture world reads;
+- public `SOLID_BLOCK` indexed-indirect comparison with live blocks atlas + level lightmap bindings;
+- one-block halo proven sufficient for the supported canonical full-cube AO neighborhood, including a runtime section-border transition;
+- exact 26.2 inspection found no AO-dependent alternate triangle diagonal for this supported path, so the canonical fixed split remains correct;
+- completion-gated staging/arena/indirect lifetime with full reclamation;
+- validation-only `1/512` outward face offset to prevent coplanar depth fighting with vanilla; not a production geometry rule.
+
+Reference RX 6800 XT validation completed all six passes with deterministic reference/material/lighting/drawable duplicates, `worldReadsAfterLightingCapture=0`, `oneBlockHaloSufficient=true`, `pipelineValid=true`, `nativeGraphicsSeam=false`, zero profiler-only submissions, full resource reclamation and process exit 0. Human validation accepted the final comparison; exact presentation fine tuning may happen later.
+
+P2.4 deliberately does not claim P2.5 broad opaque/cutout/non-full model semantics or P2.6 event-driven section lifecycle.
 
 #### P2.5 — Broader opaque/cutout block semantics — PLANNED
 
@@ -904,8 +917,8 @@ This section is a product-level checklist. Phase sections above describe sequenc
 - [PLANNED] Production binary/bitmask greedy mesher.
 - [PLANNED] Opaque terrain.
 - [PLANNED] Cutout terrain.
-- [PLANNED] Lighting.
-- [PLANNED] Ambient occlusion.
+- [COMPLETE foundation] Lighting for the conservative supported SOLID subset.
+- [COMPLETE foundation] Ambient occlusion for the conservative supported SOLID subset.
 - [COMPLETE foundation] Tint/biome color identity for the conservative supported SOLID subset.
 - [COMPLETE foundation] Resource/material/sprite/UV identity for the conservative supported SOLID subset.
 - [PLANNED] Fluids/translucent terrain.
@@ -1371,6 +1384,14 @@ Before handoff, verify:
 
 This is a concise index, **not** the evidence log. Detailed reasoning belongs in attempts/decisions.
 
+### 2026-08-21 — P2.4 Class-A status synchronization
+
+- synchronized P2.4 to COMPLETE after exact Minecraft 26.2 lighting/AO API grounding, implementation/package CI, reference RX 6800 XT runtime validation, human visual validation, and merge `fa0d40182cd0bc29a526b28a8b2b3b43fc8fc8ba`;
+- marked conservative supported-subset lighting and ambient-occlusion foundations complete;
+- recorded that exact 26.2 inspection found no AO-dependent alternate triangle diagonal for the supported path;
+- preserved the validation-only `1/512` anti-depth-fighting comparison offset as non-production presentation behavior;
+- left P2.5 as the next planned milestone without changing later phase ordering, product scope, or durable architecture.
+
 ### 2026-08-21 — P2.3 Class-A status synchronization
 
 - synchronized P2.3 to COMPLETE after exact Minecraft 26.2 API grounding, implementation/package CI, reference RX 6800 XT runtime validation, human texture/UV/alignment/tint validation, and merge `667230f51222746083efe89c72265d80ac9d3929`;
@@ -1404,8 +1425,9 @@ Current position at the time of this revision:
 - P2.1: COMPLETE / `0.2.0-phase2-dev1`.
 - P2.2: COMPLETE / `0.2.0-phase2-dev2`, first drawable real section with human-validated world/camera alignment.
 - P2.3: COMPLETE / `0.2.0-phase2-dev3`, correct texture/material/UV/tint identity for the conservative supported SOLID subset with human-validated textured alignment.
-- Next planned milestone: P2.4, block/sky lighting and ambient occlusion correctness.
-- P2.6 retains event-driven block/neighbor invalidation and rebuild scheduling; the dev3 validation-overlay recapture delay is not a production target.
+- P2.4: COMPLETE / `0.2.0-phase2-dev4`, exact block/sky light, directional shade and AO semantics for the conservative supported SOLID subset with human-validated lightmapped comparison.
+- Next planned milestone: P2.5, broader opaque/cutout block semantics.
+- P2.6 retains event-driven block/neighbor/light invalidation and rebuild scheduling; bounded validation-overlay recapture delay is not a production target.
 - Phase 3 production binary/bitmask greedy meshing remains planned after Phase 2 establishes correct render semantics.
 
 Always verify the live details in `ai/CURRENT_STATE.md` before acting on this final section because active milestone state changes more frequently than the long-range plan.
