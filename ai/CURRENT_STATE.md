@@ -20,8 +20,9 @@ Last updated: 2026-08-21
 - Current product phase: **Phase 2 - real-section correctness and renderer semantics**
 - Active milestone: **P2.6 - section lifecycle and rebuild correctness**
 - Active branch: `phase2/section-lifecycle-rebuild`
+- Active draft PR: #25, `Phase 2 dev6: section lifecycle and rebuild correctness`
 - Current development version: `0.2.0-phase2-dev6`
-- P2.6 status: **ACTIVE / exact Minecraft 26.2 lifecycle-event API grounding first**
+- P2.6 status: **exact Minecraft 26.2 lifecycle seams grounded + generation-safe one-section implementation assembled / exact CI pending**
 - Last runtime-validated development version: `0.2.0-phase2-dev5`
 
 ## Continuity model
@@ -62,56 +63,55 @@ P2.4 established exact Minecraft 26.2 block/sky light, directional shade and amb
 
 P2.5 established exact generalized vanilla MODEL semantics for the accepted SOLID/CUTOUT domain through `ModelBlockRenderer.tesselateBlock(...) -> BlockQuadOutput`, immutable arbitrary quad capture and deterministic layered BLOCK-format public indexed-indirect drawing. Runtime evidence: `ai/attempts/A-0079-phase2-dev5-runtime-success.md`.
 
-## P2.5 / dev5 - COMPLETE
+## P2.6 / dev6 - IMPLEMENTATION ASSEMBLED / CI PENDING
 
-Closing merge: `c17f7c6146678e18cacabc44d85c67413a040f73`.
-Class-A sync merge: `306d74fdf2428af93feac2ce5e49296d508d9d2d`.
-Validated version: `0.2.0-phase2-dev5`.
+Evidence:
 
-Reference validation completed six sustained SOLID+CUTOUT passes on the RX 6800 XT with deterministic generalized capture/builds, exact public BLOCK/lightmap pipelines, full completion-gated reclamation and process exit 0. The user reported everything looked fine.
+- plan: `ai/attempts/A-0080-phase2-dev6-section-lifecycle-plan.md`;
+- exact Minecraft 26.2 lifecycle inspection: `ai/attempts/A-0081-phase2-dev6-lifecycle-api-inspection.md`;
+- temporary inspection PR #26 closed without merge.
 
-## P2.6 / dev6 - ACTIVE
+Exact inspection runs:
 
-Plan: `ai/attempts/A-0080-phase2-dev6-section-lifecycle-plan.md`.
+- lifecycle run `32487025079`, artifact `9448266980`;
+- targeted `LevelExtractor`/chunk-storage run `32487514059`, artifact `9448449721`.
 
-Canonical goals:
+### Exact lifecycle observation seams
 
-- section load;
-- section unload;
-- block update invalidation;
-- neighbor-border invalidation;
-- resource reload invalidation;
-- stale async/result rejection;
-- safe replacement of live GPU allocations;
-- multiple rebuilds of the same section;
-- generation/version identity carried end to end.
+Dev6 observes vanilla behavior without cancelling or replacing it:
 
-Concrete defect being eliminated: P2.3/dev3 proved that a pass-based validation overlay could remain stale briefly after a block break until the next recapture. P2.6 replaces that validation-only behavior with event-driven dirtying, versioned rebuild/install and safe completion-gated replacement/unload.
+- private `LevelExtractor.setSectionDirty(IIIZ)` central sink after vanilla has already calculated block/light/border propagation;
+- `LevelExtractor.setLevel(ClientLevel)` for world replacement/teardown;
+- `ClientLevel.onChunkLoaded(ChunkPos)` and `ClientLevel.unload(LevelChunk)` for client chunk lifecycle;
+- successful `ModelManager.reload(...)` future completion for model/resource invalidation.
 
-### Required architecture
+Vanilla's own dirty propagation already expands block changes by one block before section conversion and light updates with neighbor sections, so Obsidian consumes exact resulting section coordinates rather than maintaining a parallel heuristic.
 
-- renderer-owned section generation increments on relevant invalidation;
-- immutable capture/build/upload/install carries generation identity;
-- stale generations are rejected before becoming live;
-- block/light changes on a border conservatively invalidate every section whose one-block halo can contain the changed cell;
-- live replacement is atomic at the renderer record level;
-- old GPU geometry/resource ownership retires only after completion;
-- unload/world teardown prevents stale reinstall and retires live ownership;
-- model/atlas resource epoch remains part of validity and resource reload forces rebuild;
-- the lifecycle identity must later be usable across asynchronous Phase 3 worker boundaries without redesign.
+### Generation-safe implementation
 
-### Exact Minecraft 26.2 grounding required before implementation
+`SectionLifecycleEvents` is a bounded primitive-only lifecycle bridge. It coalesces observed section-dirty, nearby chunk load/unload, world-change and resource-reload events without retaining Minecraft world objects.
 
-Inspect the exact client paths/APIs for client chunk/section load and unload, block-state updates, light notifications, vanilla render-section dirty propagation, resource/model reload, world replacement/disconnect and thread affinity. Prefer exact Fabric events only when they cover the required semantics; otherwise use narrow version-grounded mixins. Do not rely on older-version API memory.
+`SectionGenerationGate` owns the monotonically increasing renderer generation and includes a deterministic stale-token rejection self-test.
+
+`SectionSnapshot.tryCaptureSection(...)` recaptures the exact tracked section identity and its one-block halo without loading/generating missing chunks.
+
+`RealSectionLifecycleProbe` owns one generation at a time. It preserves the P2.5 deterministic cube-reference/generalized-capture/layered-mesh path; carries the generation and lifecycle-event sequence through capture/build/upload/install; checks for intervening lifecycle events before GPU admission/submission; draws only while LIVE; stops drawing immediately on invalidation; and completion-gates geometry/indirect retirement before replacement generation admission.
+
+`FrameCoordinator` owns the tracked section and generation lifecycle. Relevant events coalesce into one generation advance per drain batch. A stale or invalidated probe cannot become/remain live. Resource epoch mismatches force invalidation. Repeated section rebuild latency and lifecycle reason counts are logged.
+
+Dev6 remains a one-section correctness proof. P2.7 still owns persistent multi-section scene ownership; Phase 3 still owns production asynchronous worker meshing/greedy meshing.
+
+## Merge authorization
+
+The user explicitly authorized merging dev6 on 2026-08-21. Treat this as standing authorization conditional on the required reference runtime + human lifecycle gate passing and final exact-head CI remaining green. Do not ask for merge authorization again unless dev6 behavior/scope changes materially after validation.
 
 ## Immediate next action
 
-1. Open the dev6 draft PR.
-2. Mark P2.6 ACTIVE in the roadmap on the dev6 branch.
-3. Run hosted exact Minecraft 26.2 lifecycle API/bytecode inspection before choosing event/mixin seams.
-4. Record exact findings immutably before implementation.
-5. Implement the smallest one-section generation-safe event-driven lifecycle proof.
-6. Keep dev6 draft/unmerged until exact CI and required runtime validation pass. Fresh explicit merge authorization is required for dev6.
+1. Run exact Java 25 / Gradle 9.5.1 CI on the implementation head and fix any exact Minecraft/Mixin signature issue.
+2. Download and inspect the exact successful artifact: version metadata, active coordinator/probe, lifecycle mixins, generation gate and public SOLID/CUTOUT indexed-indirect path.
+3. Record implementation/package evidence immutably and synchronize this file to runtime-pending status.
+4. Produce the exact-head `0.2.0-phase2-dev6` lifecycle-test JAR for the reference RX 6800 XT session.
+5. Keep PR #25 draft/unmerged until runtime/human lifecycle validation passes; merge is already authorized if that gate passes.
 
 ## Relevant durable decisions
 
