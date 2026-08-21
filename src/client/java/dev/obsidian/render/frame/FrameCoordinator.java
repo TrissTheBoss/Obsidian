@@ -108,7 +108,7 @@ public final class FrameCoordinator implements AutoCloseable {
                 && sceneProbe.sceneReadyTransitions() > 0L) {
             runtimeInstructionsLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 2 dev7 runtime gate: inspect the simultaneous neighboring section overlay for missing/duplicate borders while moving and turning. Break/place blocks inside the visible 3x3 scene, perform F3+T, then move far enough to force scene recenter and tracked-halo chunk unload/load before returning. A whole-window blank interval during rebuild is allowed; stale or overlapping old geometry is not.");
+                    "Phase 2 dev7 runtime gate: inspect the simultaneous neighboring section overlay for missing/duplicate borders while moving and turning. Break/place blocks inside the visible 3x3 scene, perform F3+T, then move far enough to force at least one scene recenter. A whole-window blank interval during rebuild is allowed; stale or overlapping old geometry is not. Chunk load/unload counters remain diagnostic here because P2.6 separately owns the mandatory exact chunk-lifecycle gate.");
         }
     }
 
@@ -231,8 +231,6 @@ public final class FrameCoordinator implements AutoCloseable {
                 && cameraRecenterEvents >= 1L
                 && dirtyEvents > 0L
                 && resourceReloadEvents > 0L
-                && chunkUnloadEvents > 0L
-                && chunkLoadEvents > 0L
                 && droppedLifecycleEvents == 0L
                 && staleSceneRejections == 0L
                 && probeStaleInstallRejections == 0L
@@ -241,7 +239,7 @@ public final class FrameCoordinator implements AutoCloseable {
                 && deferredReleases.pendingCount() == 0;
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 2 dev7 frame coordinator closed after {0} frame(s): sceneGateReady={1}, hardFailure={2}, center={3}, sceneGeneration={4}, sceneReadyTransitions={5}, sceneRebuilds={6}, recordInstalls={7}, maxLiveRecords={8}, maxAdjacentPairs={9}, cameraRecenterEvents={10}, invalidationBatches={11}, coalescedEvents={12}, dirtyEvents={13}, playerDirtyEvents={14}, chunkLoadEvents={15}, chunkUnloadEvents={16}, worldChangeEvents={17}, resourceReloadEvents={18}, droppedLifecycleEvents={19}, observedReasons={20}, eligibilityScans={21}, eligibilitySkips={22}, uploadAdmissionDeferrals={23}, staleSceneRejections={24}, probeStaleInstallRejections={25}, maxSceneQuads={26}, maxSceneVertexBytes={27}, maxSceneIndexBytes={28}, usefulSubmissions={29}, comparisonDraws={30}, indirectCalls={31}, resourceEpochChecks={32}, retirementBackpressureEvents={33}, retirementRegistrationFailures={34}, wholeWindowInvalidation=true, boundedOneRecordAdmission=true, sceneRecordCapacity=9, nativeGraphicsSeam=false, indexedIndirect=true, stagingSubmittedBytes={35}, stagingReclaimedBytes={36}, stagingBackpressureEvents={37}, pendingUploadBatches={38}, arenaUsedBytes={39}, arenaHighWaterBytes={40}, arenaAllocations={41}, arenaAllocationFailures={42}, arenaRetired={43}, arenaReclaimed={44}, arenaRetirementBackpressureEvents={45}, arenaStaleHandleRejections={46}, arenaFreeSpans={47}, arenaLargestFree={48}, arenaFragmentationPermille={49}, pendingArenaRetirementBatches={50}, retiredResources={51}, releasedResources={52}, pendingRetirements={53}.",
+                "Phase 2 dev7 frame coordinator closed after {0} frame(s): sceneGateReady={1}, hardFailure={2}, center={3}, sceneGeneration={4}, sceneReadyTransitions={5}, sceneRebuilds={6}, recordInstalls={7}, maxLiveRecords={8}, maxAdjacentPairs={9}, cameraRecenterEvents={10}, invalidationBatches={11}, coalescedEvents={12}, dirtyEvents={13}, playerDirtyEvents={14}, chunkLoadEvents={15}, chunkUnloadEvents={16}, worldChangeEvents={17}, resourceReloadEvents={18}, droppedLifecycleEvents={19}, observedReasons={20}, eligibilityScans={21}, eligibilitySkips={22}, uploadAdmissionDeferrals={23}, staleSceneRejections={24}, probeStaleInstallRejections={25}, maxSceneQuads={26}, maxSceneVertexBytes={27}, maxSceneIndexBytes={28}, usefulSubmissions={29}, comparisonDraws={30}, indirectCalls={31}, resourceEpochChecks={32}, retirementBackpressureEvents={33}, retirementRegistrationFailures={34}, wholeWindowInvalidation=true, boundedOneRecordAdmission=true, sceneRecordCapacity=9, chunkLifecycleCountersDiagnostic=true, nativeGraphicsSeam=false, indexedIndirect=true, stagingSubmittedBytes={35}, stagingReclaimedBytes={36}, stagingBackpressureEvents={37}, pendingUploadBatches={38}, arenaUsedBytes={39}, arenaHighWaterBytes={40}, arenaAllocations={41}, arenaAllocationFailures={42}, arenaRetired={43}, arenaReclaimed={44}, arenaRetirementBackpressureEvents={45}, arenaStaleHandleRejections={46}, arenaFreeSpans={47}, arenaLargestFree={48}, arenaFragmentationPermille={49}, pendingArenaRetirementBatches={50}, retiredResources={51}, releasedResources={52}, pendingRetirements={53}.",
                 frameIndex,
                 sceneGateReady,
                 hardFailure,
