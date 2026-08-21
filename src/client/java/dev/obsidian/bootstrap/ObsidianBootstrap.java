@@ -24,47 +24,34 @@ public final class ObsidianBootstrap {
     private ObsidianBootstrap() {}
 
     public static void earlyInitialize() {
-        if (!EARLY_INIT.compareAndSet(false, true)) {
-            return;
-        }
-
+        if (!EARLY_INIT.compareAndSet(false, true)) return;
         LOG.log(System.Logger.Level.INFO,
                 "Obsidian {0} starting (Minecraft 26.2, Vulkan-only renderer)", version());
         config = ObsidianConfig.load();
-
         List<String> conflicts = ConflictDetector.findLoadedConflicts();
         if (!conflicts.isEmpty()) {
             String message = "Obsidian cannot start with renderer/optimization conflicts loaded: "
                     + String.join(", ", conflicts)
                     + ". Remove them before using Obsidian.";
-            if (config.strictConflictCheck()) {
-                throw new IllegalStateException(message);
-            }
+            if (config.strictConflictCheck()) throw new IllegalStateException(message);
             LOG.log(System.Logger.Level.WARNING, message);
         }
-
         LOG.log(System.Logger.Level.INFO,
                 "Early bootstrap complete; waiting for Minecraft GpuDevice initialization.");
     }
 
     public static void onMinecraftReady() {
-        if (!DEVICE_INIT.compareAndSet(false, true)) {
-            return;
-        }
-        if (!EARLY_INIT.get()) {
-            earlyInitialize();
-        }
+        if (!DEVICE_INIT.compareAndSet(false, true)) return;
+        if (!EARLY_INIT.get()) earlyInitialize();
 
         RendererBridge candidate = MojangVulkanBridge.attach();
         GpuCapabilities caps = candidate.capabilities();
-
         if (!caps.isVulkan()) {
             candidate.close();
             bridge = null;
             frameCoordinator = null;
             LOG.log(System.Logger.Level.WARNING,
-                    "Obsidian is Vulkan-only, but Minecraft initialized backend ''{0}''. Obsidian will remain inactive for this session instead of crashing.",
-                    caps.backend());
+                    "Obsidian is Vulkan-only, but Minecraft initialized backend ''{0}''. Obsidian will remain inactive for this session instead of crashing.", caps.backend());
             LOG.log(System.Logger.Level.WARNING,
                     "Open Video Settings, set Graphics API to 'Prefer Vulkan (Experimental)', then restart Minecraft to activate Obsidian.");
             LOG.log(System.Logger.Level.INFO,
@@ -75,12 +62,9 @@ public final class ObsidianBootstrap {
 
         bridge = candidate;
         frameCoordinator = new FrameCoordinator(candidate.nativeDeviceHandle());
-
         LOG.log(System.Logger.Level.INFO, "Attached to Vulkan backend: {0}", caps.backend());
-        LOG.log(System.Logger.Level.INFO, "GPU: {0} | {1} ({2})",
-                caps.vendor(), caps.deviceName(), caps.deviceType());
+        LOG.log(System.Logger.Level.INFO, "GPU: {0} | {1} ({2})", caps.vendor(), caps.deviceName(), caps.deviceType());
         LOG.log(System.Logger.Level.INFO, "Driver: {0}", caps.driverInfo());
-
         if (config.verboseCapabilityLog()) {
             LOG.log(System.Logger.Level.INFO,
                     "Vulkan capabilities: extensions={0}, maxTextureSize={1}, uniformAlignment={2}, debug={3}, indirect={4}, multiDrawIndirect={5}, persistentMapping={6}",
@@ -88,55 +72,40 @@ public final class ObsidianBootstrap {
                     caps.debuggingEnabled(), caps.drawIndirect(), caps.multiDrawIndirect(), caps.persistentMapping());
             LOG.log(System.Logger.Level.DEBUG, "Backend description: {0}", caps.backendDescription());
         }
-
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 2 dev3 material/texture probe armed. P2.1 reference coverage and P2.2 world/camera placement remain the correctness foundation; dev3 will capture exact Minecraft 26.2 baked sprite/UV/tint/layer identity on the render thread, build an immutable textured mesh, and overlay a deliberately darkened texture comparison on the live depth-tested vanilla world. Lighting/AO remain P2.4 and vanilla terrain remains active.");
+                "Obsidian Phase 2 dev4 lighting/AO probe armed. P2.1 geometry, P2.2 placement and P2.3 exact material/UV/tint identity remain the correctness foundation; dev4 captures exact Minecraft 26.2 BlockModelLighter per-corner light/AO/shade results on the render thread, freezes them into immutable renderer-owned data, emits the public BLOCK vertex format, and overlays a deliberately uniformly darkened lightmapped comparison while vanilla terrain remains active. Broad block semantics and event-driven lifecycle remain later milestones.");
     }
 
     public static void onFrameStart() {
         FrameCoordinator coordinator = frameCoordinator;
-        if (coordinator != null) {
-            coordinator.beginFrame();
-        }
+        if (coordinator != null) coordinator.beginFrame();
     }
 
     public static void onWorldRendered(GameRenderer renderer) {
         FrameCoordinator coordinator = frameCoordinator;
-        if (coordinator != null) {
-            coordinator.afterWorldRender(renderer);
-        }
+        if (coordinator != null) coordinator.afterWorldRender(renderer);
     }
 
     public static void onFrameEnd() {
         FrameCoordinator coordinator = frameCoordinator;
-        if (coordinator != null) {
-            coordinator.endFrame();
-        }
+        if (coordinator != null) coordinator.endFrame();
     }
 
     public static void shutdown() {
         FrameCoordinator coordinator = frameCoordinator;
         frameCoordinator = null;
-        if (coordinator != null) {
-            coordinator.close();
-        }
-
+        if (coordinator != null) coordinator.close();
         RendererBridge rendererBridge = bridge;
         bridge = null;
-        if (rendererBridge != null) {
-            rendererBridge.close();
-        }
+        if (rendererBridge != null) rendererBridge.close();
     }
 
-    public static boolean isRendererBridgeReady() {
-        return bridge != null;
-    }
+    public static boolean isRendererBridgeReady() { return bridge != null; }
 
     public static RendererBridge bridge() {
         RendererBridge value = bridge;
         if (value == null) {
-            throw new IllegalStateException(
-                    "Obsidian renderer bridge is unavailable. The Vulkan backend must be active and device bootstrap must be complete.");
+            throw new IllegalStateException("Obsidian renderer bridge is unavailable. The Vulkan backend must be active and device bootstrap must be complete.");
         }
         return value;
     }
@@ -144,8 +113,7 @@ public final class ObsidianBootstrap {
     public static FrameCoordinator frameCoordinator() {
         FrameCoordinator value = frameCoordinator;
         if (value == null) {
-            throw new IllegalStateException(
-                    "Obsidian frame coordinator is unavailable until Vulkan bootstrap has completed.");
+            throw new IllegalStateException("Obsidian frame coordinator is unavailable until Vulkan bootstrap has completed.");
         }
         return value;
     }
