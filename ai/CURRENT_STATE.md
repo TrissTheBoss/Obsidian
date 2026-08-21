@@ -124,7 +124,7 @@ Bounded maximum geometry is `3,264,000` bytes, below the existing 4 MiB validati
 
 ### Active live comparison
 
-`RealSectionBroadModelProbe` is now the active `FrameCoordinator` path.
+`RealSectionBroadModelProbe` is the active `FrameCoordinator` path.
 
 It requires at least one supported SOLID and one supported CUTOUT quad for each combined validation pass. If the current selected section lacks one layer it remains in WAITING_WORLD and logs an instruction to move near ordinary terrain plus grass/flowers or another cutout MODEL block.
 
@@ -151,14 +151,16 @@ Older Phase 2 probes remain in source as inactive diagnostics.
 
 Exact active-path behavior head: `ad417532ef939df8ef0826eac1aab100b2c26faa`.
 
-GitHub Actions run `32484610552`:
+Behavior-package GitHub Actions run `32484610552`:
 
 - Java 25 / Gradle 9.5.1: SUCCESS;
 - Build: SUCCESS;
 - Upload build artifacts: SUCCESS;
 - Publish versioned release: SKIPPED.
 
-Artifact ID: `9447364592`.
+Behavior artifact ID: `9447364592`.
+
+Documentation-synchronized head `4895df09a1757d21e1878e5a09566f8775bd98d7` also passed GitHub Actions run `32484898259`; artifact ID `9447477287`. Its JAR and sources JAR are byte-for-byte identical to the behavior-package artifact.
 
 Package:
 
@@ -168,6 +170,8 @@ Package:
 - metadata exactly `obsidian 0.2.0-phase2-dev5`.
 
 Packaged bytecode confirms active `FrameCoordinator -> RealSectionBroadModelProbe`, public SOLID/CUTOUT BLOCK pipelines, `ALPHA_CUTOUT`, `Sampler0`, `Sampler2`, and `drawIndexedIndirect`.
+
+No renderer/package behavior changed after the exact active-path package. Continuity-only synchronization may move the PR head but must leave the JAR byte-identical; merge still requires green final-head CI.
 
 ## Runtime success criteria
 
@@ -218,11 +222,10 @@ Dev5 does **not** claim:
 
 ## Immediate next action
 
-1. Run exact-head CI after A-0078/current-state/PR synchronization.
-2. Runtime-test the exact dev5 artifact on the reference RX 6800 XT.
-3. Stand near a section containing both ordinary solid terrain and visible cutout MODEL blocks such as grass/flowers; after the five-second arm delay, inspect all six passes while moving/turning.
-4. Save the complete Prism log and record the result immutably.
-5. If the runtime + human gate passes and final exact-head CI remains green, mark PR #22 ready and merge using the user's standing authorization.
+1. Runtime-test `Obsidian-0.2.0-phase2-dev5.jar` on the reference RX 6800 XT Vulkan session.
+2. Stand near a section containing both ordinary solid terrain and visible cutout MODEL blocks such as grass/flowers; after the five-second arm delay, inspect all six passes while moving/turning.
+3. Save the complete Prism log and record the result immutably.
+4. If the runtime + human gate passes and final branch-head CI is green, mark PR #22 ready and merge using the user's standing authorization.
 
 ## Relevant durable decisions
 
