@@ -5,9 +5,11 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import dev.obsidian.render.memory.DeviceGeometryArena;
 import dev.obsidian.render.resource.DeferredReleaseQueue;
 import dev.obsidian.render.terrain.BakedSectionMesh;
-import dev.obsidian.render.terrain.RealSectionBroadModelProbe;
+import dev.obsidian.render.terrain.RealSectionLifecycleProbe;
 import dev.obsidian.render.terrain.ReferenceFaceMesh;
 import dev.obsidian.render.terrain.SectionBakedQuadSnapshot;
+import dev.obsidian.render.terrain.SectionGenerationGate;
+import dev.obsidian.render.terrain.SectionLifecycleEvents;
 import dev.obsidian.render.terrain.SectionSnapshot;
 import dev.obsidian.render.upload.StagingUploadArena;
 import net.minecraft.client.renderer.GameRenderer;
@@ -18,43 +20,74 @@ public final class FrameCoordinator implements AutoCloseable {
     private static final int VALIDATION_STAGING_BYTES = 4 * 1024 * 1024;
     private static final int VALIDATION_DEVICE_ARENA_BYTES = 4 * 1024 * 1024;
     private static final long VISUAL_ARM_DELAY_NS = 5_000_000_000L;
-    private static final int VISUAL_COMPARISON_PASSES = 6;
 
     private final FrameTimings cpuFrameTimings = new FrameTimings();
     private final FrameContextRing frameContexts = new FrameContextRing();
     private final DeferredReleaseQueue deferredReleases = new DeferredReleaseQueue();
+    private final SectionLifecycleEvents.Cursor lifecycleCursor = new SectionLifecycleEvents.Cursor();
+    private final SectionGenerationGate generationGate = new SectionGenerationGate();
     private final GpuDevice device;
     private final StagingUploadArena stagingUploads;
     private final DeviceGeometryArena deviceArena;
-    private RealSectionBroadModelProbe sectionProbe;
+    private final boolean staleGenerationSelfTestPassed;
 
+    private RealSectionLifecycleProbe sectionProbe;
     private FrameContext activeFrame;
     private long frameIndex;
     private long firstWorldRenderNs;
-    private int completedVisualPasses;
+    private long pendingDirtySinceNs;
+    private long lastInstallNs;
+    private long maxRebuildLatencyNs;
+    private long installCount;
+    private long rebuildInstallCount;
+    private long invalidationBatches;
+    private long coalescedEvents;
+    private long staleInstallRejections;
+    private long totalUsefulSubmissions;
+    private long totalDrawSubmissions;
+    private long totalIndirectCalls;
+    private long totalResourceEpochChecks;
+    private long totalRetirementBackpressureEvents;
+    private long totalRetirementRegistrationFailures;
+    private int observedReasonMask;
+    private long observedLiveGeneration;
+
+    private boolean targetKnown;
+    private int targetSectionX;
+    private int targetSectionY;
+    private int targetSectionZ;
+    private SectionSnapshot lastSnapshot;
+    private ReferenceFaceMesh lastReference;
+    private SectionBakedQuadSnapshot lastBaked;
+    private BakedSectionMesh lastDrawable;
+
     private boolean firstFrameLogged;
     private boolean visualDelayLogged;
+    private boolean runtimeInstructionsLogged;
+    private boolean hardFailure;
     private boolean closed;
 
     public FrameCoordinator(GpuDevice device) {
         this.device = device;
+        staleGenerationSelfTestPassed = SectionGenerationGate.staleSelfTest();
+        if (!staleGenerationSelfTestPassed) {
+            throw new IllegalStateException("Phase 2 dev6 stale-generation gate self-test failed");
+        }
+
         StagingUploadArena staging = null;
         DeviceGeometryArena arena = null;
-        RealSectionBroadModelProbe probe = null;
         try {
-            staging = new StagingUploadArena(device, () -> "Obsidian Phase 2 dev5 bounded staging ring", VALIDATION_STAGING_BYTES);
-            arena = new DeviceGeometryArena(device, () -> "Obsidian Phase 2 dev5 device geometry arena", VALIDATION_DEVICE_ARENA_BYTES);
-            probe = new RealSectionBroadModelProbe(device, staging, arena, deferredReleases);
+            staging = new StagingUploadArena(device, () -> "Obsidian Phase 2 dev6 bounded staging ring", VALIDATION_STAGING_BYTES);
+            arena = new DeviceGeometryArena(device, () -> "Obsidian Phase 2 dev6 device geometry arena", VALIDATION_DEVICE_ARENA_BYTES);
         } catch (RuntimeException e) {
-            if (probe != null) try { probe.close(); } catch (RuntimeException ignored) { }
             if (arena != null) try { arena.close(); } catch (RuntimeException ignored) { }
             if (staging != null) try { staging.close(); } catch (RuntimeException ignored) { }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 2 dev5 generalized-section initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 2 dev6 lifecycle initialization failed; Minecraft will continue for diagnosis.", e);
+            hardFailure = true;
         }
         stagingUploads = staging;
         deviceArena = arena;
-        sectionProbe = probe;
     }
 
     public void beginFrame() {
@@ -62,30 +95,152 @@ public final class FrameCoordinator implements AutoCloseable {
         if (closed) return;
         frameIndex++;
         activeFrame = frameContexts.begin(frameIndex, System.nanoTime());
+        drainLifecycleEvents();
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 2 dev5 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, stagingCapacity={2}, deviceArenaCapacity={3}; dev5 captures exact vanilla-emitted arbitrary MODEL quads and compares deterministic SOLID+CUTOUT BLOCK-format ranges while the permanent P2.1 cube oracle remains independent.",
+                    "Phase 2 dev6 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, stagingCapacity={2}, deviceArenaCapacity={3}; exact LevelExtractor/ClientLevel/ModelManager lifecycle signals drive a generation-safe persistent one-section drawable. staleGenerationSelfTest=true.",
                     frameContexts.size(), cpuFrameTimings.capacity(),
                     stagingUploads == null ? 0 : stagingUploads.capacityBytes(),
                     deviceArena == null ? 0L : deviceArena.capacityBytes());
         }
     }
 
+    private void drainLifecycleEvents() {
+        int reasons = SectionLifecycleEvents.drain(
+                lifecycleCursor,
+                targetKnown,
+                targetSectionX,
+                targetSectionY,
+                targetSectionZ);
+        if (reasons == 0) return;
+
+        observedReasonMask |= reasons;
+        int relevantEvents = lifecycleCursor.lastRelevantEventCount();
+        if (relevantEvents > 1) {
+            coalescedEvents += relevantEvents - 1L;
+        }
+        invalidationBatches++;
+        long newGeneration = generationGate.advance();
+        long now = System.nanoTime();
+        if (pendingDirtySinceNs == 0L) pendingDirtySinceNs = now;
+
+        if ((reasons & SectionLifecycleEvents.REASON_WORLD_CHANGE) != 0) {
+            targetKnown = false;
+        }
+
+        RealSectionLifecycleProbe probe = sectionProbe;
+        if (probe != null) {
+            probe.requestInvalidate(reasons, frameIndex);
+        }
+
+        LOG.log(System.Logger.Level.INFO,
+                "Phase 2 dev6 lifecycle invalidation batch on frame {0}: reasons={1}, relevantEvents={2}, generationNow={3}, trackedSection={4}, coalescedEvents={5}; stale geometry is no longer eligible to draw.",
+                frameIndex, SectionLifecycleEvents.describeReasons(reasons), relevantEvents,
+                newGeneration,
+                targetKnown ? "(" + targetSectionX + "," + targetSectionY + "," + targetSectionZ + ")" : "unbound",
+                coalescedEvents);
+    }
+
     public void afterWorldRender(GameRenderer renderer) {
         RenderSystem.assertOnRenderThread();
-        if (closed || sectionProbe == null) return;
+        if (closed || hardFailure || stagingUploads == null || deviceArena == null) return;
         long nowNs = System.nanoTime();
         if (firstWorldRenderNs == 0L) firstWorldRenderNs = nowNs;
-        if (completedVisualPasses == 0 && nowNs - firstWorldRenderNs < VISUAL_ARM_DELAY_NS) {
+        if (nowNs - firstWorldRenderNs < VISUAL_ARM_DELAY_NS) {
             if (!visualDelayLogged) {
                 visualDelayLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 2 dev5 SOLID+CUTOUT comparison is armed but intentionally delayed for 5 seconds after first world render so the human validation window is not consumed during world entry.");
+                        "Phase 2 dev6 lifecycle comparison is armed but intentionally delayed for 5 seconds after first world render so startup dirtiness/resource activity settles before the tracked generation is installed.");
             }
             return;
         }
-        sectionProbe.afterWorldRender(renderer, frameIndex);
+
+        ensureProbe();
+        if (sectionProbe != null) {
+            sectionProbe.afterWorldRender(renderer, frameIndex);
+            observeLiveInstall();
+        }
+    }
+
+    private void ensureProbe() {
+        if (sectionProbe != null || hardFailure) return;
+        long generation = generationGate.currentGeneration();
+        long eventSequence = SectionLifecycleEvents.latestSequence();
+        sectionProbe = new RealSectionLifecycleProbe(
+                device,
+                stagingUploads,
+                deviceArena,
+                deferredReleases,
+                generation,
+                eventSequence,
+                targetKnown,
+                targetSectionX,
+                targetSectionY,
+                targetSectionZ);
+    }
+
+    private void observeLiveInstall() {
+        RealSectionLifecycleProbe probe = sectionProbe;
+        if (probe == null || probe.state() != RealSectionLifecycleProbe.State.LIVE
+                || observedLiveGeneration == probe.generation()) {
+            return;
+        }
+
+        if (!generationGate.tryInstall(probe.generation())) {
+            staleInstallRejections++;
+            probe.requestInvalidate(SectionLifecycleEvents.REASON_OVERFLOW, frameIndex);
+            LOG.log(System.Logger.Level.WARNING,
+                    "Phase 2 dev6 rejected generation {0} at the final install gate because current generation is {1}.",
+                    probe.generation(), generationGate.currentGeneration());
+            return;
+        }
+
+        observedLiveGeneration = probe.generation();
+        installCount++;
+        if (installCount > 1L) rebuildInstallCount++;
+
+        SectionSnapshot snapshot = probe.snapshot();
+        if (snapshot == null) {
+            hardFailure = true;
+            probe.requestInvalidate(SectionLifecycleEvents.REASON_OVERFLOW, frameIndex);
+            LOG.log(System.Logger.Level.ERROR, "Phase 2 dev6 live generation has no immutable snapshot.");
+            return;
+        }
+        targetKnown = true;
+        targetSectionX = snapshot.sectionX();
+        targetSectionY = snapshot.sectionY();
+        targetSectionZ = snapshot.sectionZ();
+        lastSnapshot = snapshot;
+        lastReference = probe.referenceMesh();
+        lastBaked = probe.bakedSnapshot();
+        lastDrawable = probe.drawableMesh();
+
+        long now = System.nanoTime();
+        lastInstallNs = now;
+        if (pendingDirtySinceNs != 0L) {
+            long latency = now - pendingDirtySinceNs;
+            if (latency > maxRebuildLatencyNs) maxRebuildLatencyNs = latency;
+            pendingDirtySinceNs = 0L;
+        }
+
+        LOG.log(System.Logger.Level.INFO,
+                "Phase 2 dev6 generation installed: generation={0}, installCount={1}, rebuildInstalls={2}, section=({3},{4},{5}), blockBounds=[{6}..{7},{8}..{9},{10}..{11}], snapshotFingerprint={12}, generalizedFingerprint={13}, drawableFingerprint={14}, staleGenerationRejectedByGate={15}, generationCarriedCaptureBuildUploadInstall=true.",
+                probe.generation(), installCount, rebuildInstallCount,
+                targetSectionX, targetSectionY, targetSectionZ,
+                targetSectionX * 16, targetSectionX * 16 + 15,
+                targetSectionY * 16, targetSectionY * 16 + 15,
+                targetSectionZ * 16, targetSectionZ * 16 + 15,
+                Long.toUnsignedString(snapshot.fingerprint()),
+                lastBaked == null ? "none" : Long.toUnsignedString(lastBaked.fingerprint()),
+                lastDrawable == null ? "none" : Long.toUnsignedString(lastDrawable.fingerprint()),
+                staleGenerationSelfTestPassed);
+
+        if (!runtimeInstructionsLogged) {
+            runtimeInstructionsLogged = true;
+            LOG.log(System.Logger.Level.INFO,
+                    "Phase 2 dev6 runtime gate: keep this tracked section visible; break/place blocks in the logged block bounds and confirm the overlay stops showing stale geometry then rebuilds. Trigger a resource reload (F3+T). Then travel far enough for the tracked chunk neighborhood to unload and return so chunk-unload/chunk-load rebuilds are observed. Exit normally after each class of event has rebuilt at least once.");
+        }
     }
 
     public void endFrame() {
@@ -97,27 +252,41 @@ public final class FrameCoordinator implements AutoCloseable {
             long duration = context.finish(System.nanoTime());
             if (duration > 0L) cpuFrameTimings.record(duration);
         }
+
         deferredReleases.poll();
         if (stagingUploads != null) stagingUploads.pollReclaims();
         if (deviceArena != null) deviceArena.pollRetirements();
         if (sectionProbe != null) {
             sectionProbe.poll(frameIndex);
-            if (sectionProbe.state() == RealSectionBroadModelProbe.State.VERIFIED
-                    && completedVisualPasses < VISUAL_COMPARISON_PASSES) {
-                completedVisualPasses++;
-                if (completedVisualPasses < VISUAL_COMPARISON_PASSES) {
-                    sectionProbe.close();
-                    sectionProbe = new RealSectionBroadModelProbe(device, stagingUploads, deviceArena, deferredReleases);
-                    LOG.log(System.Logger.Level.INFO,
-                            "Phase 2 dev5 generalized comparison pass {0}/{1} completed; re-arming immediately so arbitrary geometry, SOLID/CUTOUT layer identity, tint, light and AO remain observable across fresh captures.",
-                            completedVisualPasses, VISUAL_COMPARISON_PASSES);
-                } else {
-                    LOG.log(System.Logger.Level.INFO,
-                            "Phase 2 dev5 sustained generalized comparison completed all {0} pass(es); awaiting shutdown/runtime review.",
-                            VISUAL_COMPARISON_PASSES);
-                }
+            observeLiveInstall();
+            RealSectionLifecycleProbe.State state = sectionProbe.state();
+            if (state == RealSectionLifecycleProbe.State.RETIRED
+                    || state == RealSectionLifecycleProbe.State.STALE) {
+                disposeFinishedProbe();
+            } else if (state == RealSectionLifecycleProbe.State.FAILED) {
+                hardFailure = true;
+                disposeFinishedProbe();
             }
         }
+    }
+
+    private void disposeFinishedProbe() {
+        RealSectionLifecycleProbe probe = sectionProbe;
+        if (probe == null) return;
+        totalUsefulSubmissions += probe.usefulSubmissions();
+        totalDrawSubmissions += probe.drawSubmissions();
+        totalIndirectCalls += probe.indirectCalls();
+        totalResourceEpochChecks += probe.resourceEpochChecks();
+        totalRetirementBackpressureEvents += probe.retirementBackpressureEvents();
+        totalRetirementRegistrationFailures += probe.retirementRegistrationFailures();
+        staleInstallRejections += probe.staleInstallRejections();
+        if (probe.snapshot() != null) lastSnapshot = probe.snapshot();
+        if (probe.referenceMesh() != null) lastReference = probe.referenceMesh();
+        if (probe.bakedSnapshot() != null) lastBaked = probe.bakedSnapshot();
+        if (probe.drawableMesh() != null) lastDrawable = probe.drawableMesh();
+        probe.close();
+        sectionProbe = null;
+        observedLiveGeneration = 0L;
     }
 
     public long frameIndex() { return frameIndex; }
@@ -126,8 +295,8 @@ public final class FrameCoordinator implements AutoCloseable {
     public int pendingRetirements() { return deferredReleases.pendingCount(); }
     public int pendingUploadBatches() { return stagingUploads == null ? 0 : stagingUploads.pendingBatches(); }
     public int pendingArenaRetirementBatches() { return deviceArena == null ? 0 : deviceArena.pendingRetirementBatches(); }
-    public RealSectionBroadModelProbe.State sectionProbeState() {
-        return sectionProbe == null ? RealSectionBroadModelProbe.State.FAILED : sectionProbe.state();
+    public RealSectionLifecycleProbe.State sectionProbeState() {
+        return sectionProbe == null ? (hardFailure ? RealSectionLifecycleProbe.State.FAILED : RealSectionLifecycleProbe.State.WAITING_WORLD) : sectionProbe.state();
     }
 
     @Override
@@ -136,52 +305,65 @@ public final class FrameCoordinator implements AutoCloseable {
         if (closed) return;
         closed = true;
 
-        RealSectionBroadModelProbe.State stateBeforeClose =
-                sectionProbe == null ? RealSectionBroadModelProbe.State.FAILED : sectionProbe.state();
-        SectionSnapshot snapshot = sectionProbe == null ? null : sectionProbe.snapshot();
-        ReferenceFaceMesh reference = sectionProbe == null ? null : sectionProbe.referenceMesh();
-        SectionBakedQuadSnapshot baked = sectionProbe == null ? null : sectionProbe.bakedSnapshot();
-        BakedSectionMesh drawable = sectionProbe == null ? null : sectionProbe.drawableMesh();
-        boolean pipelineValid = sectionProbe != null && sectionProbe.pipelineValid();
-        long resourceChecks = sectionProbe == null ? 0L : sectionProbe.resourceEpochChecks();
-        long useful = sectionProbe == null ? 0L : sectionProbe.usefulSubmissions();
-        long draws = sectionProbe == null ? 0L : sectionProbe.drawSubmissions();
-        long indirectCalls = sectionProbe == null ? 0L : sectionProbe.indirectCalls();
+        RealSectionLifecycleProbe probe = sectionProbe;
+        if (probe != null) {
+            if (probe.snapshot() != null) lastSnapshot = probe.snapshot();
+            if (probe.referenceMesh() != null) lastReference = probe.referenceMesh();
+            if (probe.bakedSnapshot() != null) lastBaked = probe.bakedSnapshot();
+            if (probe.drawableMesh() != null) lastDrawable = probe.drawableMesh();
+            probe.close();
+            totalUsefulSubmissions += probe.usefulSubmissions();
+            totalDrawSubmissions += probe.drawSubmissions();
+            totalIndirectCalls += probe.indirectCalls();
+            totalResourceEpochChecks += probe.resourceEpochChecks();
+            totalRetirementBackpressureEvents += probe.retirementBackpressureEvents();
+            totalRetirementRegistrationFailures += probe.retirementRegistrationFailures();
+            staleInstallRejections += probe.staleInstallRejections();
+            sectionProbe = null;
+        }
 
-        if (sectionProbe != null) sectionProbe.close();
         if (stagingUploads != null) stagingUploads.close();
         if (deviceArena != null) deviceArena.close();
         deferredReleases.close();
 
+        boolean lifecycleGateReady = !hardFailure
+                && staleGenerationSelfTestPassed
+                && rebuildInstallCount >= 3L
+                && lifecycleCursor.sectionDirtyEvents() > 0L
+                && lifecycleCursor.resourceReloadEvents() > 0L
+                && lifecycleCursor.chunkUnloadEvents() > 0L
+                && lifecycleCursor.chunkLoadEvents() > 0L
+                && (stagingUploads == null || stagingUploads.pendingBatches() == 0)
+                && (deviceArena == null || deviceArena.pendingRetirementBatches() == 0)
+                && deferredReleases.pendingCount() == 0;
+
+        long currentUseful = totalUsefulSubmissions;
+        long currentDraws = totalDrawSubmissions;
+        long currentIndirect = totalIndirectCalls;
+        long currentResourceChecks = totalResourceEpochChecks;
+
         LOG.log(System.Logger.Level.INFO,
-                "Phase 2 dev5 frame coordinator closed after {0} frame(s): generalizedSectionResult={1}, section=({2},{3},{4}), sampledCells={5}, interiorAir={6}, interiorSupported={7}, interiorUnsupported={8}, cubeReferenceFaces={9}, modelBlocksScanned={10}, acceptedBlocks={11}, noVisibleBlocks={12}, rejectedBlocks={13}, rejectedLeaves={14}, rejectedFluid={15}, rejectedBlockEntity={16}, rejectedMissingModel={17}, rejectedMaterial={18}, rejectedTranslucent={19}, rejectedAtlas={20}, generalizedQuads={21}, solidQuads={22}, cutoutQuads={23}, materialCount={24}, tintedQuads={25}, blockLightRange={26}..{27}, skyLightRange={28}..{29}, snapshotFingerprint={30}, cubeReferenceFingerprint={31}, generalizedFingerprint={32}, drawableFingerprint={33}, drawableVertices={34}, drawableIndices={35}, drawableVertexBytes={36}, drawableIndexBytes={37}, pipelineValid={38}, resourceEpochChecks={39}, usefulSubmissions={40}, comparisonDraws={41}, indirectCalls={42}, completedVisualPasses={43}, profilerOnlySubmissions=0, worldReadsAfterGeneralizedCapture=0, cubeOraclePreserved=true, oneBlockHaloSufficientForCapturedCullingLightSamples=true, nativeGraphicsSeam=false, indexedIndirect=true, textured=true, blockVertexFormat=true, blocksAtlasBound=true, lightmapBound=true, solidPipeline=true, cutoutPipeline=true, cutoutAlphaThreshold=0.5, comparisonColorScale=3/4, comparisonFaceOffset=1/512, vanillaTerrainActive=true, stagingSubmittedBytes={44}, stagingReclaimedBytes={45}, stagingHighWater={46}, stagingBackpressureEvents={47}, pendingUploadBatches={48}, arenaUsedBytes={49}, arenaHighWater={50}, arenaAllocations={51}, arenaAllocationFailures={52}, arenaRetired={53}, arenaReclaimed={54}, arenaRetirementBackpressureEvents={55}, arenaStaleHandleRejections={56}, arenaFreeSpans={57}, arenaLargestFree={58}, arenaFragmentationPermille={59}, pendingArenaRetirementBatches={60}, retiredResources={61}, releasedResources={62}, pendingRetirements={63}.",
-                frameIndex, stateBeforeClose,
-                snapshot == null ? 0 : snapshot.sectionX(), snapshot == null ? 0 : snapshot.sectionY(), snapshot == null ? 0 : snapshot.sectionZ(),
-                snapshot == null ? 0 : snapshot.sampledCells(), snapshot == null ? 0 : snapshot.interiorAirCells(),
-                snapshot == null ? 0 : snapshot.interiorSupportedCells(), snapshot == null ? 0 : snapshot.interiorUnsupportedCells(),
-                reference == null ? 0 : reference.faceCount(), baked == null ? 0 : baked.modelBlocksScanned(),
-                baked == null ? 0 : baked.acceptedBlocks(), baked == null ? 0 : baked.noVisibleQuadBlocks(),
-                baked == null ? 0 : baked.rejectedBlocks(), baked == null ? 0 : baked.rejectedLeavesBlocks(),
-                baked == null ? 0 : baked.rejectedFluidBlocks(), baked == null ? 0 : baked.rejectedBlockEntityBlocks(),
-                baked == null ? 0 : baked.rejectedMissingModelBlocks(), baked == null ? 0 : baked.rejectedMaterialBlocks(),
-                baked == null ? 0 : baked.rejectedTranslucentBlocks(), baked == null ? 0 : baked.rejectedAtlasBlocks(),
-                baked == null ? 0 : baked.quadCount(), baked == null ? 0 : baked.solidQuads(), baked == null ? 0 : baked.cutoutQuads(),
-                baked == null ? 0 : baked.materialCount(), baked == null ? 0 : baked.tintedQuads(),
-                baked == null ? 0 : baked.minBlockLight(), baked == null ? 0 : baked.maxBlockLight(),
-                baked == null ? 0 : baked.minSkyLight(), baked == null ? 0 : baked.maxSkyLight(),
-                snapshot == null ? "none" : Long.toUnsignedString(snapshot.fingerprint()),
-                reference == null ? "none" : Long.toUnsignedString(reference.fingerprint()),
-                baked == null ? "none" : Long.toUnsignedString(baked.fingerprint()),
-                drawable == null ? "none" : Long.toUnsignedString(drawable.fingerprint()),
-                drawable == null ? 0 : drawable.vertexCount(), drawable == null ? 0 : drawable.indexCount(),
-                drawable == null ? 0 : drawable.vertexBytes(), drawable == null ? 0 : drawable.indexBytes(),
-                pipelineValid, resourceChecks, useful, draws, indirectCalls, completedVisualPasses,
+                "Phase 2 dev6 frame coordinator closed after {0} frame(s): lifecycleGateReady={1}, hardFailure={2}, trackedSection={3}, currentGeneration={4}, installedGeneration={5}, generationAdvances={6}, installCount={7}, rebuildInstalls={8}, invalidationBatches={9}, coalescedEvents={10}, staleGenerationSelfTest={11}, staleInstallRejections={12}, dirtyEvents={13}, playerDirtyEvents={14}, chunkLoadEvents={15}, chunkUnloadEvents={16}, worldChangeEvents={17}, resourceReloadEvents={18}, droppedLifecycleEvents={19}, observedReasons={20}, maxRebuildLatencyNs={21}, snapshotFingerprint={22}, cubeReferenceFingerprint={23}, generalizedFingerprint={24}, drawableFingerprint={25}, generalizedQuads={26}, solidQuads={27}, cutoutQuads={28}, usefulSubmissions={29}, comparisonDraws={30}, indirectCalls={31}, resourceEpochChecks={32}, profilerOnlySubmissions=0, worldReadsAfterGeneralizedCapture=0, cubeOraclePreserved=true, generationCarriedCaptureBuildUploadInstall=true, exactVanillaDirtySink=true, immediateStaleDrawSuppression=true, completionGatedReplacement=true, nativeGraphicsSeam=false, indexedIndirect=true, stagingSubmittedBytes={33}, stagingReclaimedBytes={34}, stagingBackpressureEvents={35}, pendingUploadBatches={36}, arenaUsedBytes={37}, arenaAllocations={38}, arenaRetired={39}, arenaReclaimed={40}, arenaRetirementBackpressureEvents={41}, arenaStaleHandleRejections={42}, arenaFreeSpans={43}, arenaLargestFree={44}, arenaFragmentationPermille={45}, pendingArenaRetirementBatches={46}, retiredResources={47}, releasedResources={48}, pendingRetirements={49}.",
+                frameIndex, lifecycleGateReady, hardFailure,
+                targetKnown ? "(" + targetSectionX + "," + targetSectionY + "," + targetSectionZ + ")" : "unbound",
+                generationGate.currentGeneration(), generationGate.installedGeneration(), generationGate.advances(),
+                installCount, rebuildInstallCount, invalidationBatches, coalescedEvents,
+                staleGenerationSelfTestPassed, staleInstallRejections + generationGate.rejectedInstalls(),
+                lifecycleCursor.sectionDirtyEvents(), lifecycleCursor.playerDirtyEvents(),
+                lifecycleCursor.chunkLoadEvents(), lifecycleCursor.chunkUnloadEvents(),
+                lifecycleCursor.worldChangeEvents(), lifecycleCursor.resourceReloadEvents(), lifecycleCursor.droppedEvents(),
+                SectionLifecycleEvents.describeReasons(observedReasonMask), maxRebuildLatencyNs,
+                lastSnapshot == null ? "none" : Long.toUnsignedString(lastSnapshot.fingerprint()),
+                lastReference == null ? "none" : Long.toUnsignedString(lastReference.fingerprint()),
+                lastBaked == null ? "none" : Long.toUnsignedString(lastBaked.fingerprint()),
+                lastDrawable == null ? "none" : Long.toUnsignedString(lastDrawable.fingerprint()),
+                lastBaked == null ? 0 : lastBaked.quadCount(), lastBaked == null ? 0 : lastBaked.solidQuads(),
+                lastBaked == null ? 0 : lastBaked.cutoutQuads(), currentUseful, currentDraws, currentIndirect, currentResourceChecks,
                 stagingUploads == null ? 0L : stagingUploads.submittedBytes(), stagingUploads == null ? 0L : stagingUploads.reclaimedBytes(),
-                stagingUploads == null ? 0L : stagingUploads.highWaterBytes(), stagingUploads == null ? 0L : stagingUploads.backpressureEvents(),
-                stagingUploads == null ? 0 : stagingUploads.pendingBatches(), deviceArena == null ? 0L : deviceArena.usedBytes(),
-                deviceArena == null ? 0L : deviceArena.highWaterBytes(), deviceArena == null ? 0L : deviceArena.successfulAllocations(),
-                deviceArena == null ? 0L : deviceArena.allocationFailures(), deviceArena == null ? 0L : deviceArena.retiredAllocations(),
-                deviceArena == null ? 0L : deviceArena.reclaimedAllocations(), deviceArena == null ? 0L : deviceArena.retirementBackpressureEvents(),
+                stagingUploads == null ? 0L : stagingUploads.backpressureEvents(), stagingUploads == null ? 0 : stagingUploads.pendingBatches(),
+                deviceArena == null ? 0L : deviceArena.usedBytes(), deviceArena == null ? 0L : deviceArena.successfulAllocations(),
+                deviceArena == null ? 0L : deviceArena.retiredAllocations(), deviceArena == null ? 0L : deviceArena.reclaimedAllocations(),
+                (deviceArena == null ? 0L : deviceArena.retirementBackpressureEvents()) + totalRetirementBackpressureEvents,
                 deviceArena == null ? 0L : deviceArena.staleHandleRejections(), deviceArena == null ? 0 : deviceArena.freeSpanCount(),
                 deviceArena == null ? 0L : deviceArena.largestFreeBlockBytes(), deviceArena == null ? 0 : deviceArena.fragmentationPermille(),
                 deviceArena == null ? 0 : deviceArena.pendingRetirementBatches(), deferredReleases.retiredCount(),
