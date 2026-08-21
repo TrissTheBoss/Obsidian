@@ -1,0 +1,72 @@
+name: Inspect Phase 2 Dev6 Targeted Lifecycle APIs
+
+on:
+  push:
+    branches: [phase2/section-lifecycle-rebuild-inspect]
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+      - name: Inspect exact targeted lifecycle contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle classes --stacktrace
+          cat > /tmp/obsidian-inspect.init.gradle <<'EOF'
+          allprojects {
+            afterEvaluate { p ->
+              if (p == rootProject) {
+                tasks.register('printClientCompileClasspath') {
+                  doLast { println sourceSets.client.compileClasspath.files.collect { it.absolutePath }.join(File.pathSeparator) }
+                }
+              }
+            }
+          }
+          EOF
+          gradle -q -I /tmp/obsidian-inspect.init.gradle printClientCompileClasspath | tail -n 1 > /tmp/cp
+          CP="$(cat /tmp/cp)"
+          mkdir -p inspection-dev6-targeted
+          cat > inspection-dev6-targeted/classes.txt <<'EOF'
+          net.minecraft.client.renderer.extract.LevelExtractor
+          net.minecraft.client.multiplayer.ClientChunkCache$Storage
+          net.minecraft.world.level.Level
+          net.minecraft.client.renderer.ViewArea
+          net.minecraft.client.renderer.chunk.SectionRenderDispatcher$RenderSection
+          net.minecraft.client.resources.model.ModelManager
+          net.minecraft.client.Minecraft
+          EOF
+          : > inspection-dev6-targeted/api.txt
+          : > inspection-dev6-targeted/code.txt
+          while IFS= read -r CLASS; do
+            echo "=== $CLASS ===" >> inspection-dev6-targeted/api.txt
+            javap -classpath "$CP" -public "$CLASS" >> inspection-dev6-targeted/api.txt 2>&1 || true
+            echo >> inspection-dev6-targeted/api.txt
+            echo "=== $CLASS ===" >> inspection-dev6-targeted/code.txt
+            javap -classpath "$CP" -c -p "$CLASS" >> inspection-dev6-targeted/code.txt 2>&1 || true
+            echo >> inspection-dev6-targeted/code.txt
+          done < inspection-dev6-targeted/classes.txt
+          grep -n -E 'setBlockDirty|blockChanged|setSectionDirty|setSectionDirtyWithNeighbors|setSectionRangeDirty|dirty|Dirty|drop\(|unload|onChunkLoaded|replaceWithPacketData|setLevel|disconnect|reload|Reload|apply|barrier|resource|Resource|RenderSection|reset\(' inspection-dev6-targeted/code.txt > inspection-dev6-targeted/key-grep.txt || true
+
+          # Inventory resolved Fabric event/reload APIs without assuming package names.
+          : > inspection-dev6-targeted/fabric-classes.txt
+          tr ':' '\n' < /tmp/cp | while IFS= read -r JAR; do
+            if [ -f "$JAR" ] && [[ "$JAR" == *.jar ]]; then
+              jar tf "$JAR" 2>/dev/null | grep -E '^net/fabricmc/fabric/api/.*(Chunk|World|Block|Light|Reload|Resource).*\.class$' || true
+            fi
+          done | sort -u > inspection-dev6-targeted/fabric-classes.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase2-dev6-targeted-lifecycle-inspection-${{ github.sha }}
+          if-no-files-found: error
+          path: inspection-dev6-targeted/
