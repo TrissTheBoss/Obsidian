@@ -55,7 +55,7 @@ P2.7 cannot reach `main` until P2.6 closes.
 
 Phase 3 may proceed forward on top of validated P2.7 while P2.6 waits for its specific manual unload/return coverage. Phase 3 remains **non-mergeable** until the P2.6 -> P2.7 dependency chain reaches `main` and separate Phase 3 merge authorization exists.
 
-No Phase 3 merge authorization currently exists.
+Separate Phase 3 merge authorization now exists from the user as of 2026-08-21. That satisfies the human-authorization half of the merge condition; it does **not** waive the still-open P2.6 -> P2.7 dependency gate.
 
 ### P3.1 dev1 — first worker/job concurrency boundary runtime validated
 
@@ -69,7 +69,7 @@ No Phase 3 merge authorization currently exists.
 
 A-0092 proved the bounded worker/job boundary with 12 submitted jobs, 4 completed, 8 cancelled from 8 requests, 11 stolen, zero queue-full rejection/failure/stale batch, deterministic accepted worker meshes, `workerWorldReadsAfterCapture=0`, full renderer cleanup and exit 0. It deliberately retained `productionSceneInstallStillSynchronous=true`; dev1 proved concurrency architecture only.
 
-### P3.1 dev2 — production async scene implemented and exact-CI/package verified; reference runtime next
+### P3.1 dev2 — production async scene reference-runtime validated; merge-authorized but dependency-blocked
 
 - Branch: `phase3/async-scene-integration`.
 - Canonical stacked PR: #32, base `phase3/worker-job-architecture`, open/draft.
@@ -78,141 +78,79 @@ A-0092 proved the bounded worker/job boundary with 12 submitted jobs, 4 complete
 - A-0095: branch handoff.
 - A-0096: first implementation + exact CI/package/bytecode evidence.
 - A-0097: shutdown-gate accounting correction + corrected exact CI/package evidence.
-- Temporary PR #33 targets `main` **only** to trigger exact CI and is NEVER MERGE.
+- A-0098: reference runtime success + explicit Phase 3 merge authorization.
+- Temporary main-targeting CI PR #33 was closed unmerged after exact CI.
 
-Active dev2 production path:
-
-- `AsyncMultiSectionSceneProbe` owns the persistent 3x3 scene;
-- `WorkerBackedSectionLifecycleProbe` owns each async section record;
-- `SectionMeshWorkerPool` performs pure drawable mesh construction;
-- render-thread staging, device arena, indexed-indirect drawing and completion-gated retirement remain unchanged in ownership.
-
-The validated P2.6/P2.7 probe classes remain in source as historical correctness oracles rather than being rewritten by this concurrency milestone.
-
-#### Ownership flow
+#### Proven ownership flow
 
 `render-thread immutable capture -> bounded worker mesh job -> render-thread generation/event/resource validation -> render-thread GPU allocation/upload/install -> completion-gated replacement`
 
-Render thread continues to own:
+`AsyncMultiSectionSceneProbe` owns the persistent 3x3 validation scene, `WorkerBackedSectionLifecycleProbe` owns async section records, and `SectionMeshWorkerPool` performs pure deterministic mesh construction from immutable `SectionSnapshot` + `SectionBakedQuadSnapshot` inputs. Live world/model/material/light capture and all GPU allocation/staging/draw/retirement ownership remain render-thread-only.
 
-1. live world/chunk access;
-2. `SectionSnapshot` capture;
-3. generalized vanilla model/material/light/tint capture into `SectionBakedQuadSnapshot`;
-4. permanent `ReferenceFaceMesh` oracle checks;
-5. worker ticket admission/acceptance;
-6. lifecycle/resource identity validation;
-7. GPU arena allocation;
-8. staging upload;
-9. indirect command creation and draw encoding;
-10. GPU retirement/reclamation.
+The validated P2.6/P2.7 probe classes remain in source as historical correctness oracles. Greedy/bitmask meshing remains downstream P3.2 work.
 
-Workers receive only immutable `SectionSnapshot` + `SectionBakedQuadSnapshot` plus generation/event-sequence/priority metadata and perform pure deterministic `BakedSectionMesh.build(...)` work.
+#### Dev2 corrected package evidence
 
-#### Active record state machine
+Corrected source head tested before documentation synchronization:
 
-`WAITING_WORLD -> WAITING_MESH -> READY_TO_INSTALL -> LIVE -> RETIRING -> RETIRED`
+- `da4bd615a7de0bf90ac42c39ab945bb4903ae194`.
 
-with `STALE`, `FAILED`, and `CLOSED` control/terminal states.
+Exact GitHub Actions evidence:
 
-Identity is checked before accepting a completed worker result, before GPU allocation, and immediately before staging submission/install. Invalidation while queued/running requests cancellation. Completed stale pre-install work is discarded without GPU allocation. Safe stale/cancelled pre-install work is measured separately from unsafe stale GPU installation.
-
-#### Production scheduling in dev2
-
-- whole-window invalidation remains inherited from correctness-first P2.7;
-- center record uses HIGH priority;
-- neighboring records use NORMAL priority;
-- LOW is reserved for later background relevance work;
-- one new record is admitted per render frame;
-- multiple mesh jobs may be queued/running concurrently;
-- install remains serialized by the bounded staging pending-batch contract;
-- no fallback/unbounded queue exists.
-
-The dev1 synthetic `WorkerMeshValidationProbe` is no longer part of the active `FrameCoordinator`; real scene records now exercise the worker pool.
-
-#### Shutdown gate correction
-
-A-0097 supersedes the first A-0096 runtime package for testing.
-
-The first dev2 coordinator sampled cleanup status before its bounded shutdown waits had drained scene-close retirements, so a correct live scene could falsely report `phase3GateReady=false`. The corrected coordinator now:
-
-1. snapshots scene evidence;
-2. closes the scene and registers completion-gated retirements;
-3. closes/joins workers;
-4. drains/closes staging with its bounded fence wait;
-5. drains/closes the device arena with its bounded retirement wait;
-6. drains/closes deferred GPU resources;
-7. evaluates the runtime gate from post-drain state.
-
-The gate explicitly requires `workersClean=true`, `stagingClean=true`, `arenaClean=true`, and `resourcesClean=true`, plus no staging/arena shutdown abandonment.
-
-#### Corrected exact CI/package evidence
-
-Corrected source head tested:
-
-- `da4bd615a7de0bf90ac42c39ab945bb4903ae194`
-
-Exact GitHub Actions:
-
-- temporary CI PR #33;
-- run `32521379106`;
-- Java 25 / Gradle 9.5.1 job `96894077235`;
-- Build success;
-- artifact upload success;
-- release publishing correctly skipped;
-- artifact id `9460674755`;
-- artifact wrapper digest `sha256:0762557f387ae3e42b6d604ff4f6a052b0ea00e8d2ee609ac6b8a494b6ed628a`.
-
-**Use these A-0097 artifacts for reference runtime:**
-
-- `Obsidian-0.3.0-phase3-dev2.jar`
-  - size `269,557` bytes;
-  - SHA-256 `0f1cc8f2aa50da277c8b6bacb531d065ba7ecf489c9e406a2e15fa7c8a455044`.
-- `Obsidian-0.3.0-phase3-dev2-sources.jar`
-  - size `140,377` bytes;
-  - SHA-256 `fc51609e5523620796bd78b6bd4c572e23958c8a920d1b241b48d9737380c497`.
+- corrected run `32521379106`, Java 25 / Gradle 9.5.1, build + artifact upload success, release skipped;
+- documentation-synchronized run `32521543712`, success;
+- corrected runtime JAR: `Obsidian-0.3.0-phase3-dev2.jar`;
+- size `269,557` bytes;
+- SHA-256 `0f1cc8f2aa50da277c8b6bacb531d065ba7ecf489c9e406a2e15fa7c8a455044`.
 
 A-0096 package hashes are historical pre-A-0097 evidence and are superseded for runtime testing.
 
-Bytecode ownership evidence from A-0096 remains structurally valid: render-thread worker-backed records submit/cancel worker tickets and own lifecycle checks/GPU allocation/staging/indexed-indirect draws, while `SectionMeshWorkerPool$Worker` owns the deterministic `BakedSectionMesh.build(snapshot, bakedSnapshot)` calls. The render-thread record does not call `BakedSectionMesh.build(...)`.
+#### Dev2 reference runtime success
 
-This closes dev2 implementation/compile/package evidence only. It is **not** reference-runtime validation.
+The corrected A-0097 package was run on the reference Windows 11 / Prism Launcher / Minecraft 26.2 / Fabric Loader 0.19.3 / Fabric API 0.158.0+26.2 / Java 25.0.1 / Radeon RX 6800 XT Vulkan system. The production asynchronous scene gate passed under real dirty-event rebuilds, resource reload, camera recenter churn, and normal shutdown.
 
-#### Dev2 reference runtime gate
-
-Run the corrected A-0097 `0.3.0-phase3-dev2` artifact on the reference Vulkan system and exercise:
-
-1. ordinary surface terrain with supported SOLID + CUTOUT content;
-2. initial async 3x3 scene READY;
-3. visual border/stale-geometry inspection;
-4. break/place blocks and allow a worker-backed rebuild;
-5. F3+T once and allow another rebuild;
-6. optional movement/recenter for additional cancellation/relevance churn;
-7. normal exit with the complete Prism log.
-
-Desired final evidence includes:
+Final evidence:
 
 - `phase3GateReady=true`;
 - `productionWorkerIntegrationReady=true`;
+- `hardFailure=false`;
 - `productionSceneInstallStillSynchronous=false`;
 - `productionWorkerSceneIntegration=true`;
-- at least two scene READY transitions;
-- at least one rebuild;
-- at least three worker-result installs;
-- scene worker installs equal renderer record installs;
-- zero synchronous scene mesh builds;
-- zero unsafe stale scene installs;
-- zero queue-full rejection/worker failure;
-- zero queued/running jobs at shutdown;
-- nonzero dirty + resource-reload events;
-- zero dropped lifecycle events;
+- `renderThreadCaptureOwnership=true`;
+- `renderThreadGpuOwnership=true`;
+- `workerWorldReadsAfterCapture=0`;
+- `synchronousSceneMeshBuilds=0`;
+- worker submitted/started/completed `131/131/131`;
+- worker cancelled `0`, queue-full rejections `0`, failures `0`;
+- worker stolen jobs `97`;
+- worker maximum queue depth `1`;
+- scene worker installs / record installs `131/131`;
+- scene READY transitions `25`;
+- scene rebuilds `24`;
+- maximum live records `8`;
+- maximum adjacent pairs `10`;
+- camera recenter events `2`;
+- resource reload events `2`;
+- dirty events `1,052`;
+- dropped lifecycle events `0`;
+- unsafe stale scene installs `0`;
 - `workersClean=true`;
 - `stagingClean=true`;
 - `arenaClean=true`;
 - `resourcesClean=true`;
-- no staging/arena shutdown abandonment;
-- exit code 0.
+- staging submitted/reclaimed `9,553,256 / 9,553,256` bytes;
+- pending staging batches `0`, staging abandonment `false`;
+- arena used bytes `0`, allocations `262`, retired/reclaimed `262/262`, fragmentation `0`, arena abandonment `false`;
+- deferred resources retired/released `131/131`, pending `0`;
+- process exit code `0`.
 
-Safe pre-install cancellation/stale-discard counts may be nonzero and are not failures. Camera recenter is optional for dev2 because P2.7 already proved that behavior separately.
+This closes the dev2 production async-scene runtime gate. The same dev2 run recorded `chunkLoadEvents=0` and `chunkUnloadEvents=0`; those counters do not substitute for the standalone P2.6 fixed-target unload/return gate.
+
+The user explicitly authorized Phase 3 merging after this successful run. PR #32 still remains draft/unmerged because its recorded merge contract requires the P2.6 -> P2.7 dependency chain to reach `main` first.
+
+#### Runtime artifact handoff preference
+
+For future user runtime testing, provide the direct versioned Obsidian `.jar` as the user-facing artifact whenever possible rather than requiring the user to unpack the GitHub Actions ZIP wrapper.
 
 ### Remaining P3.1 after dev2 runtime success
 
@@ -223,7 +161,9 @@ Before P3.2 activates, P3.1 still needs:
 3. production queue latency, execution latency and output-size evidence;
 4. scheduler/backpressure tuning justified by measurements.
 
-Do not begin greedy/bitmask meshing merely because dev2 compiles; P3.2 remains downstream of P3.1 closure.
+The dev2 run's `maxSimultaneousSceneJobs=1` / maximum worker queue depth `1` is useful correctness evidence but is not sufficient streaming-pressure scheduler evidence. A deliberate pressure scenario is still required before scheduler-performance claims.
+
+Do not begin greedy/bitmask meshing merely because dev2 passed; P3.2 remains downstream of P3.1 closure.
 
 ## Continuity model
 
