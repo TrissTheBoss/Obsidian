@@ -73,7 +73,7 @@ public final class ObsidianBootstrap {
             LOG.log(System.Logger.Level.DEBUG, "Backend description: {0}", caps.backendDescription());
         }
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 2 dev6 lifecycle probe armed. Exact Minecraft 26.2 LevelExtractor dirtiness, ClientLevel chunk load/unload, world replacement and successful ModelManager reload completion feed a bounded primitive event bridge. One tracked section carries a renderer generation through immutable capture, deterministic generalized SOLID/CUTOUT build, bounded upload and live installation. Invalidated geometry stops drawing immediately; stale generations are rejected before installation; replaced/unloaded GPU ownership remains completion-gated. Vanilla terrain remains active. Multi-section scene ownership remains P2.7 and production async greedy meshing remains Phase 3.");
+                "Obsidian Phase 2 dev7 multi-section scene probe armed. A persistent renderer-owned 3x3 horizontal section table reuses the proven dev6 immutable capture, generalized SOLID/CUTOUT build, public BLOCK/lightmap indexed-indirect drawing and completion-gated GPU ownership. Exact vanilla dirtiness within the scene plus the union 5x5 chunk halo, world replacement and successful resource reload drive one lossless validity domain. Upload admission is one record at a time; this correctness milestone rebuilds the whole scene window after relevant invalidation. Vanilla terrain remains active. Production per-section async scheduling and binary greedy meshing remain Phase 3.");
     }
 
     public static void onFrameStart() {

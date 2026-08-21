@@ -2,14 +2,14 @@ package dev.obsidian.render.terrain;
 
 /**
  * Allocation-free coalescing bridge from exact Minecraft lifecycle mixins into
- * the render-thread P2.6 one-section lifecycle proof.
+ * the render-thread P2.7 multi-section scene proof.
  *
- * <p>The bridge intentionally does not queue every vanilla dirty notification.
- * Once the validation section is bound, only events that can affect that exact
- * section (or its 3x3 chunk halo neighborhood), plus world/resource changes,
- * advance the renderer validity sequence. Counters are sticky and drained by
- * delta, so unrelated chunk streaming cannot overflow a ring and cannot make a
- * valid tracked generation stale.</p>
+ * <p>The tracked scene is a 3x3 horizontal section window at one section Y.
+ * Exact dirty events inside that window advance renderer validity. Chunk
+ * load/unload events use radius two in X/Z because the union of every record's
+ * one-block halo spans a 5x5 chunk footprint. World and resource changes are
+ * always relevant. Counters are sticky and drained by delta, so unrelated world
+ * streaming cannot overflow a queue or stale a valid scene generation.</p>
  */
 public final class SectionLifecycleEvents {
     public static final int REASON_SECTION_DIRTY = 1;
@@ -17,15 +17,21 @@ public final class SectionLifecycleEvents {
     public static final int REASON_CHUNK_UNLOAD = 1 << 2;
     public static final int REASON_WORLD_CHANGE = 1 << 3;
     public static final int REASON_RESOURCE_RELOAD = 1 << 4;
-    /** Reserved for explicit safety invalidation; the coalescing bridge itself cannot overflow. */
+    /** Reserved for explicit internal safety invalidation; the bridge itself cannot overflow. */
     public static final int REASON_OVERFLOW = 1 << 5;
+    /** Renderer-originated scene recenter, not emitted by Minecraft lifecycle hooks. */
+    public static final int REASON_SCENE_RECENTER = 1 << 6;
+
+    public static final int SCENE_SECTION_RADIUS = 1;
+    public static final int SCENE_RECORD_CAPACITY = 9;
+    public static final int SCENE_HALO_CHUNK_RADIUS = SCENE_SECTION_RADIUS + 1;
 
     private static boolean targetKnown;
     private static int targetSectionX;
     private static int targetSectionY;
     private static int targetSectionZ;
 
-    /** Monotonic sequence of events relevant to the currently tracked renderer validity domain. */
+    /** Monotonic sequence of events relevant to the currently tracked scene validity domain. */
     private static long relevantSequence;
     private static long sectionDirtyEvents;
     private static long playerDirtyEvents;
@@ -62,40 +68,45 @@ public final class SectionLifecycleEvents {
         return relevantSequence;
     }
 
-    /**
-     * Called from the exact vanilla LevelExtractor dirty sink. Vanilla already
-     * performed block/light/border propagation; only the chosen section matters
-     * to this one-section proof.
-     */
+    /** Immediately updates the renderer-owned tracked scene identity. */
+    public static synchronized void bindTrackedScene(
+            boolean rendererTargetKnown,
+            int sectionX,
+            int sectionY,
+            int sectionZ) {
+        targetKnown = rendererTargetKnown;
+        if (rendererTargetKnown) {
+            targetSectionX = sectionX;
+            targetSectionY = sectionY;
+            targetSectionZ = sectionZ;
+        }
+    }
+
+    /** Called from the exact vanilla LevelExtractor dirty sink. */
     public static synchronized void sectionDirty(
             int sectionX,
             int sectionY,
             int sectionZ,
             boolean dirtyFromPlayer) {
-        if (!targetKnown
-                || sectionX != targetSectionX
-                || sectionY != targetSectionY
-                || sectionZ != targetSectionZ) {
-            return;
-        }
+        if (!isRenderedSceneSection(sectionX, sectionY, sectionZ)) return;
         relevantSequence++;
         sectionDirtyEvents++;
         if (dirtyFromPlayer) playerDirtyEvents++;
     }
 
     public static synchronized void chunkLoaded(int chunkX, int chunkZ) {
-        if (!isTargetNeighborhoodChunk(chunkX, chunkZ)) return;
+        if (!isSceneHaloChunk(chunkX, chunkZ)) return;
         relevantSequence++;
         chunkLoadEvents++;
     }
 
     public static synchronized void chunkUnloaded(int chunkX, int chunkZ) {
-        if (!isTargetNeighborhoodChunk(chunkX, chunkZ)) return;
+        if (!isSceneHaloChunk(chunkX, chunkZ)) return;
         relevantSequence++;
         chunkUnloadEvents++;
     }
 
-    /** World replacement/teardown invalidates any previous target immediately. */
+    /** World replacement/teardown invalidates any previous scene immediately. */
     public static synchronized void worldChanged() {
         relevantSequence++;
         worldChangeEvents++;
@@ -107,17 +118,23 @@ public final class SectionLifecycleEvents {
         resourceReloadEvents++;
     }
 
-    private static boolean isTargetNeighborhoodChunk(int chunkX, int chunkZ) {
+    private static boolean isRenderedSceneSection(int sectionX, int sectionY, int sectionZ) {
         return targetKnown
-                && Math.abs(chunkX - targetSectionX) <= 1
-                && Math.abs(chunkZ - targetSectionZ) <= 1;
+                && sectionY == targetSectionY
+                && Math.abs(sectionX - targetSectionX) <= SCENE_SECTION_RADIUS
+                && Math.abs(sectionZ - targetSectionZ) <= SCENE_SECTION_RADIUS;
+    }
+
+    private static boolean isSceneHaloChunk(int chunkX, int chunkZ) {
+        return targetKnown
+                && Math.abs(chunkX - targetSectionX) <= SCENE_HALO_CHUNK_RADIUS
+                && Math.abs(chunkZ - targetSectionZ) <= SCENE_HALO_CHUNK_RADIUS;
     }
 
     /**
-     * Drains sticky counters by delta and synchronizes the bridge's target with
-     * the coordinator. A pending world change wins over the coordinator's old
-     * target so teardown cannot accidentally rebind stale coordinates for one
-     * frame. No event payload can be overwritten, so droppedEvents remains zero.
+     * Drains sticky counters by delta and synchronizes the bridge target with
+     * the scene coordinator. A pending world change wins over the coordinator's
+     * previous target so teardown cannot rebind stale coordinates for one frame.
      */
     public static synchronized int drain(
             Cursor cursor,
@@ -196,6 +213,7 @@ public final class SectionLifecycleEvents {
         appendReason(out, reasons, REASON_WORLD_CHANGE, "world-change");
         appendReason(out, reasons, REASON_RESOURCE_RELOAD, "resource-reload");
         appendReason(out, reasons, REASON_OVERFLOW, "safety-invalidate");
+        appendReason(out, reasons, REASON_SCENE_RECENTER, "scene-recenter");
         return out.toString();
     }
 
