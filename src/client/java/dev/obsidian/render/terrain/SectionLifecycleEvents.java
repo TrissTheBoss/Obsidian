@@ -58,23 +58,6 @@ public final class SectionLifecycleEvents {
         public int lastRelevantEventCount() { return lastRelevantEventCount; }
     }
 
-    /**
-     * Binds the exact section whose renderer generation is currently being
-     * validated. Rebinding the same section is a no-op and does not itself
-     * advance validity.
-     */
-    public static synchronized void bindTarget(int sectionX, int sectionY, int sectionZ) {
-        targetKnown = true;
-        targetSectionX = sectionX;
-        targetSectionY = sectionY;
-        targetSectionZ = sectionZ;
-    }
-
-    /** Stops target-specific dirtiness/chunk events from affecting validity. */
-    public static synchronized void unbindTarget() {
-        targetKnown = false;
-    }
-
     public static synchronized long latestSequence() {
         return relevantSequence;
     }
@@ -131,11 +114,27 @@ public final class SectionLifecycleEvents {
     }
 
     /**
-     * Drains sticky counters by delta. No event payload can be overwritten, so
-     * droppedEvents remains zero unless a future implementation explicitly
-     * introduces a lossy source.
+     * Drains sticky counters by delta and synchronizes the bridge's target with
+     * the coordinator. A pending world change wins over the coordinator's old
+     * target so teardown cannot accidentally rebind stale coordinates for one
+     * frame. No event payload can be overwritten, so droppedEvents remains zero.
      */
-    public static synchronized int drain(Cursor cursor) {
+    public static synchronized int drain(
+            Cursor cursor,
+            boolean rendererTargetKnown,
+            int sectionX,
+            int sectionY,
+            int sectionZ) {
+        boolean worldChangePending = worldChangeEvents != cursor.worldChangeEvents;
+        if (worldChangePending || !rendererTargetKnown) {
+            targetKnown = false;
+        } else {
+            targetKnown = true;
+            targetSectionX = sectionX;
+            targetSectionY = sectionY;
+            targetSectionZ = sectionZ;
+        }
+
         cursor.lastRelevantEventCount = 0;
         int reasons = 0;
 
