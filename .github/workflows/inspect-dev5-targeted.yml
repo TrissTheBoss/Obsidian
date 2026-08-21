@@ -1,0 +1,82 @@
+name: Inspect Phase 2 Dev5 Targeted APIs
+
+on:
+  push:
+    branches: [phase2/broader-opaque-cutout-semantics-inspect]
+  pull_request:
+    branches: [main]
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+      - name: Inspect exact targeted dev5 contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle classes --stacktrace
+          cat > /tmp/obsidian-inspect.init.gradle <<'EOF'
+          allprojects {
+            afterEvaluate { p ->
+              if (p == rootProject) {
+                tasks.register('printClientCompileClasspath') {
+                  doLast { println sourceSets.client.compileClasspath.files.collect { it.absolutePath }.join(File.pathSeparator) }
+                }
+              }
+            }
+          }
+          EOF
+          gradle -q -I /tmp/obsidian-inspect.init.gradle printClientCompileClasspath | tail -n 1 > /tmp/cp
+          CP="$(cat /tmp/cp)"
+          mkdir -p inspection-targeted
+          cat > inspection-targeted/classes.txt <<'EOF'
+          net.minecraft.client.renderer.chunk.SectionCompiler
+          net.minecraft.client.renderer.chunk.ChunkSectionLayer
+          net.minecraft.client.renderer.RenderPipelines
+          net.minecraft.client.renderer.block.ModelBlockRenderer
+          net.minecraft.client.renderer.block.BlockModelLighter
+          net.minecraft.client.renderer.block.QuadInstance
+          net.minecraft.client.renderer.block.BlockRenderDispatcher
+          net.minecraft.client.renderer.block.dispatch.BlockStateModel
+          net.minecraft.client.renderer.block.dispatch.BlockStateModelPart
+          net.minecraft.client.resources.model.geometry.BakedQuad
+          net.minecraft.client.resources.model.geometry.BakedQuad$MaterialInfo
+          net.minecraft.world.level.block.Block
+          net.minecraft.world.level.block.state.BlockState
+          net.minecraft.world.level.block.state.BlockBehaviour$BlockStateBase
+          com.mojang.blaze3d.pipeline.RenderPipeline
+          com.mojang.blaze3d.vertex.DefaultVertexFormat
+          com.mojang.blaze3d.vertex.VertexConsumer
+          EOF
+          : > inspection-targeted/api.txt
+          : > inspection-targeted/code.txt
+          while IFS= read -r CLASS; do
+            echo "=== $CLASS ===" >> inspection-targeted/api.txt
+            javap -classpath "$CP" -public "$CLASS" >> inspection-targeted/api.txt 2>&1 || true
+            echo >> inspection-targeted/api.txt
+            echo "=== $CLASS ===" >> inspection-targeted/code.txt
+            javap -classpath "$CP" -c -p "$CLASS" >> inspection-targeted/code.txt 2>&1 || true
+            echo >> inspection-targeted/code.txt
+          done < inspection-targeted/classes.txt
+          : > inspection-targeted/discovered-names.txt
+          tr ':' '\n' < /tmp/cp | while IFS= read -r JAR; do
+            if [ -f "$JAR" ] && [[ "$JAR" == *.jar ]]; then
+              jar tf "$JAR" 2>/dev/null | grep -E '^net/minecraft/client/.*(Occlusion|Cull|Cutout|SectionCompiler|BlockModelLighter|ModelBlockRenderer|QuadInstance|BakedQuad|ChunkSectionLayer).*\.class$' || true
+            fi
+          done | sort -u > inspection-targeted/discovered-names.txt
+          grep -n -E 'getQuads|collectParts|shouldRenderFace|skipRendering|occlusion|Occlusion|CUTOUT|SOLID|TRANSLUCENT|discard|alpha|withCull|withDepth|writeMask|POSITION.*BLOCK|putBlockBakedQuad|prepareQuad|recalculate|winding|layer\(\)|tintIndex|isTinted|lightEmission|shade\(\)|position[0-3]?\(|packedUV|useAmbientOcclusion|getShape|general' inspection-targeted/code.txt > inspection-targeted/key-grep.txt || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase2-dev5-targeted-inspection-${{ github.sha }}
+          if-no-files-found: error
+          path: inspection-targeted/
