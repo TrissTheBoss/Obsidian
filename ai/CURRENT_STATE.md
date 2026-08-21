@@ -22,8 +22,8 @@ Last updated: 2026-08-21
 - Active branch: `phase2/section-lifecycle-rebuild`
 - Active draft PR: #25, `Phase 2 dev6: section lifecycle and rebuild correctness`
 - Current development version: `0.2.0-phase2-dev6`
-- P2.6 status: **exact Minecraft 26.2 lifecycle seams grounded + generation-safe implementation + CI/package/bytecode verified; reference lifecycle runtime/human gate pending**
-- Last runtime-validated development version: `0.2.0-phase2-dev5`
+- P2.6 status: **human visual behavior passed on first runtime, but machine gate exposed lossy event-bridge overflow; target-scoped correction implemented + exact CI/package/bytecode verified; corrected reference runtime retest pending**
+- Last fully runtime-validated development version: `0.2.0-phase2-dev5`
 
 ## Continuity model
 
@@ -63,13 +63,14 @@ P2.4 established exact Minecraft 26.2 block/sky light, directional shade and amb
 
 P2.5 established exact generalized vanilla MODEL semantics for the accepted SOLID/CUTOUT domain through `ModelBlockRenderer.tesselateBlock(...) -> BlockQuadOutput`, immutable arbitrary quad capture and deterministic layered BLOCK-format public indexed-indirect drawing. Runtime evidence: `ai/attempts/A-0079-phase2-dev5-runtime-success.md`.
 
-## P2.6 / dev6 - IMPLEMENTED / CI + PACKAGE VERIFIED / RUNTIME PENDING
+## P2.6 / dev6 - CORRECTED IMPLEMENTATION / CI + PACKAGE VERIFIED / RETEST PENDING
 
 Evidence:
 
 - plan: `ai/attempts/A-0080-phase2-dev6-section-lifecycle-plan.md`;
 - exact Minecraft 26.2 lifecycle inspection: `ai/attempts/A-0081-phase2-dev6-lifecycle-api-inspection.md`;
-- implementation/package: `ai/attempts/A-0082-phase2-dev6-implementation-and-package.md`;
+- initial implementation/package: `ai/attempts/A-0082-phase2-dev6-implementation-and-package.md`;
+- first runtime machine-gate defect + correction: `ai/attempts/A-0083-phase2-dev6-runtime-event-bridge-correction.md`;
 - temporary inspection PR #26 closed without merge.
 
 ### Exact lifecycle observation seams
@@ -85,54 +86,98 @@ Vanilla's own dirty propagation already expands block changes by one block befor
 
 ### Generation-safe implementation
 
-`SectionLifecycleEvents` is a bounded primitive-only lifecycle bridge. `SectionGenerationGate` owns monotonic renderer generation and permanently self-tests stale-token rejection. `SectionSnapshot.tryCaptureSection(...)` recaptures the exact tracked section plus halo without loading/generating chunks.
+`SectionGenerationGate` owns monotonic renderer generation and permanently self-tests stale-token rejection. `SectionSnapshot.tryCaptureSection(...)` recaptures the exact tracked section plus halo without loading/generating chunks.
 
-`RealSectionLifecycleProbe` owns one generation at a time, preserves P2.5 deterministic cube/generalized/layered build correctness, carries generation + lifecycle sequence through capture/build/upload/install, rejects intervening-event work before installation, draws only while LIVE, suppresses stale drawing immediately on invalidation and completion-retires old geometry/indirect ownership before replacement admission.
+`RealSectionLifecycleProbe` owns one generation at a time, preserves P2.5 deterministic cube/generalized/layered build correctness, carries generation + lifecycle validity sequence through capture/build/upload/install, rejects intervening relevant-event work before installation, draws only while LIVE, suppresses stale drawing immediately on invalidation and completion-retires old geometry/indirect ownership before replacement admission.
 
 `FrameCoordinator` coalesces relevant observed events into one generation advance per frame-drain batch, owns tracked-section identity, rejects stale installs, records rebuild installs/latency/reasons and requires runtime evidence across section edits, resource reload and chunk unload/load.
 
+### Corrected lifecycle bridge
+
+The first runtime proved the visual/update path but exposed that the initial 256-entry global event ring was wrong for the exact `LevelExtractor` dirty sink: startup/chunk streaming produced hundreds of thousands of unrelated section-dirty events, overwrote rare lifecycle events and advanced the stale token for unrelated sections.
+
+`SectionLifecycleEvents` is now an allocation-free target-scoped coalescing bridge with no per-event ring:
+
+- before a tracked section exists, unrelated section/chunk churn does not advance renderer validity;
+- once bound, only exact dirty events for the tracked section advance validity;
+- only chunk load/unload events in the tracked section's 3x3 X/Z halo neighborhood advance validity;
+- world replacement and successful resource reload always advance validity;
+- world replacement immediately unbinds the old target;
+- sticky counters drain by delta and cannot overwrite rare chunk lifecycle events;
+- `latestSequence()` now represents only events relevant to the tracked renderer validity domain;
+- the bridge has no normal overflow/drop path. `REASON_OVERFLOW` remains only as an explicit internal safety-invalidation reason.
+
 Dev6 remains a one-section lifecycle correctness proof. P2.7 still owns persistent multi-section scene ownership; Phase 3 still owns production asynchronous worker meshing/greedy meshing.
 
-## Dev6 CI/package evidence
+## First dev6 runtime result - visual pass, machine gate fail
 
-Exact behavior head: `5ba0dc66157f0140ae394e389f27a450857aea11`.
+The user reported everything worked visually. The log also proved repeated edit-driven rebuilds, resource reload observation, deterministic P2.5 capture/build semantics, immediate stale draw suppression, completion-gated replacement, full staging/arena/resource reclamation and process exit 0.
 
-The first full compile run `32489999086` exposed only an exact Minecraft 26.2 accessor mismatch: `ChunkPos.x/z` are private. A-0081 bytecode identified public `x()` / `z()`; correcting those accessors produced the successful behavior head without architecture changes.
+However shutdown was not a P2.6 success:
 
-GitHub Actions run `32490137172`:
+- `lifecycleGateReady=false`;
+- `installCount=33`, `rebuildInstalls=32`;
+- `dirtyEvents=1184`, `resourceReloadEvents=1`;
+- `chunkLoadEvents=0`, `chunkUnloadEvents=0`;
+- `droppedLifecycleEvents=391374`;
+- observed reasons included `event-overflow`;
+- process exit code `0`.
+
+That tested package is not canonical closure evidence.
+
+## Corrected dev6 CI/package evidence
+
+Corrected implementation head: `6e01a8c9a5a9018eb427b42c0c1ad15fc92769d4`.
+
+GitHub Actions run `32499586294`:
 
 - Java 25 / Gradle 9.5.1: SUCCESS;
 - Build: SUCCESS;
 - Upload build artifacts: SUCCESS;
 - Publish versioned release: SKIPPED.
 
-Artifact ID: `9449425262`.
+Artifact ID: `9452971102`.
 
-Package:
+Corrected package:
 
 - `Obsidian-0.2.0-phase2-dev6.jar`;
-- SHA-256 `3a0fb21a8c39d82d7f9a779523921213b198bc296711ba7b83a81fbcfd368c8e`;
-- sources SHA-256 `b7e05afa49d6bab70387fce5b9d894e900057088201df60ec2afa5ff08dab87a`;
+- SHA-256 `486db6d80490170961d5a98debcb691e440e775e433283ab50b30c894821feb8`;
+- sources SHA-256 `786d3c2f54bdc5f1e29b6ff10f5d4009eba7398dc215606fec3bbd4e86354f0e`;
 - metadata exactly `obsidian 0.2.0-phase2-dev6`.
 
-Packaged bytecode confirms the active lifecycle coordinator/probe, exact lifecycle mixin selectors, generation/event-sequence checks, public SOLID/CUTOUT BLOCK pipelines, `ALPHA_CUTOUT`, atlas/lightmap bindings and `drawIndexedIndirect`. No native graphics seam was introduced.
+Packaged bytecode confirms the active lifecycle coordinator/probe and exact lifecycle mixins, plus the corrected target identity, relevant-only validity sequence, sticky dirty/load/unload/world/resource counters and target-neighborhood chunk filtering. The old 256-entry event ring is absent. Public SOLID/CUTOUT BLOCK pipelines, `ALPHA_CUTOUT`, atlas/lightmap bindings and `drawIndexedIndirect` remain unchanged. No native graphics seam was introduced.
 
-## Required runtime/human gate
+## Required corrected runtime gate
 
-The reference RX 6800 XT run must exercise multiple edits inside the logged tracked-section bounds, successful F3+T resource reload, tracked 3x3-halo chunk unload then reload/return, and normal shutdown. Required machine closure includes at least three rebuild installs, nonzero section-dirty/resource-reload/chunk-unload/chunk-load counters, no stale generation installation, deterministic P2.5 capture/build semantics, full completion-gated reclamation, process exit 0 and `lifecycleGateReady=true`.
+The reference RX 6800 XT retest must exercise multiple edits inside the logged tracked-section bounds, successful F3+T resource reload, tracked 3x3-halo chunk unload then reload/return, and normal shutdown.
 
-Human oracle: after edits/reload/unload-return, no stale block geometry should persist. A short blank overlay interval while invalidated ownership retires and the new generation rebuilds is allowed for this correctness milestone.
+Required machine closure:
+
+- at least three rebuild installs;
+- nonzero section-dirty events;
+- nonzero resource-reload events;
+- nonzero tracked-neighborhood chunk-unload and chunk-load events;
+- `droppedLifecycleEvents=0`;
+- no event-bridge overflow reason;
+- no stale generation installation;
+- deterministic P2.5 capture/build semantics;
+- full completion-gated reclamation;
+- process exit `0`;
+- shutdown `lifecycleGateReady=true`.
+
+Human oracle: no stale block geometry should persist after edits/reload/unload-return. The prior visual pass remains positive evidence because the correction only changes lifecycle event transport/validity scoping, but the corrected package still needs one complete lifecycle run for closure.
 
 ## Merge authorization
 
-The user explicitly authorized merging dev6 on 2026-08-21. Treat this as standing authorization conditional on the required reference runtime + human lifecycle gate passing and final exact-head CI remaining green. Do not ask for merge authorization again unless dev6 behavior/scope changes materially after validation.
+The user explicitly authorized merging dev6 on 2026-08-21. Treat this as standing authorization conditional on the corrected reference runtime lifecycle gate passing and final exact-head CI remaining green. Do not ask for merge authorization again unless dev6 behavior/scope changes materially after validation.
 
 ## Immediate next action
 
-1. Run exact-head CI containing A-0082 and this runtime-pending continuity update.
-2. Confirm its artifact is byte-identical to the verified behavior package.
-3. Deliver the exact-head dev6 lifecycle-test JAR for reference runtime validation.
-4. Keep PR #25 draft/unmerged until runtime/human lifecycle validation passes; merge is already authorized if that gate passes.
+1. Run exact-head CI containing A-0083 and this corrected runtime-pending continuity update.
+2. Confirm the exact-head artifact is byte-identical to the corrected implementation package.
+3. Deliver the corrected `0.2.0-phase2-dev6` lifecycle-test JAR.
+4. Validate edits + F3+T + tracked-neighborhood unload/return and require `droppedLifecycleEvents=0`, nonzero chunk load/unload counters and `lifecycleGateReady=true`.
+5. If the corrected gate passes, record immutable success evidence and merge PR #25 under the user's standing authorization, then Class-A synchronize `main` before starting P2.7/dev7.
 
 ## Relevant durable decisions
 
