@@ -1,9 +1,15 @@
 package dev.obsidian.render.terrain;
 
 /**
- * Allocation-free bounded bridge from exact Minecraft lifecycle mixins into the
- * render-thread P2.6 one-section lifecycle proof. No mutable Minecraft object
- * is retained; only coordinates, reason bits and a monotonic event sequence.
+ * Allocation-free coalescing bridge from exact Minecraft lifecycle mixins into
+ * the render-thread P2.6 one-section lifecycle proof.
+ *
+ * <p>The bridge intentionally does not queue every vanilla dirty notification.
+ * Once the validation section is bound, only events that can affect that exact
+ * section (or its 3x3 chunk halo neighborhood), plus world/resource changes,
+ * advance the renderer validity sequence. Counters are sticky and drained by
+ * delta, so unrelated chunk streaming cannot overflow a ring and cannot make a
+ * valid tracked generation stale.</p>
  */
 public final class SectionLifecycleEvents {
     public static final int REASON_SECTION_DIRTY = 1;
@@ -11,22 +17,22 @@ public final class SectionLifecycleEvents {
     public static final int REASON_CHUNK_UNLOAD = 1 << 2;
     public static final int REASON_WORLD_CHANGE = 1 << 3;
     public static final int REASON_RESOURCE_RELOAD = 1 << 4;
+    /** Reserved for explicit safety invalidation; the coalescing bridge itself cannot overflow. */
     public static final int REASON_OVERFLOW = 1 << 5;
 
-    private static final byte TYPE_SECTION_DIRTY = 1;
-    private static final byte TYPE_CHUNK_LOAD = 2;
-    private static final byte TYPE_CHUNK_UNLOAD = 3;
-    private static final byte TYPE_WORLD_CHANGE = 4;
-    private static final byte TYPE_RESOURCE_RELOAD = 5;
-    private static final int CAPACITY = 256;
+    private static boolean targetKnown;
+    private static int targetSectionX;
+    private static int targetSectionY;
+    private static int targetSectionZ;
 
-    private static final long[] sequences = new long[CAPACITY];
-    private static final byte[] types = new byte[CAPACITY];
-    private static final int[] xs = new int[CAPACITY];
-    private static final int[] ys = new int[CAPACITY];
-    private static final int[] zs = new int[CAPACITY];
-    private static final boolean[] playerDirty = new boolean[CAPACITY];
-    private static long latestSequence;
+    /** Monotonic sequence of events relevant to the currently tracked renderer validity domain. */
+    private static long relevantSequence;
+    private static long sectionDirtyEvents;
+    private static long playerDirtyEvents;
+    private static long chunkLoadEvents;
+    private static long chunkUnloadEvents;
+    private static long worldChangeEvents;
+    private static long resourceReloadEvents;
 
     private SectionLifecycleEvents() {}
 
@@ -52,114 +58,134 @@ public final class SectionLifecycleEvents {
         public int lastRelevantEventCount() { return lastRelevantEventCount; }
     }
 
+    /**
+     * Binds the exact section whose renderer generation is currently being
+     * validated. Rebinding the same section is a no-op and does not itself
+     * advance validity.
+     */
+    public static synchronized void bindTarget(int sectionX, int sectionY, int sectionZ) {
+        targetKnown = true;
+        targetSectionX = sectionX;
+        targetSectionY = sectionY;
+        targetSectionZ = sectionZ;
+    }
+
+    /** Stops target-specific dirtiness/chunk events from affecting validity. */
+    public static synchronized void unbindTarget() {
+        targetKnown = false;
+    }
+
     public static synchronized long latestSequence() {
-        return latestSequence;
+        return relevantSequence;
     }
 
-    public static void sectionDirty(int sectionX, int sectionY, int sectionZ, boolean dirtyFromPlayer) {
-        append(TYPE_SECTION_DIRTY, sectionX, sectionY, sectionZ, dirtyFromPlayer);
-    }
-
-    public static void chunkLoaded(int chunkX, int chunkZ) {
-        append(TYPE_CHUNK_LOAD, chunkX, 0, chunkZ, false);
-    }
-
-    public static void chunkUnloaded(int chunkX, int chunkZ) {
-        append(TYPE_CHUNK_UNLOAD, chunkX, 0, chunkZ, false);
-    }
-
-    public static void worldChanged() {
-        append(TYPE_WORLD_CHANGE, 0, 0, 0, false);
-    }
-
-    public static void resourceReloaded() {
-        append(TYPE_RESOURCE_RELOAD, 0, 0, 0, false);
-    }
-
-    private static synchronized void append(byte type, int x, int y, int z, boolean fromPlayer) {
-        long sequence = ++latestSequence;
-        int slot = (int) (sequence % CAPACITY);
-        sequences[slot] = sequence;
-        types[slot] = type;
-        xs[slot] = x;
-        ys[slot] = y;
-        zs[slot] = z;
-        playerDirty[slot] = fromPlayer;
-    }
-
-    public static synchronized int drain(
-            Cursor cursor,
-            boolean targetKnown,
+    /**
+     * Called from the exact vanilla LevelExtractor dirty sink. Vanilla already
+     * performed block/light/border propagation; only the chosen section matters
+     * to this one-section proof.
+     */
+    public static synchronized void sectionDirty(
             int sectionX,
             int sectionY,
-            int sectionZ) {
-        long newest = latestSequence;
+            int sectionZ,
+            boolean dirtyFromPlayer) {
+        if (!targetKnown
+                || sectionX != targetSectionX
+                || sectionY != targetSectionY
+                || sectionZ != targetSectionZ) {
+            return;
+        }
+        relevantSequence++;
+        sectionDirtyEvents++;
+        if (dirtyFromPlayer) playerDirtyEvents++;
+    }
+
+    public static synchronized void chunkLoaded(int chunkX, int chunkZ) {
+        if (!isTargetNeighborhoodChunk(chunkX, chunkZ)) return;
+        relevantSequence++;
+        chunkLoadEvents++;
+    }
+
+    public static synchronized void chunkUnloaded(int chunkX, int chunkZ) {
+        if (!isTargetNeighborhoodChunk(chunkX, chunkZ)) return;
+        relevantSequence++;
+        chunkUnloadEvents++;
+    }
+
+    /** World replacement/teardown invalidates any previous target immediately. */
+    public static synchronized void worldChanged() {
+        relevantSequence++;
+        worldChangeEvents++;
+        targetKnown = false;
+    }
+
+    public static synchronized void resourceReloaded() {
+        relevantSequence++;
+        resourceReloadEvents++;
+    }
+
+    private static boolean isTargetNeighborhoodChunk(int chunkX, int chunkZ) {
+        return targetKnown
+                && Math.abs(chunkX - targetSectionX) <= 1
+                && Math.abs(chunkZ - targetSectionZ) <= 1;
+    }
+
+    /**
+     * Drains sticky counters by delta. No event payload can be overwritten, so
+     * droppedEvents remains zero unless a future implementation explicitly
+     * introduces a lossy source.
+     */
+    public static synchronized int drain(Cursor cursor) {
         cursor.lastRelevantEventCount = 0;
-        if (cursor.sequence == newest) {
-            return 0;
-        }
-
         int reasons = 0;
-        long oldestAvailable = Math.max(1L, newest - CAPACITY + 1L);
-        long first = cursor.sequence + 1L;
-        if (first < oldestAvailable) {
-            cursor.droppedEvents += oldestAvailable - first;
-            reasons |= REASON_OVERFLOW;
-            cursor.lastRelevantEventCount++;
-            first = oldestAvailable;
+
+        long dirtyDelta = sectionDirtyEvents - cursor.sectionDirtyEvents;
+        if (dirtyDelta > 0L) {
+            reasons |= REASON_SECTION_DIRTY;
+            cursor.sectionDirtyEvents = sectionDirtyEvents;
+            cursor.lastRelevantEventCount = addRelevantCount(cursor.lastRelevantEventCount, dirtyDelta);
         }
 
-        for (long sequence = first; sequence <= newest; sequence++) {
-            int slot = (int) (sequence % CAPACITY);
-            if (sequences[slot] != sequence) {
-                cursor.droppedEvents++;
-                reasons |= REASON_OVERFLOW;
-                cursor.lastRelevantEventCount++;
-                continue;
-            }
-            byte type = types[slot];
-            switch (type) {
-                case TYPE_SECTION_DIRTY -> {
-                    if (targetKnown && xs[slot] == sectionX && ys[slot] == sectionY && zs[slot] == sectionZ) {
-                        reasons |= REASON_SECTION_DIRTY;
-                        cursor.sectionDirtyEvents++;
-                        if (playerDirty[slot]) cursor.playerDirtyEvents++;
-                        cursor.lastRelevantEventCount++;
-                    }
-                }
-                case TYPE_CHUNK_LOAD -> {
-                    if (targetKnown && Math.abs(xs[slot] - sectionX) <= 1 && Math.abs(zs[slot] - sectionZ) <= 1) {
-                        reasons |= REASON_CHUNK_LOAD;
-                        cursor.chunkLoadEvents++;
-                        cursor.lastRelevantEventCount++;
-                    }
-                }
-                case TYPE_CHUNK_UNLOAD -> {
-                    if (targetKnown && Math.abs(xs[slot] - sectionX) <= 1 && Math.abs(zs[slot] - sectionZ) <= 1) {
-                        reasons |= REASON_CHUNK_UNLOAD;
-                        cursor.chunkUnloadEvents++;
-                        cursor.lastRelevantEventCount++;
-                    }
-                }
-                case TYPE_WORLD_CHANGE -> {
-                    reasons |= REASON_WORLD_CHANGE;
-                    cursor.worldChangeEvents++;
-                    cursor.lastRelevantEventCount++;
-                }
-                case TYPE_RESOURCE_RELOAD -> {
-                    reasons |= REASON_RESOURCE_RELOAD;
-                    cursor.resourceReloadEvents++;
-                    cursor.lastRelevantEventCount++;
-                }
-                default -> {
-                    cursor.droppedEvents++;
-                    reasons |= REASON_OVERFLOW;
-                    cursor.lastRelevantEventCount++;
-                }
-            }
+        long playerDelta = playerDirtyEvents - cursor.playerDirtyEvents;
+        if (playerDelta > 0L) {
+            cursor.playerDirtyEvents = playerDirtyEvents;
         }
-        cursor.sequence = newest;
+
+        long loadDelta = chunkLoadEvents - cursor.chunkLoadEvents;
+        if (loadDelta > 0L) {
+            reasons |= REASON_CHUNK_LOAD;
+            cursor.chunkLoadEvents = chunkLoadEvents;
+            cursor.lastRelevantEventCount = addRelevantCount(cursor.lastRelevantEventCount, loadDelta);
+        }
+
+        long unloadDelta = chunkUnloadEvents - cursor.chunkUnloadEvents;
+        if (unloadDelta > 0L) {
+            reasons |= REASON_CHUNK_UNLOAD;
+            cursor.chunkUnloadEvents = chunkUnloadEvents;
+            cursor.lastRelevantEventCount = addRelevantCount(cursor.lastRelevantEventCount, unloadDelta);
+        }
+
+        long worldDelta = worldChangeEvents - cursor.worldChangeEvents;
+        if (worldDelta > 0L) {
+            reasons |= REASON_WORLD_CHANGE;
+            cursor.worldChangeEvents = worldChangeEvents;
+            cursor.lastRelevantEventCount = addRelevantCount(cursor.lastRelevantEventCount, worldDelta);
+        }
+
+        long resourceDelta = resourceReloadEvents - cursor.resourceReloadEvents;
+        if (resourceDelta > 0L) {
+            reasons |= REASON_RESOURCE_RELOAD;
+            cursor.resourceReloadEvents = resourceReloadEvents;
+            cursor.lastRelevantEventCount = addRelevantCount(cursor.lastRelevantEventCount, resourceDelta);
+        }
+
+        cursor.sequence = relevantSequence;
         return reasons;
+    }
+
+    private static int addRelevantCount(int current, long delta) {
+        long sum = current + delta;
+        return sum >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) sum;
     }
 
     public static String describeReasons(int reasons) {
@@ -170,7 +196,7 @@ public final class SectionLifecycleEvents {
         appendReason(out, reasons, REASON_CHUNK_UNLOAD, "chunk-unload");
         appendReason(out, reasons, REASON_WORLD_CHANGE, "world-change");
         appendReason(out, reasons, REASON_RESOURCE_RELOAD, "resource-reload");
-        appendReason(out, reasons, REASON_OVERFLOW, "event-overflow");
+        appendReason(out, reasons, REASON_OVERFLOW, "safety-invalidate");
         return out.toString();
     }
 
