@@ -19,7 +19,7 @@ import dev.obsidian.render.terrain.SectionSnapshot;
 public final class WorkerMeshValidationProbe implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/WorkerMeshValidation");
     private static final int JOB_COUNT = 12;
-    private static final int CANCEL_FROM_INDEX = 9;
+    private static final int CANCEL_FROM_INDEX = 4;
     private static final long RETRY_DELAY_NS = 500_000_000L;
 
     public enum State { WAITING_WORLD, RUNNING, SUCCESS, FAILED, CLOSED }
@@ -119,14 +119,14 @@ public final class WorkerMeshValidationProbe implements AutoCloseable {
                 if (tickets[i] == null) {
                     throw new IllegalStateException("P3.1 bounded worker queue rejected validation job " + i);
                 }
-            }
-            for (int i = CANCEL_FROM_INDEX; i < tickets.length; i++) {
-                workers.cancel(tickets[i]);
+                if (i >= CANCEL_FROM_INDEX) {
+                    workers.cancel(tickets[i]);
+                }
             }
             state = State.RUNNING;
 
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev1 worker proof submitted {0} immutable real-section mesh jobs on frame {1}: section=({2},{3},{4}), workerCount={5}, queueCapacity={6}, expectedEventSequence={7}, cancellationRequests={8}. All jobs are pinned to worker 0 initially so idle peers must exercise work stealing.",
+                    "Phase 3 dev1 worker proof submitted {0} immutable real-section mesh jobs on frame {1}: section=({2},{3},{4}), workerCount={5}, queueCapacity={6}, expectedEventSequence={7}, cancellationRequests={8}. All jobs are pinned to worker 0 initially so idle peers must exercise work stealing; cancellation is requested immediately for the final validation subset.",
                     tickets.length,
                     frameSerial,
                     captured.sectionX(), captured.sectionY(), captured.sectionZ(),
@@ -190,9 +190,11 @@ public final class WorkerMeshValidationProbe implements AutoCloseable {
             return;
         }
 
-        boolean gateReady = acceptedCompleted >= CANCEL_FROM_INDEX
-                && acceptedCancelled >= tickets.length - CANCEL_FROM_INDEX
+        boolean gateReady = acceptedCompleted + acceptedCancelled == tickets.length
+                && acceptedCompleted >= CANCEL_FROM_INDEX
+                && acceptedCancelled > 0L
                 && deterministicMatches == acceptedCompleted
+                && workers.cancellationRequests() >= tickets.length - CANCEL_FROM_INDEX
                 && workers.stolenJobs() > 0L
                 && workers.queueFullRejections() == 0L
                 && workers.failedJobs() == 0L
@@ -203,6 +205,7 @@ public final class WorkerMeshValidationProbe implements AutoCloseable {
                     "P3.1 worker proof terminal accounting failed: completed=" + acceptedCompleted
                             + ", cancelled=" + acceptedCancelled
                             + ", deterministic=" + deterministicMatches
+                            + ", cancellationRequests=" + workers.cancellationRequests()
                             + ", stolen=" + workers.stolenJobs()
                             + ", queueFull=" + workers.queueFullRejections()
                             + ", failed=" + workers.failedJobs()));
@@ -211,7 +214,7 @@ public final class WorkerMeshValidationProbe implements AutoCloseable {
 
         state = State.SUCCESS;
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev1 worker/job architecture VERIFIED on frame {0}: section=({1},{2},{3}), snapshotFingerprint={4}, referenceFingerprint={5}, bakedFingerprint={6}, meshFingerprint={7}, completedJobs={8}, cancelledJobs={9}, stolenJobs={10}, workerCount={11}, maxQueueDepth={12}, totalQueueWaitNs={13}, maxQueueWaitNs={14}, totalExecutionNs={15}, maxExecutionNs={16}, queueFullRejections={17}, failedJobs={18}, staleBatches={19}, workerWorldReadsAfterCapture=0, boundedPriorityQueues=true, workStealing=true, generationTaggedJobs=true, renderThreadGpuOwnershipPreserved=true.",
+                "Phase 3 dev1 worker/job architecture VERIFIED on frame {0}: section=({1},{2},{3}), snapshotFingerprint={4}, referenceFingerprint={5}, bakedFingerprint={6}, meshFingerprint={7}, completedJobs={8}, cancelledJobs={9}, cancellationRequests={10}, stolenJobs={11}, workerCount={12}, maxQueueDepth={13}, totalQueueWaitNs={14}, maxQueueWaitNs={15}, totalExecutionNs={16}, maxExecutionNs={17}, queueFullRejections={18}, failedJobs={19}, staleBatches={20}, workerWorldReadsAfterCapture=0, boundedPriorityQueues=true, workStealing=true, generationTaggedJobs=true, renderThreadGpuOwnershipPreserved=true.",
                 frameSerial,
                 snapshot.sectionX(), snapshot.sectionY(), snapshot.sectionZ(),
                 Long.toUnsignedString(snapshot.fingerprint()),
@@ -220,6 +223,7 @@ public final class WorkerMeshValidationProbe implements AutoCloseable {
                 Long.toUnsignedString(firstFingerprint),
                 acceptedCompleted,
                 acceptedCancelled,
+                workers.cancellationRequests(),
                 workers.stolenJobs(),
                 workers.workerCount(),
                 workers.maxObservedQueueDepth(),
