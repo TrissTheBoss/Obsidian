@@ -10,152 +10,173 @@ Last updated: 2026-08-22
 - Canonical long-range plan: `ai/MASTER_ROADMAP.md`
 - Current product phase: **Phase 3 — production asynchronous CPU mesher / greedy meshing**.
 - Current active milestone: **P3.2 — binary/bitmask visibility masks**.
+- Active branch: `phase3/bitmask-visibility-masks`.
+- Canonical draft PR: #36 against `main`.
+- Active development version: `0.3.0-phase3-dev4`.
 - Runtime test handoff preference: provide the direct versioned `.jar`, not a GitHub Actions ZIP wrapper.
 
 ## Completed merged foundation
 
 - Phase 0: COMPLETE — public checkpoint `v0.0.2-phase0`.
-- Phase 1: COMPLETE — closing merge `61df7b8e2abc09ce387e09c9e4d6811a9ef6c40f`.
-- P2.1: COMPLETE — `a714e19ce871bf73136d52f85a1780109aa851dd`.
-- P2.2: COMPLETE — `f9c64267c5becb3bd80897efdb09ed65a6ce8697`.
-- P2.3: COMPLETE — `667230f51222746083efe89c72265d80ac9d3929`.
-- P2.4: COMPLETE — `fa0d40182cd0bc29a526b28a8b2b3b43fc8fc8ba`.
-- P2.5: COMPLETE — `c17f7c6146678e18cacabc44d85c67413a040f73`.
-- P2.6 + P2.7 integration: COMPLETE — PR #25 merge `794483f955c861cbf9e24ade2463ba51ab9ab284`.
-- P3.1 dev1 worker/job architecture: COMPLETE — PR #29 merge `c39cf17b4864e7f7081007238117aea5be3c26e3`.
-- P3.1 dev2 production asynchronous scene integration: COMPLETE — PR #32 merge `58b2b8b8b1962f2809029e32d147a4a96a93b486`.
-- P3.1 dev3 scheduler/backpressure + reusable scratch + production metrics: COMPLETE — PR #34 merge `1b6615eac2494a197cea86d314cf5b099d2418e8`.
+- Phase 1: COMPLETE — merge `61df7b8e2abc09ce387e09c9e4d6811a9ef6c40f`.
+- P2.1 through P2.5: COMPLETE.
+- P2.6 + P2.7: COMPLETE — PR #25 merge `794483f955c861cbf9e24ade2463ba51ab9ab284`.
+- P3.1 dev1: COMPLETE — PR #29 merge `c39cf17b4864e7f7081007238117aea5be3c26e3`.
+- P3.1 dev2: COMPLETE — PR #32 merge `58b2b8b8b1962f2809029e32d147a4a96a93b486`.
+- P3.1 dev3: COMPLETE — PR #34 merge `1b6615eac2494a197cea86d314cf5b099d2418e8`.
+- Class-A synchronization before P3.2: `b5914a7b383d8f1a27cfe542201d389da8477bb1`.
 
-All promotion merges used `[no-release]`; the public release remains `v0.0.2-phase0`.
+The P2.6 fixed-target chunk lifecycle gap was closed by A-0101 using the same grounded `ClientLevel.onChunkLoaded` / `ClientLevel.unload` hooks with a diagnostic-only fixed first-scene anchor. That proof does not need to be repeated for P3.2.
 
-## Phase 2 — COMPLETE
+## P3.1 proven production boundary
 
-Phase 2 now provides the correctness foundation required by D-0024 before optimized greedy meshing:
+The merged production flow remains:
 
-- immutable real 16^3 section snapshots with one-block halo;
-- permanent independent deterministic reference oracle;
-- correct supported position/material/UV/tint/light/AO semantics;
-- generalized accepted SOLID/CUTOUT vanilla-emitted model quads;
-- event-driven dirty/resource/world/chunk lifecycle invalidation;
-- generation/version identity and stale-result rejection;
-- completion-gated live GPU replacement/reclamation;
-- persistent neighboring multi-section scene ownership;
-- human-validated multi-section border/camera behavior.
+`render-thread immutable capture -> bounded relevance-aware worker job -> render-thread generation/event/resource validation -> GPU allocation/upload/install -> completion-gated replacement`
 
-### P2.6 fixed-target lifecycle closure
+P3.1 proved:
 
-A-0084's corrected standalone dev6 run proved edit/reload/reclamation correctness but did not actually unload its fixed target (`chunkLoadEvents=0`, `chunkUnloadEvents=0`).
+- bounded HIGH/NORMAL/LOW work queues and stealing;
+- immutable worker inputs and zero live-world reads after capture;
+- cancellation/stale-result safety;
+- worker-local reusable mesh scratch;
+- production async 3x3 scene installation;
+- bounded two-record scene admission/backpressure;
+- deterministic periodic mesh audits;
+- zero synchronous production scene mesh builds;
+- clean worker/staging/arena/resource shutdown.
 
-A-0101 closed that remaining evidence gap using the downstream production runtime's diagnostic-only first-scene anchor on the same exact grounded `ClientLevel.onChunkLoaded` / `ClientLevel.unload` hooks. Final evidence included:
+A-0101 final P3.1 run passed `phase3GateReady=true` and `schedulerEvidenceReady=true` with 208/208 completed worker jobs, 159 steals, zero queue-full rejection/failure/shutdown-join failure, all priority tiers exercised and clean shutdown.
 
-- `phase2ChunkLifecycleEvidenceReady=true`;
-- `fixedAnchorReturnSceneReady=true`;
-- fixed-anchor chunk loads/unloads `9/9`;
-- active-scene chunk loads/unloads `30/35`;
-- zero dropped lifecycle events;
-- zero unsafe stale scene installs;
-- LIVE/READY async scene after returning to the unloaded anchor area;
-- full worker/staging/arena/resource cleanup;
-- exit code 0.
+## ACTIVE: P3.2 dev4 — binary visibility sidecar integrated
 
-That stronger downstream proof supersedes only A-0084's missing observation; it does not rewrite the old immutable attempt.
+Evidence:
 
-### P2.7 validation
+- A-0103 — frozen P3.2 plan;
+- A-0104 — implementation, exact CI and package evidence.
 
-The validated 3x3 scene proof reached `sceneGateReady=true`, 16 READY transitions, 15 rebuilds, 144 installs, max 9 live records / 12 adjacent pairs, two recenter events, zero dropped/stale installs, full reclamation and exit 0. Human visual validation reported no persistent duplicate/missing borders or stale old-window geometry.
+### Binary topology representation
 
-## Phase 3 P3.1 — COMPLETE
+`BinarySectionVisibility` is now implemented as a pure worker-side topology representation built only from immutable `SectionSnapshot`:
 
-### Dev1 — bounded worker/job architecture
+- six directions matching permanent `ReferenceFaceMesh` order: WEST/EAST/DOWN/UP/NORTH/SOUTH;
+- 4,096 bits / 64 `long` words per direction;
+- 384 retained words = exactly 3,072 bytes per complete mask set;
+- deterministic cell bit order `((y * 16) + z) * 16 + x`;
+- reusable 18x18 supported/air halo-row scratch;
+- machine-word directional visibility derivation;
+- conservative semantics exactly `SUPPORTED_FULL_CUBE && neighbor == AIR`;
+- unsupported neighbors suppress faces exactly as the independent oracle does.
 
-A-0092 proved dedicated bounded priority workers, work stealing, immutable inputs, generation/event identity, cancellation, deterministic accepted outputs, `workerWorldReadsAfterCapture=0`, clean shutdown and exit 0.
+Every primary build scalar-validates its bitset against the immutable source snapshot during this correctness-first milestone.
 
-### Dev2 — production asynchronous scene integration
+### Independent differential validation
 
-A-0098 proved the production ownership flow:
+On the existing worker audit cadence, P3.2:
 
-`render-thread immutable capture -> bounded worker mesh job -> render-thread generation/event/resource validation -> render-thread GPU allocation/upload/install -> completion-gated replacement`
+1. builds a second mask and requires exact deterministic equality;
+2. independently builds the permanent simple `ReferenceFaceMesh` from the immutable snapshot;
+3. requires equal visible-face and unsupported-neighbor counts;
+4. requires every reference face to exist in the optimized directional mask.
 
-Runtime evidence included `phase3GateReady=true`, `productionWorkerIntegrationReady=true`, `productionSceneInstallStillSynchronous=false`, 131/131 completed worker jobs, zero queue-full rejection/failure, 97 steals, 131/131 record installs, 25 READY transitions / 24 rebuilds and clean shutdown.
+Equal count plus complete reference inclusion proves no missing or extra optimized cube faces. The reference oracle does not share the optimized construction algorithm.
 
-### Dev3 — relevance scheduler, scratch reuse and production evidence
+### Production integration boundary
 
-A-0101 is the canonical final P3.1 runtime result for `0.3.0-phase3-dev3`.
+Every real `SectionMeshWorkerPool` job now produces:
 
-Final gate:
+- `BinarySectionVisibility` — P3.2 topology sidecar;
+- existing `BakedSectionMesh` — unchanged generalized SOLID/CUTOUT drawable output.
+
+The current GPU renderer still consumes the validated generalized baked mesh. P3.2 therefore does **not** emit merged geometry or change visual geometry ownership.
+
+Final runtime logs expose:
+
+- `binaryVisibilityEvidenceReady`;
+- visibility builds / total and per-direction faces;
+- exact retained bytes;
+- total/max visibility build time;
+- scratch uses/high-water;
+- determinism audits/matches;
+- independent reference audits/matches;
+- `binaryVisibilitySidecarIntegrated=true`;
+- `greedyRectangleEmission=false`.
+
+## Exact dev4 CI/package
+
+Canonical tested code head:
+
+- `ab394076853d2647340c8eb4f2983ec842823938`.
+
+Exact final run:
+
+- GitHub Actions `32583676238`;
+- Java 25 / Gradle 9.5.1;
+- Build SUCCESS;
+- artifact upload SUCCESS;
+- versioned release SKIPPED;
+- artifact id `9478459893`;
+- wrapper digest `sha256:09c68667008fa5d1071f298926b80801b6cf4031054c4a7159078efdc998260b`.
+
+Canonical runtime JAR:
+
+- `Obsidian-0.3.0-phase3-dev4.jar`;
+- size `285,246` bytes;
+- SHA-256 `93211c45bae44f927fc3946c30ec336d3ad41ea6a015992f395ab669b9a8d14e`.
+
+Sources JAR SHA-256: `d75f495e9731d90266ef4334f8e8ef16fa0136441557e1b7756359ff81f4f346`.
+
+Packaged metadata: Minecraft `~26.2`, Java `>=25`, version `0.3.0-phase3-dev4`.
+
+## Reference runtime — NEXT / REQUIRED
+
+Use the canonical dev4 JAR on the reference Vulkan machine:
+
+1. enter ordinary surface terrain and wait for the async 3x3 scene to become READY;
+2. visually inspect for missing/duplicate/stale geometry;
+3. break/place blocks and wait for a READY rebuild;
+4. perform F3+T and wait for another READY rebuild;
+5. optional normal movement/recenter is useful;
+6. exit normally and provide the complete Prism log.
+
+The old far-travel fixed-anchor unload/return sequence is **not required again**.
+
+Required P3.2 closure evidence:
 
 - `phase3GateReady=true`;
 - `schedulerEvidenceReady=true`;
-- `phase2ChunkLifecycleEvidenceReady=true`;
-- `fixedAnchorReturnSceneReady=true`;
-- `productionWorkerIntegrationReady=true`;
-- `hardFailure=false`;
-- `productionSceneInstallStillSynchronous=false`;
-- `productionWorkerSceneIntegration=true`;
-- render-thread capture/GPU ownership preserved;
-- worker world reads after capture `0`;
-- synchronous scene mesh builds `0`.
+- `binaryVisibilityEvidenceReady=true`;
+- visibility builds > 0;
+- visibility faces > 0;
+- six direction totals sum exactly to total faces;
+- retained bytes == builds * 3,072;
+- visibility scratch use is nonzero and >= primary builds;
+- determinism audits > 0 and matches == audits;
+- independent reference audits > 0 and matches == audits;
+- zero worker queue-full rejection/failure/shutdown join failure;
+- zero unsafe stale scene installs;
+- clean workers/staging/arena/resources;
+- process exit code 0.
 
-Worker/scheduler metrics:
+Individual direction totals do not all need to be nonzero for every terrain sample.
 
-- worker submitted/started/completed `208/208/208`;
-- stolen jobs `159`;
-- queue-full rejections `0`;
-- worker failures `0`;
-- shutdown join failures `0`;
-- HIGH/NORMAL/LOW completed `29/89/90`;
-- output quads `151,898`;
-- output vertex/index bytes `17,012,576 / 3,645,552`;
-- scratch build uses `212`, scratch high-water `1,464` quads;
-- determinism audits/matches `4/4`;
-- `maxAdmissionBurst=2`.
+## Deliberate boundary / next phase
 
-Scene/lifetime metrics:
+P3.2 is **not complete** until the reference runtime passes and is recorded.
 
-- scene worker submitted/completed `208/208`;
-- record installs / worker installs `203/203`;
-- safe stale completed results `5`, preinstall invalidations `5`;
-- READY transitions/rebuilds `29/28`;
-- max live records / adjacent pairs `9/12`;
-- camera recenter events `6`;
-- dirty events `1,988`, resource reload events `3`;
-- dropped lifecycle events `0`;
-- unsafe stale scene installs `0`;
-- `workersClean=true`, `stagingClean=true`, `arenaClean=true`, `resourcesClean=true`;
-- staging submitted/reclaimed `20,025,552 / 20,025,552` bytes;
-- arena allocations/retired/reclaimed `406/406/406`, used bytes `0`, fragmentation `0`;
-- deferred resources retired/released `203/203`, pending `0`;
-- process exit code `0`.
+Not P3.2:
 
-The maximum queue depth stayed at 1 because bounded two-record admission plus four workers kept work responsive; all three relevance tiers, stealing, output accounting, scratch reuse and determinism audits were nevertheless exercised.
+- greedy rectangle extraction or merged quad emission;
+- replacement of generalized `BakedSectionMesh` output;
+- final material/light/AO merge-key construction;
+- arbitrary model-quad merging;
+- fluid/translucent terrain;
+- partial remeshing;
+- worker-thread live-world capture.
 
-## Current active milestone — P3.2 binary/bitmask visibility masks
+P3.3 greedy rectangle extraction remains PLANNED and must not begin before P3.2 is formally closed.
 
-P3.2 is now allowed to begin. It is **ACTIVE**, not complete.
-
-Immediate contract:
-
-1. keep the P2.1 reference oracle independent and permanently available;
-2. retain immutable renderer-owned worker inputs and zero live world reads after capture;
-3. introduce compact machine-word occupancy/face-visibility masks suitable for worker-local reuse;
-4. prove deterministic mask construction and directional face coverage against the existing reference semantics;
-5. preserve material/light/AO merge-key truth for downstream P3.3 greedy rectangle extraction;
-6. keep queues, scratch and output bounded/observable;
-7. do not claim greedy rectangle meshing until P3.3 actually implements and validates it.
-
-P3.3 greedy rectangle extraction and later Phase 3 work remain PLANNED.
-
-## Promotion / CI evidence
-
-A-0102 records the completed promotion chain.
-
-Fresh exact Java 25 / Gradle 9.5.1 retarget CI before Phase 3 merges:
-
-- dev1 run `32582746431` — success;
-- dev2 run `32582829896` — success;
-- dev3 run `32582906074` — success.
-
-Each artifact upload passed and release publishing was skipped.
+PR #36 remains draft. Starting P3.2 does not itself provide merge authorization for this new scope.
 
 ## Continuity model
 
