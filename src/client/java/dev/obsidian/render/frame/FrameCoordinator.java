@@ -6,11 +6,12 @@ import dev.obsidian.render.memory.DeviceGeometryArena;
 import dev.obsidian.render.mesh.SectionMeshWorkerPool;
 import dev.obsidian.render.resource.DeferredReleaseQueue;
 import dev.obsidian.render.terrain.AsyncMultiSectionSceneProbe;
+import dev.obsidian.render.terrain.BinarySectionVisibility;
 import dev.obsidian.render.terrain.SectionLifecycleEvents;
 import dev.obsidian.render.upload.StagingUploadArena;
 import net.minecraft.client.renderer.GameRenderer;
 
-/** Render-thread lifecycle root for the active Phase 3 dev3 scheduler milestone. */
+/** Render-thread lifecycle root for the active Phase 3 P3.2 binary visibility milestone. */
 public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
     private static final int VALIDATION_STAGING_BYTES = 4 * 1024 * 1024;
@@ -42,10 +43,10 @@ public final class FrameCoordinator implements AutoCloseable {
         try {
             workers = new SectionMeshWorkerPool(SectionMeshWorkerPool.defaultWorkerCount());
             staging = new StagingUploadArena(
-                    device, () -> "Obsidian Phase 3 dev3 bounded scene staging ring",
+                    device, () -> "Obsidian Phase 3 dev4 bounded scene staging ring",
                     VALIDATION_STAGING_BYTES);
             arena = new DeviceGeometryArena(
-                    device, () -> "Obsidian Phase 3 dev3 scene device geometry arena",
+                    device, () -> "Obsidian Phase 3 dev4 scene device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
             sceneProbe = new AsyncMultiSectionSceneProbe(device, staging, arena, deferredReleases, workers);
         } catch (RuntimeException e) {
@@ -55,7 +56,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (arena != null) try { arena.close(); } catch (RuntimeException ignored) { }
             try { deferredReleases.close(); } catch (RuntimeException ignored) { }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev3 scheduler integration initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 3 dev4 P3.2 initialization failed; Minecraft will continue for diagnosis.", e);
             hardFailure = true;
         }
         meshWorkers = workers;
@@ -75,13 +76,13 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev3 frame coordinator active. contextSlots=" + frameContexts.size()
+                    "Phase 3 dev4 P3.2 frame coordinator active. contextSlots=" + frameContexts.size()
                             + ", cpuTimingCapacity=" + cpuFrameTimings.capacity()
                             + ", meshWorkers=" + (meshWorkers == null ? 0 : meshWorkers.workerCount())
                             + ", meshQueueCapacity=" + (meshWorkers == null ? 0 : meshWorkers.queueCapacity())
                             + ", stagingCapacity=" + (stagingUploads == null ? 0 : stagingUploads.capacityBytes())
                             + ", deviceArenaCapacity=" + (deviceArena == null ? 0L : deviceArena.capacityBytes())
-                            + "; global relevance scheduling and fixed-anchor lifecycle evidence are armed.");
+                            + "; binary visibility sidecars, reusable mask scratch, determinism audits and independent reference audits are armed. Greedy rectangle emission is still disabled.");
         }
     }
 
@@ -94,7 +95,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (!visualDelayLogged) {
                 visualDelayLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev3 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
+                        "Phase 3 dev4 P3.2 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
             }
             return;
         }
@@ -108,7 +109,7 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!runtimeInstructionsLogged && sceneProbe != null && sceneProbe.productionWorkerIntegrationReady()) {
             runtimeInstructionsLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev3 combined runtime gate is active. Verify the 3x3 scene visually; break/place blocks; perform F3+T and allow a READY rebuild; travel far enough that the FIRST tracked scene neighborhood really unloads; return to that area so it loads again; WAIT FOR THE ASYNC SCENE TO BECOME LIVE/READY AGAIN; then exit normally. Final evidence should include schedulerEvidenceReady=true and phase2ChunkLifecycleEvidenceReady=true.");
+                    "Phase 3 dev4 P3.2 runtime gate is active. Let the 3x3 async scene reach READY and visually inspect it; break/place blocks and allow a READY rebuild; perform F3+T and allow another READY rebuild; move enough to exercise normal scene scheduling/recentering if convenient; then exit normally. The new required flag is binaryVisibilityEvidenceReady=true together with the existing phase3GateReady=true and schedulerEvidenceReady=true. The old fixed-anchor unload/return proof is already closed and is not required again for P3.2.");
         }
     }
 
@@ -279,6 +280,37 @@ public final class FrameCoordinator implements AutoCloseable {
                 && workerDeterminismAuditMatches == workerDeterminismAudits
                 && workerOutputQuads > 0L && workerOutputVertexBytes > 0L && workerOutputIndexBytes > 0L;
 
+        long visibilityBuilds = meshWorkers == null ? 0L : meshWorkers.visibilityBuilds();
+        long visibilityFaces = meshWorkers == null ? 0L : meshWorkers.totalVisibilityFaces();
+        long visibilityRetainedBytes = meshWorkers == null ? 0L : meshWorkers.totalVisibilityRetainedBytes();
+        long visibilityScratchUses = meshWorkers == null ? 0L : meshWorkers.visibilityScratchBuildUses();
+        long visibilityDeterminismAudits = meshWorkers == null ? 0L : meshWorkers.visibilityDeterminismAudits();
+        long visibilityDeterminismMatches = meshWorkers == null ? 0L : meshWorkers.visibilityDeterminismAuditMatches();
+        long visibilityReferenceAudits = meshWorkers == null ? 0L : meshWorkers.visibilityReferenceAudits();
+        long visibilityReferenceMatches = meshWorkers == null ? 0L : meshWorkers.visibilityReferenceAuditMatches();
+        long visibilityWestFaces = meshWorkers == null ? 0L : meshWorkers.visibilityFaces(BinarySectionVisibility.WEST);
+        long visibilityEastFaces = meshWorkers == null ? 0L : meshWorkers.visibilityFaces(BinarySectionVisibility.EAST);
+        long visibilityDownFaces = meshWorkers == null ? 0L : meshWorkers.visibilityFaces(BinarySectionVisibility.DOWN);
+        long visibilityUpFaces = meshWorkers == null ? 0L : meshWorkers.visibilityFaces(BinarySectionVisibility.UP);
+        long visibilityNorthFaces = meshWorkers == null ? 0L : meshWorkers.visibilityFaces(BinarySectionVisibility.NORTH);
+        long visibilitySouthFaces = meshWorkers == null ? 0L : meshWorkers.visibilityFaces(BinarySectionVisibility.SOUTH);
+        long visibilityDirectionSum = visibilityWestFaces + visibilityEastFaces
+                + visibilityDownFaces + visibilityUpFaces + visibilityNorthFaces + visibilitySouthFaces;
+        long workerCompletedJobs = meshWorkers == null ? 0L : meshWorkers.completedJobs();
+
+        boolean binaryVisibilityEvidenceReady = phase3GateReady
+                && visibilityBuilds > 0L
+                && visibilityBuilds >= workerCompletedJobs
+                && visibilityFaces > 0L
+                && visibilityDirectionSum == visibilityFaces
+                && visibilityRetainedBytes == visibilityBuilds * BinarySectionVisibility.RETAINED_BYTES
+                && visibilityScratchUses >= visibilityBuilds
+                && visibilityDeterminismAudits > 0L
+                && visibilityDeterminismMatches == visibilityDeterminismAudits
+                && visibilityReferenceAudits > 0L
+                && visibilityReferenceMatches == visibilityReferenceAudits
+                && workersClean && stagingClean && arenaClean && resourcesClean;
+
         boolean phase2ChunkLifecycleEvidenceReady = phase3GateReady
                 && fixedAnchorChunkUnloadEvents > 0L
                 && fixedAnchorChunkLoadEvents > 0L
@@ -287,22 +319,24 @@ public final class FrameCoordinator implements AutoCloseable {
                 && unsafeStaleSceneInstalls == 0L
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
-        StringBuilder out = new StringBuilder(4096);
-        out.append("Phase 3 dev3 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
+        StringBuilder out = new StringBuilder(6144);
+        out.append("Phase 3 dev4 P3.2 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
                 .append("phase3GateReady=").append(phase3GateReady)
                 .append(", schedulerEvidenceReady=").append(schedulerEvidenceReady)
+                .append(", binaryVisibilityEvidenceReady=").append(binaryVisibilityEvidenceReady)
                 .append(", phase2ChunkLifecycleEvidenceReady=").append(phase2ChunkLifecycleEvidenceReady)
                 .append(", fixedAnchorReturnSceneReady=").append(fixedAnchorReturnSceneReady)
                 .append(", productionWorkerIntegrationReady=").append(productionWorkerIntegrationReady)
                 .append(", hardFailure=").append(hardFailure)
                 .append(", productionSceneInstallStillSynchronous=false, productionWorkerSceneIntegration=true")
                 .append(", renderThreadCaptureOwnership=true, renderThreadGpuOwnership=true, workerWorldReadsAfterCapture=0")
+                .append(", binaryVisibilitySidecarIntegrated=true, greedyRectangleEmission=false")
                 .append(", synchronousSceneMeshBuilds=").append(synchronousSceneMeshBuilds)
                 .append(", workerCount=").append(meshWorkers == null ? 0 : meshWorkers.workerCount())
                 .append(", workerQueueCapacity=").append(meshWorkers == null ? 0 : meshWorkers.queueCapacity())
                 .append(", workerSubmittedJobs=").append(meshWorkers == null ? 0L : meshWorkers.submittedJobs())
                 .append(", workerStartedJobs=").append(meshWorkers == null ? 0L : meshWorkers.startedJobs())
-                .append(", workerCompletedJobs=").append(meshWorkers == null ? 0L : meshWorkers.completedJobs())
+                .append(", workerCompletedJobs=").append(workerCompletedJobs)
                 .append(", workerCancelledJobs=").append(meshWorkers == null ? 0L : meshWorkers.cancelledJobs())
                 .append(", workerCancellationRequests=").append(meshWorkers == null ? 0L : meshWorkers.cancellationRequests())
                 .append(", workerStolenJobs=").append(meshWorkers == null ? 0L : meshWorkers.stolenJobs())
@@ -331,6 +365,25 @@ public final class FrameCoordinator implements AutoCloseable {
                 .append(", workerMaxScratchQuads=").append(meshWorkers == null ? 0L : meshWorkers.maxScratchQuads())
                 .append(", workerDeterminismAudits=").append(workerDeterminismAudits)
                 .append(", workerDeterminismAuditMatches=").append(workerDeterminismAuditMatches)
+                .append(", visibilityBuilds=").append(visibilityBuilds)
+                .append(", visibilityTotalFaces=").append(visibilityFaces)
+                .append(", visibilityWestFaces=").append(visibilityWestFaces)
+                .append(", visibilityEastFaces=").append(visibilityEastFaces)
+                .append(", visibilityDownFaces=").append(visibilityDownFaces)
+                .append(", visibilityUpFaces=").append(visibilityUpFaces)
+                .append(", visibilityNorthFaces=").append(visibilityNorthFaces)
+                .append(", visibilitySouthFaces=").append(visibilitySouthFaces)
+                .append(", visibilityRetainedBytes=").append(visibilityRetainedBytes)
+                .append(", visibilityRetainedBytesPerBuild=").append(BinarySectionVisibility.RETAINED_BYTES)
+                .append(", visibilityTotalBuildNs=").append(meshWorkers == null ? 0L : meshWorkers.totalVisibilityBuildNs())
+                .append(", visibilityMaxBuildNs=").append(meshWorkers == null ? 0L : meshWorkers.maxVisibilityBuildNs())
+                .append(", visibilityMaxFaces=").append(meshWorkers == null ? 0L : meshWorkers.maxVisibilityFaces())
+                .append(", visibilityScratchBuildUses=").append(visibilityScratchUses)
+                .append(", visibilityMaxScratchRows=").append(meshWorkers == null ? 0L : meshWorkers.maxVisibilityScratchRows())
+                .append(", visibilityDeterminismAudits=").append(visibilityDeterminismAudits)
+                .append(", visibilityDeterminismAuditMatches=").append(visibilityDeterminismMatches)
+                .append(", visibilityReferenceAudits=").append(visibilityReferenceAudits)
+                .append(", visibilityReferenceAuditMatches=").append(visibilityReferenceMatches)
                 .append(", sceneWorkerSubmitted=").append(sceneWorkerSubmitted)
                 .append(", sceneWorkerCompleted=").append(sceneWorkerCompleted)
                 .append(", sceneWorkerCancelled=").append(sceneWorkerCancelled)
