@@ -502,7 +502,6 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         return enqueue(chosen, generation, eventSequence, priority, snapshot, bakedSnapshot);
     }
 
-    /** Validation-only pinned submit retained for the historical dev1 proof. */
     Ticket submitPinnedForValidation(
             int workerIndex,
             long generation,
@@ -651,7 +650,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         do {
             previous = target.get(index);
             if (value <= previous) return;
-        } while (!target.compareAndSet(previous, value));
+        } while (!target.compareAndSet(index, previous, value));
     }
 
     public static String priorityName(int priority) {
