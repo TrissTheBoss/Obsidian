@@ -1,6 +1,8 @@
 package dev.obsidian.render.mesh;
 
 import dev.obsidian.render.terrain.BakedSectionMesh;
+import dev.obsidian.render.terrain.BinarySectionVisibility;
+import dev.obsidian.render.terrain.ReferenceFaceMesh;
 import dev.obsidian.render.terrain.SectionBakedQuadSnapshot;
 import dev.obsidian.render.terrain.SectionSnapshot;
 
@@ -15,8 +17,9 @@ import java.util.concurrent.atomic.AtomicLongArray;
  * <p>Jobs contain only immutable renderer-owned Phase 2 snapshots. There are
  * three bounded priority lanes per worker and idle workers steal from peers.
  * Dev3 chooses work by priority across the whole pool before falling through to
- * lower relevance. No worker touches Minecraft world/chunk/model state or GPU
- * objects.</p>
+ * lower relevance. P3.2 additionally builds a compact binary directional-face
+ * visibility sidecar for every production job. No worker touches Minecraft
+ * world/chunk/model state or GPU objects.</p>
  */
 public final class SectionMeshWorkerPool implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/SectionMeshWorkers");
@@ -46,6 +49,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
 
         private volatile TicketState state = TicketState.QUEUED;
         private volatile boolean cancellationRequested;
+        private volatile BinarySectionVisibility visibility;
         private volatile BakedSectionMesh mesh;
         private volatile Throwable failure;
         private volatile long startNs;
@@ -80,6 +84,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     || current == TicketState.FAILED;
         }
         public boolean cancellationRequested() { return cancellationRequested; }
+        public BinarySectionVisibility visibility() { return visibility; }
         public BakedSectionMesh mesh() { return mesh; }
         public Throwable failure() { return failure; }
         public long queueWaitNs() { return startNs == 0L ? 0L : Math.max(0L, startNs - enqueueNs); }
@@ -144,6 +149,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private final WorkerQueue queue = new WorkerQueue();
         private final Thread thread;
         private final BakedSectionMesh.BuildScratch buildScratch = new BakedSectionMesh.BuildScratch();
+        private final BinarySectionVisibility.BuildScratch visibilityScratch = new BinarySectionVisibility.BuildScratch();
         private long completedLocalBuilds;
         private long lastFingerprint;
 
@@ -197,6 +203,24 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     return;
                 }
 
+                BinarySectionVisibility firstVisibility = BinarySectionVisibility.build(
+                        ticket.snapshot, visibilityScratch);
+                recordVisibilityScratchUse(visibilityScratch);
+                visibilityBuilds.incrementAndGet();
+                totalVisibilityFaces.addAndGet(firstVisibility.visibleFaceCount());
+                totalVisibilityRetainedBytes.addAndGet(firstVisibility.retainedBytes());
+                totalVisibilityBuildNs.addAndGet(firstVisibility.buildTimeNs());
+                updateMax(maxVisibilityFaces, firstVisibility.visibleFaceCount());
+                updateMax(maxVisibilityBuildNs, firstVisibility.buildTimeNs());
+                for (int direction = 0; direction < BinarySectionVisibility.DIRECTION_COUNT; direction++) {
+                    visibilityFacesByDirection.addAndGet(
+                            direction, firstVisibility.directionFaceCount(direction));
+                }
+                if (ticket.cancellationRequested || closed) {
+                    cancelTicket(ticket);
+                    return;
+                }
+
                 BakedSectionMesh first = BakedSectionMesh.build(
                         ticket.snapshot, ticket.bakedSnapshot, buildScratch);
                 recordScratchUse(buildScratch);
@@ -208,6 +232,21 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 boolean audit = completedLocalBuilds == 0L
                         || (completedLocalBuilds % DETERMINISM_AUDIT_INTERVAL) == 0L;
                 if (audit) {
+                    visibilityDeterminismAudits.incrementAndGet();
+                    BinarySectionVisibility secondVisibility = BinarySectionVisibility.build(
+                            ticket.snapshot, visibilityScratch);
+                    recordVisibilityScratchUse(visibilityScratch);
+                    if (!firstVisibility.contentEquals(secondVisibility)) {
+                        throw new IllegalStateException("Worker-produced binary section visibility was nondeterministic");
+                    }
+                    visibilityDeterminismAuditMatches.incrementAndGet();
+
+                    visibilityReferenceAudits.incrementAndGet();
+                    ReferenceFaceMesh reference = ReferenceFaceMesh.build(ticket.snapshot);
+                    reference.validateAgainst(ticket.snapshot);
+                    firstVisibility.validateAgainst(reference);
+                    visibilityReferenceAuditMatches.incrementAndGet();
+
                     determinismAudits.incrementAndGet();
                     BakedSectionMesh second = BakedSectionMesh.build(
                             ticket.snapshot, ticket.bakedSnapshot, buildScratch);
@@ -222,6 +261,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     return;
                 }
 
+                ticket.visibility = firstVisibility;
                 ticket.mesh = first;
                 ticket.endNs = System.nanoTime();
                 ticket.state = TicketState.COMPLETED;
@@ -277,6 +317,18 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLong maxScratchQuads = new AtomicLong();
     private final AtomicLong determinismAudits = new AtomicLong();
     private final AtomicLong determinismAuditMatches = new AtomicLong();
+    private final AtomicLong visibilityBuilds = new AtomicLong();
+    private final AtomicLong totalVisibilityFaces = new AtomicLong();
+    private final AtomicLong maxVisibilityFaces = new AtomicLong();
+    private final AtomicLong totalVisibilityRetainedBytes = new AtomicLong();
+    private final AtomicLong totalVisibilityBuildNs = new AtomicLong();
+    private final AtomicLong maxVisibilityBuildNs = new AtomicLong();
+    private final AtomicLong visibilityScratchBuildUses = new AtomicLong();
+    private final AtomicLong maxVisibilityScratchRows = new AtomicLong();
+    private final AtomicLong visibilityDeterminismAudits = new AtomicLong();
+    private final AtomicLong visibilityDeterminismAuditMatches = new AtomicLong();
+    private final AtomicLong visibilityReferenceAudits = new AtomicLong();
+    private final AtomicLong visibilityReferenceAuditMatches = new AtomicLong();
     private final AtomicLong shutdownJoinFailures = new AtomicLong();
 
     private final AtomicLongArray submittedByPriority = new AtomicLongArray(PRIORITY_COUNT);
@@ -288,6 +340,8 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLongArray cancellationRequestsByPriority = new AtomicLongArray(PRIORITY_COUNT);
     private final AtomicLongArray totalQueueWaitByPriority = new AtomicLongArray(PRIORITY_COUNT);
     private final AtomicLongArray maxQueueWaitByPriority = new AtomicLongArray(PRIORITY_COUNT);
+    private final AtomicLongArray visibilityFacesByDirection =
+            new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
 
     private volatile boolean closed;
 
@@ -421,6 +475,11 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         updateMax(maxScratchQuads, scratch.highWaterQuads());
     }
 
+    private void recordVisibilityScratchUse(BinarySectionVisibility.BuildScratch scratch) {
+        visibilityScratchBuildUses.incrementAndGet();
+        updateMax(maxVisibilityScratchRows, scratch.highWaterSupportedRows());
+    }
+
     private static void validateJob(
             int priority,
             SectionSnapshot snapshot,
@@ -500,6 +559,24 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     public long maxScratchQuads() { return maxScratchQuads.get(); }
     public long determinismAudits() { return determinismAudits.get(); }
     public long determinismAuditMatches() { return determinismAuditMatches.get(); }
+    public long visibilityBuilds() { return visibilityBuilds.get(); }
+    public long totalVisibilityFaces() { return totalVisibilityFaces.get(); }
+    public long maxVisibilityFaces() { return maxVisibilityFaces.get(); }
+    public long totalVisibilityRetainedBytes() { return totalVisibilityRetainedBytes.get(); }
+    public long totalVisibilityBuildNs() { return totalVisibilityBuildNs.get(); }
+    public long maxVisibilityBuildNs() { return maxVisibilityBuildNs.get(); }
+    public long visibilityScratchBuildUses() { return visibilityScratchBuildUses.get(); }
+    public long maxVisibilityScratchRows() { return maxVisibilityScratchRows.get(); }
+    public long visibilityDeterminismAudits() { return visibilityDeterminismAudits.get(); }
+    public long visibilityDeterminismAuditMatches() { return visibilityDeterminismAuditMatches.get(); }
+    public long visibilityReferenceAudits() { return visibilityReferenceAudits.get(); }
+    public long visibilityReferenceAuditMatches() { return visibilityReferenceAuditMatches.get(); }
+    public long visibilityFaces(int direction) {
+        if (direction < 0 || direction >= BinarySectionVisibility.DIRECTION_COUNT) {
+            throw new IllegalArgumentException("Invalid visibility direction");
+        }
+        return visibilityFacesByDirection.get(direction);
+    }
     public long shutdownJoinFailures() { return shutdownJoinFailures.get(); }
 
     public long submittedJobs(int priority) { validatePriority(priority); return submittedByPriority.get(priority); }
