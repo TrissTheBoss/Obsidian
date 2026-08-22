@@ -1,6 +1,6 @@
 # Obsidian Current State
 
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 ## Canonical repository
 
@@ -9,10 +9,9 @@ Last updated: 2026-08-22
 - Current public release intent: keep the existing public checkpoint until a separate release decision.
 - Canonical long-range plan: `ai/MASTER_ROADMAP.md`
 - Current product phase: **Phase 3 — production asynchronous CPU mesher / greedy meshing**.
-- Current active milestone: **P3.4 dev6 — render-correct merge-key sidecar**.
-- Active branch: `phase3/render-correct-merge-key`.
-- Canonical draft PR: #38 against `main`.
-- Active development version: `0.3.0-phase3-dev6`.
+- Current active milestone: **P3.4 dev7 — render-key-aware merge-candidate sidecar**.
+- Active branch: `phase3/render-merge-candidate-sidecar`.
+- Active development version: `0.3.0-phase3-dev7`.
 - Runtime test handoff preference: provide the direct versioned `.jar`, not a GitHub Actions ZIP wrapper.
 
 ## Completed merged foundation
@@ -25,10 +24,11 @@ Last updated: 2026-08-22
 - P3.1 dev3: COMPLETE — PR #34 merge `1b6615eac2494a197cea86d314cf5b099d2418e8`.
 - P3.2 dev4 binary visibility masks: COMPLETE — PR #36 merge `54ca3cb2d64eda958579407728e757eb0c98b948`.
 - P3.3 dev5 greedy rectangle extraction: COMPLETE — PR #37 merge `34caa19a9de70ba8e0395a2992180f3a24a3f7aa`.
+- P3.4 dev6 canonical render-key sidecar slice: COMPLETE — PR #38 merge `967c4511cd11cd721886feae6d146f4412790a6d`.
 
 A-0101 remains the canonical proof for the already-closed Phase 2 fixed-target chunk unload/return lifecycle. Later Phase 3 runtime tests do not need to repeat that long-distance sequence unless lifecycle hooks or semantics materially change.
 
-## P3.2 proven topology foundation
+## Proven P3.2 / P3.3 topology foundation
 
 `BinarySectionVisibility` is the immutable worker-side conservative canonical face representation:
 
@@ -36,136 +36,103 @@ A-0101 remains the canonical proof for the already-closed Phase 2 fixed-target c
 - 4,096 bits / 64 `long` words per direction;
 - exactly 3,072 retained bytes per complete mask set;
 - exact conservative rule `SUPPORTED_FULL_CUBE && neighbor == AIR`;
-- reusable worker-local primitive scratch;
-- deterministic construction and independent `ReferenceFaceMesh` equivalence.
+- deterministic construction and permanent independent `ReferenceFaceMesh` equivalence.
 
-A-0105 closed P3.2 on real runtime evidence with `binaryVisibilityEvidenceReady=true`.
+`GreedySectionRectangles` deterministically partitions those masks into packed topology-only rectangles with exact no-gap/no-overlap coverage. Dev5 runtime measured 21,286 rectangles over 48,261 faces, a 55.8% topology reduction, while the generalized `BakedSectionMesh` remained the GPU drawable.
 
-## P3.3 greedy rectangle extraction — COMPLETE
+## P3.4 dev6 render-key sidecar — COMPLETE SLICE
 
-Evidence chain:
+A-0112 froze dev6; A-0113 records implementation/package; A-0114 preserves the initially incomplete shutdown paste; A-0115 supplies the complete runtime closure; A-0116 records promotion and activates dev7.
 
-- A-0108 — frozen dev5 correctness-first rectangle contract;
-- A-0110 — successful reference runtime and positive human visual regression verdict;
-- A-0111 — promotion and P3.4 activation.
+`CanonicalFaceRenderKeys` consumes immutable `SectionSnapshot`, `BinarySectionVisibility`, and `SectionBakedQuadSnapshot`. A canonical face is render-key eligible only when exactly one accepted baked SOLID/CUTOUT quad from the same source block is proven to be the exact full unit-cube face for that direction.
 
-`GreedySectionRectangles` deterministically partitions P3.2 canonical faces into packed topology rectangles while preserving exact face coverage. It remains a topology representation; dev5 did not emit greedy GPU geometry.
+The recognizer rejects offset/inset/partial/rotated/non-axis-aligned/duplicate-corner/ambiguous generalized geometry. Exact render equivalence requires:
 
-Reference dev5 runtime proved:
+- canonical direction/orientation;
+- render layer;
+- complete `MaterialIdentity` equality;
+- geometric corner-order/winding signature;
+- exact raw UV bits per geometric corner;
+- exact ARGB per geometric corner;
+- exact packed light per geometric corner.
+
+Block/state ID equality alone is never sufficient.
+
+The retained map is 24,576 `short` slots = exactly 49,152 bytes/build: `0` unmapped, positive unique source quad, `-1` ambiguous.
+
+### Dev6 canonical runtime closure
+
+Reference runtime on the Windows 11 / Radeon RX 6800 XT Vulkan machine ended with `Process exited with code 0` and proved:
 
 - `phase3GateReady=true`;
 - `schedulerEvidenceReady=true`;
 - `binaryVisibilityEvidenceReady=true`;
 - `greedyRectangleEvidenceReady=true`;
-- worker jobs `162/162/162` submitted/started/completed;
-- visibility faces `48,261`;
-- topology rectangles `21,286`;
-- faces saved `26,975`;
-- topology reduction `558` permille = **55.8%**;
-- rectangle retained bytes `85,144 = 21,286 * 4`;
-- primary exact mask audits `162/162`;
-- rectangle determinism audits/matches `4/4`;
-- independent rectangle/reference audits/matches `4/4`;
-- zero worker rejection/failure/shutdown-join failure;
-- zero dropped lifecycle events / unsafe stale installs;
-- workers/staging/arena/resources clean;
-- process exit code `0`.
+- `renderMergeKeyEvidenceReady=true`;
+- `productionWorkerIntegrationReady=true`;
+- `hardFailure=false`;
+- `workerWorldReadsAfterCapture=0`;
+- `synchronousSceneMeshBuilds=0`;
+- worker submitted/started/completed `229/229/229`, steals `172`, zero queue-full rejection/failure/shutdown-join failure;
+- visibility builds/faces `229 / 96,038`, exact 3,072 bytes/build, determinism/reference `4/4` each;
+- rectangle builds/count/covered faces `229 / 38,917 / 96,038`, faces saved `57,121` = 59.4%, mask audits `229/229`, determinism/reference `4/4` each;
+- render-key builds `229`;
+- render-key visible/eligible/unmapped/ambiguous `96,038 / 77,157 / 0 / 18,881`, exact accounting;
+- recognized canonical / ignored noncanonical baked quads `114,919 / 73,977`;
+- same/different/ineligible adjacencies `10,328 / 70,564 / 12,389`;
+- retained render-key bytes `11,255,808 = 229 * 49,152`;
+- render-key determinism `4/4`;
+- dropped lifecycle / unsafe stale installs `0 / 0`;
+- workers/staging/arena/resources all clean;
+- staging submitted/reclaimed `25,244,616 / 25,244,616`;
+- arena allocations/retired/reclaimed `450/450/450`, used bytes `0`;
+- resources retired/released `225/225`.
 
-The user reported that everything looked right. `BakedSectionMesh` remained the GPU drawable, so this visual result is a regression guard rather than proof of greedy GPU emission.
+The user reported visuals looked fine. Dev6 still did not change GPU geometry, so that is a regression guard.
 
-## ACTIVE: P3.4 dev6 — render-correct merge-key sidecar
+The final A-0115 evidence head `efbaf7d15be5a4472700c861535ee6e4ef8fc038` passed exact CI run `32601469374`; build/upload succeeded and release publishing was skipped. PR #38 merged with `[no-release]` as `967c4511cd11cd721886feae6d146f4412790a6d`.
 
-A-0112 freezes the first P3.4 slice. Draft PR #38 implements a correctness-first sidecar before any production geometry replacement.
+## ACTIVE: P3.4 dev7 — render-key-aware merge-candidate sidecar
 
-### Exact input truth already captured
+Dev7 is the next correctness-first P3.4 slice. It remains **sidecar-only** and must not replace emitted GPU geometry.
 
-`SectionBakedQuadSnapshot` freezes vanilla-emitted accepted SOLID/CUTOUT baked data into immutable primitive arrays, including:
+Intended inputs:
 
-- exact quad positions and UVs;
-- exact per-corner ARGB colors and packed light;
-- source block and state identity;
-- face direction and render layer;
-- material identity: atlas, sprite, material flags, tint index, shade, light emission and animation state;
-- stable source snapshot/resource fingerprints.
+1. proven `BinarySectionVisibility` canonical face topology;
+2. proven `CanonicalFaceRenderKeys` eligibility and exact face render equivalence;
+3. P3.3 `GreedySectionRectangles` retained as a topology/differential input, but not necessarily as a partition constraint if that would prevent a larger valid key-aware rectangle.
 
-### Dev6 canonical face mapping
+The dev7 product should deterministically partition the dev6-eligible canonical face set into same-render-key merge candidates while preserving exact canonical passthrough accounting for ambiguous/ineligible faces. Arbitrary generalized baked-model geometry stays on the existing `BakedSectionMesh` path.
 
-`CanonicalFaceRenderKeys` is the active P3.4 sidecar. A P3.2 canonical face becomes render-key eligible only when exactly one baked quad from the same source block is proven to be the exact full unit-cube face for that direction.
+Required correctness properties before dev7 can close:
 
-The conservative recognizer:
+- every candidate contains only dev6-eligible faces;
+- every covered face is exactly render-equivalent to the candidate representative/source key;
+- candidate rectangles have no overlap;
+- candidate coverage equals the complete eligible canonical face set exactly, globally and by direction;
+- visible canonical passthrough count equals visible minus eligible;
+- deterministic extraction/order and bounded primitive storage/scratch;
+- nonzero multi-face candidates and measurable candidate face reduction on real terrain;
+- existing P3.2/P3.3/dev6 differential gates remain true;
+- zero worker/lifecycle/lifetime regressions and clean process exit.
 
-- explicitly maps Minecraft `Direction` ordinals to P3.2 direction order;
-- requires the P3.2 visible-face bit;
-- requires all four baked positions to be exact integer-boundary corners of the expected unit face;
-- rejects offset, inset, partial, rotated/non-axis-aligned, duplicate-corner and ambiguous generalized geometry;
-- leaves zero-match or multi-match faces on the existing exact passthrough path.
+### Critical dev7 rendering boundary
 
-### Render-equivalence contract
+Pairwise face render-key equality is necessary but is **not yet sufficient** to emit one large quad safely. Replacing repeated cell quads with one rectangle can change interpolation of per-corner light/color/AO, and identical cell-local atlas UVs do not by themselves define correct texture repetition over a larger rectangle.
 
-Two uniquely mapped canonical faces are considered render-equivalent only when all captured output-affecting truth agrees:
+Therefore dev7 must continue to report:
 
-- canonical direction/orientation;
-- render layer;
-- complete `MaterialIdentity` equality;
-- geometric corner order/winding signature;
-- exact raw UV bits per geometric corner;
-- exact ARGB color per geometric corner;
-- exact packed light per geometric corner.
-
-Block/state ID equality alone is never sufficient for merging.
-
-### Current integration boundary
-
-Every production `SectionMeshWorkerPool` job in dev6 is intended to build, in order:
-
-1. `BinarySectionVisibility`;
-2. `GreedySectionRectangles`;
-3. `CanonicalFaceRenderKeys`;
-4. existing generalized `BakedSectionMesh` drawable.
-
-The render-key sidecar uses a bounded 24,576-entry `short` map, exactly **49,152 retained bytes per build**. `0` means unmapped, positive values identify the unique source baked quad, and `-1` means ambiguous.
-
-Existing P3.2/P3.3/reference/baked deterministic audits remain active. Dev6 adds duplicate render-key determinism audits and metrics for eligible/unmapped/ambiguous faces, recognized/ignored baked quads, and same-key/different-key/ineligible canonical adjacency pairs.
-
-### Deliberate dev6 rendering boundary
-
-Dev6 must continue to report:
-
-- `binaryVisibilitySidecarIntegrated=true`;
-- `greedyRectangleSidecarIntegrated=true`;
-- `renderMergeKeySidecarIntegrated=true`;
 - `greedyRectangleGpuEmission=false`;
-- `renderCorrectMergeKeyComplete=false`.
+- `renderCorrectMergeKeyComplete=false`;
+- the generalized `BakedSectionMesh` remains the authoritative GPU drawable.
 
-The generalized SOLID/CUTOUT `BakedSectionMesh` remains the authoritative GPU drawable. Arbitrary generalized baked-model quads remain exact passthrough unless explicitly proven canonical and render-equivalent.
+A later P3.4 emission slice must separately freeze and prove rectangle-level UV and interpolation semantics before changing GPU geometry. That later geometry-changing slice requires renewed explicit human visual validation.
 
-## Dev6 runtime closure — REQUIRED BEFORE MERGE
-
-New required flag: `renderMergeKeyEvidenceReady=true`, together with the existing Phase 3/P3.2/P3.3 gates.
-
-Closure requires:
-
-- render-key builds cover completed production jobs;
-- render-key visible-face count exactly equals P3.2 visibility faces;
-- eligible + unmapped + ambiguous exactly equals visible faces;
-- nonzero uniquely mapped canonical faces;
-- nonzero recognized canonical baked quads;
-- at least one same-key canonical adjacency and at least one different-key adjacency, proving the comparator is exercised both ways;
-- retained bytes exactly equal builds * 49,152;
-- render-key scratch use covers builds;
-- nonzero deterministic audits with all matches;
-- zero worker rejection/failure/shutdown-join failure;
-- zero dropped lifecycle events / unsafe stale installs;
-- workers/staging/arena/resources clean;
-- process exit code `0`.
-
-Runtime sequence remains ordinary terrain: initial 3x3 READY, visual regression check, break/place + READY rebuild, F3+T + READY rebuild, optional normal recenter movement, then normal exit. The old fixed-anchor far-travel sequence is not required again.
-
-Because dev6 still does not change emitted GPU geometry, human visual inspection is a regression guard. Any later P3.4 step that begins emitting merged geometry requires renewed explicit human visual validation.
+P3.5 border/halo correctness remains planned and is **not** active yet.
 
 ## Promotion authorization
 
-Standing user merge authorization applies to this validated Phase 3 chain. PR #38 may be promoted without another authorization request only after its frozen exact CI/package and runtime closure gates pass. Promotion must use `[no-release]`.
+Standing user merge authorization applies to this validated Phase 3 chain. A dev7 PR may be promoted without another authorization request only after its frozen exact CI/package/runtime gates pass. Promotion must use `[no-release]`.
 
 ## Continuity model
 
@@ -195,4 +162,4 @@ Source/runtime evidence overrides stale planning text. Attempts are immutable.
 
 ## Relevant durable decisions
 
-D-0014 through D-0027 remain active, especially D-0016 completion-gated reclamation, D-0017 bounded/backpressured staging, D-0020 generation-safe arena identity, D-0023 public Blaze3D graphics first, D-0024 permanent independent reference oracle + worker-local binary/bitmask greedy meshing with complete visual merge-key truth, D-0025 narrow native seam, and D-0027 public fixed-count indirect baseline.
+D-0014 through D-0027 remain active, especially D-0016 completion-gated reclamation, D-0017 bounded/backpressured staging, D-0020 generation-safe arena identity, D-0023 public Blaze3D graphics first, D-0024 permanent independent reference oracle + worker-local binary/bitmask greedy meshing with complete output-affecting merge truth, D-0025 narrow native seam, and D-0027 public fixed-count indirect baseline.
