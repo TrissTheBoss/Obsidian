@@ -5,6 +5,7 @@ import dev.obsidian.render.terrain.BinarySectionVisibility;
 import dev.obsidian.render.terrain.CanonicalFaceRenderKeys;
 import dev.obsidian.render.terrain.GreedySectionRectangles;
 import dev.obsidian.render.terrain.ReferenceFaceMesh;
+import dev.obsidian.render.terrain.RenderMergeCandidates;
 import dev.obsidian.render.terrain.SectionBakedQuadSnapshot;
 import dev.obsidian.render.terrain.SectionSnapshot;
 
@@ -21,9 +22,10 @@ import java.util.concurrent.atomic.AtomicLongArray;
  * Dev3 chooses work by priority across the whole pool before falling through to
  * lower relevance. P3.2 builds compact binary directional-face visibility,
  * P3.3 partitions that proven topology into deterministic greedy rectangles,
- * and P3.4 dev6 maps conservative canonical faces to exact baked render keys.
- * The existing baked mesh remains the production drawable. No worker touches
- * Minecraft world/chunk/model state or GPU objects.</p>
+ * P3.4 dev6 maps conservative canonical faces to exact baked render keys, and
+ * dev7 partitions only those eligible faces into render-key-aware merge
+ * candidates. The existing baked mesh remains the production drawable. No
+ * worker touches Minecraft world/chunk/model state or GPU objects.</p>
  */
 public final class SectionMeshWorkerPool implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/SectionMeshWorkers");
@@ -56,6 +58,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private volatile BinarySectionVisibility visibility;
         private volatile GreedySectionRectangles rectangles;
         private volatile CanonicalFaceRenderKeys renderKeys;
+        private volatile RenderMergeCandidates mergeCandidates;
         private volatile BakedSectionMesh mesh;
         private volatile Throwable failure;
         private volatile long startNs;
@@ -93,6 +96,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         public BinarySectionVisibility visibility() { return visibility; }
         public GreedySectionRectangles rectangles() { return rectangles; }
         public CanonicalFaceRenderKeys renderKeys() { return renderKeys; }
+        public RenderMergeCandidates mergeCandidates() { return mergeCandidates; }
         public BakedSectionMesh mesh() { return mesh; }
         public Throwable failure() { return failure; }
         public long queueWaitNs() { return startNs == 0L ? 0L : Math.max(0L, startNs - enqueueNs); }
@@ -160,6 +164,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private final BinarySectionVisibility.BuildScratch visibilityScratch = new BinarySectionVisibility.BuildScratch();
         private final GreedySectionRectangles.BuildScratch rectangleScratch = new GreedySectionRectangles.BuildScratch();
         private final CanonicalFaceRenderKeys.BuildScratch renderKeyScratch = new CanonicalFaceRenderKeys.BuildScratch();
+        private final RenderMergeCandidates.BuildScratch mergeCandidateScratch = new RenderMergeCandidates.BuildScratch();
         private long completedLocalBuilds;
         private long lastFingerprint;
 
@@ -276,6 +281,33 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     return;
                 }
 
+                RenderMergeCandidates firstMergeCandidates = RenderMergeCandidates.build(
+                        firstVisibility, firstRectangles, firstRenderKeys,
+                        ticket.bakedSnapshot, mergeCandidateScratch);
+                recordMergeCandidateScratchUse(mergeCandidateScratch);
+                mergeCandidateBuilds.incrementAndGet();
+                totalMergeCandidateCount.addAndGet(firstMergeCandidates.candidateCount());
+                totalMergeCandidateCoveredEligibleFaces.addAndGet(firstMergeCandidates.coveredEligibleFaces());
+                totalMergeCandidatePassthroughCanonicalFaces.addAndGet(firstMergeCandidates.passthroughCanonicalFaces());
+                totalMergeCandidateSingletons.addAndGet(firstMergeCandidates.singletonCandidates());
+                totalMergeCandidateMultiFace.addAndGet(firstMergeCandidates.multiFaceCandidates());
+                totalMergeCandidateRetainedBytes.addAndGet(firstMergeCandidates.retainedBytes());
+                totalMergeCandidateBuildNs.addAndGet(firstMergeCandidates.buildTimeNs());
+                updateMax(maxMergeCandidateCount, firstMergeCandidates.candidateCount());
+                updateMax(maxMergeCandidateBuildNs, firstMergeCandidates.buildTimeNs());
+                mergeCandidateCoverageAudits.incrementAndGet();
+                mergeCandidateCoverageAuditMatches.incrementAndGet();
+                for (int direction = 0; direction < BinarySectionVisibility.DIRECTION_COUNT; direction++) {
+                    mergeCandidateCountsByDirection.addAndGet(
+                            direction, firstMergeCandidates.directionCandidateCount(direction));
+                    mergeCandidateCoveredFacesByDirection.addAndGet(
+                            direction, firstMergeCandidates.directionCoveredFaceCount(direction));
+                }
+                if (ticket.cancellationRequested || closed) {
+                    cancelTicket(ticket);
+                    return;
+                }
+
                 BakedSectionMesh first = BakedSectionMesh.build(
                         ticket.snapshot, ticket.bakedSnapshot, buildScratch);
                 recordScratchUse(buildScratch);
@@ -324,6 +356,16 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     }
                     renderKeyDeterminismAuditMatches.incrementAndGet();
 
+                    mergeCandidateDeterminismAudits.incrementAndGet();
+                    RenderMergeCandidates secondMergeCandidates = RenderMergeCandidates.build(
+                            secondVisibility, secondRectangles, secondRenderKeys,
+                            ticket.bakedSnapshot, mergeCandidateScratch);
+                    recordMergeCandidateScratchUse(mergeCandidateScratch);
+                    if (!firstMergeCandidates.contentEquals(secondMergeCandidates)) {
+                        throw new IllegalStateException("Worker-produced render merge-candidate sidecar was nondeterministic");
+                    }
+                    mergeCandidateDeterminismAuditMatches.incrementAndGet();
+
                     determinismAudits.incrementAndGet();
                     BakedSectionMesh second = BakedSectionMesh.build(
                             ticket.snapshot, ticket.bakedSnapshot, buildScratch);
@@ -341,6 +383,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 ticket.visibility = firstVisibility;
                 ticket.rectangles = firstRectangles;
                 ticket.renderKeys = firstRenderKeys;
+                ticket.mergeCandidates = firstMergeCandidates;
                 ticket.mesh = first;
                 ticket.endNs = System.nanoTime();
                 ticket.state = TicketState.COMPLETED;
@@ -445,6 +488,23 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLong renderKeyDeterminismAudits = new AtomicLong();
     private final AtomicLong renderKeyDeterminismAuditMatches = new AtomicLong();
 
+    private final AtomicLong mergeCandidateBuilds = new AtomicLong();
+    private final AtomicLong totalMergeCandidateCount = new AtomicLong();
+    private final AtomicLong totalMergeCandidateCoveredEligibleFaces = new AtomicLong();
+    private final AtomicLong totalMergeCandidatePassthroughCanonicalFaces = new AtomicLong();
+    private final AtomicLong totalMergeCandidateSingletons = new AtomicLong();
+    private final AtomicLong totalMergeCandidateMultiFace = new AtomicLong();
+    private final AtomicLong totalMergeCandidateRetainedBytes = new AtomicLong();
+    private final AtomicLong totalMergeCandidateBuildNs = new AtomicLong();
+    private final AtomicLong maxMergeCandidateBuildNs = new AtomicLong();
+    private final AtomicLong maxMergeCandidateCount = new AtomicLong();
+    private final AtomicLong mergeCandidateScratchBuildUses = new AtomicLong();
+    private final AtomicLong maxMergeCandidateScratchCandidates = new AtomicLong();
+    private final AtomicLong mergeCandidateCoverageAudits = new AtomicLong();
+    private final AtomicLong mergeCandidateCoverageAuditMatches = new AtomicLong();
+    private final AtomicLong mergeCandidateDeterminismAudits = new AtomicLong();
+    private final AtomicLong mergeCandidateDeterminismAuditMatches = new AtomicLong();
+
     private final AtomicLong shutdownJoinFailures = new AtomicLong();
 
     private final AtomicLongArray submittedByPriority = new AtomicLongArray(PRIORITY_COUNT);
@@ -461,6 +521,10 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLongArray rectangleCountsByDirection =
             new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
     private final AtomicLongArray rectangleCoveredFacesByDirection =
+            new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
+    private final AtomicLongArray mergeCandidateCountsByDirection =
+            new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
+    private final AtomicLongArray mergeCandidateCoveredFacesByDirection =
             new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
 
     private volatile boolean closed;
@@ -609,6 +673,11 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         updateMax(maxRenderKeyScratchEligibleFaces, scratch.highWaterEligibleFaces());
     }
 
+    private void recordMergeCandidateScratchUse(RenderMergeCandidates.BuildScratch scratch) {
+        mergeCandidateScratchBuildUses.incrementAndGet();
+        updateMax(maxMergeCandidateScratchCandidates, scratch.highWaterCandidates());
+    }
+
     private static void validateJob(
             int priority,
             SectionSnapshot snapshot,
@@ -754,6 +823,35 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     public long maxRenderKeyScratchEligibleFaces() { return maxRenderKeyScratchEligibleFaces.get(); }
     public long renderKeyDeterminismAudits() { return renderKeyDeterminismAudits.get(); }
     public long renderKeyDeterminismAuditMatches() { return renderKeyDeterminismAuditMatches.get(); }
+
+    public long mergeCandidateBuilds() { return mergeCandidateBuilds.get(); }
+    public long totalMergeCandidateCount() { return totalMergeCandidateCount.get(); }
+    public long totalMergeCandidateCoveredEligibleFaces() { return totalMergeCandidateCoveredEligibleFaces.get(); }
+    public long totalMergeCandidatePassthroughCanonicalFaces() { return totalMergeCandidatePassthroughCanonicalFaces.get(); }
+    public long totalMergeCandidateSingletons() { return totalMergeCandidateSingletons.get(); }
+    public long totalMergeCandidateMultiFace() { return totalMergeCandidateMultiFace.get(); }
+    public long totalMergeCandidateRetainedBytes() { return totalMergeCandidateRetainedBytes.get(); }
+    public long totalMergeCandidateBuildNs() { return totalMergeCandidateBuildNs.get(); }
+    public long maxMergeCandidateBuildNs() { return maxMergeCandidateBuildNs.get(); }
+    public long maxMergeCandidateCount() { return maxMergeCandidateCount.get(); }
+    public long mergeCandidateScratchBuildUses() { return mergeCandidateScratchBuildUses.get(); }
+    public long maxMergeCandidateScratchCandidates() { return maxMergeCandidateScratchCandidates.get(); }
+    public long mergeCandidateCoverageAudits() { return mergeCandidateCoverageAudits.get(); }
+    public long mergeCandidateCoverageAuditMatches() { return mergeCandidateCoverageAuditMatches.get(); }
+    public long mergeCandidateDeterminismAudits() { return mergeCandidateDeterminismAudits.get(); }
+    public long mergeCandidateDeterminismAuditMatches() { return mergeCandidateDeterminismAuditMatches.get(); }
+    public long mergeCandidates(int direction) {
+        if (direction < 0 || direction >= BinarySectionVisibility.DIRECTION_COUNT) {
+            throw new IllegalArgumentException("Invalid merge-candidate direction");
+        }
+        return mergeCandidateCountsByDirection.get(direction);
+    }
+    public long mergeCandidateCoveredFaces(int direction) {
+        if (direction < 0 || direction >= BinarySectionVisibility.DIRECTION_COUNT) {
+            throw new IllegalArgumentException("Invalid merge-candidate direction");
+        }
+        return mergeCandidateCoveredFacesByDirection.get(direction);
+    }
 
     public long shutdownJoinFailures() { return shutdownJoinFailures.get(); }
 
