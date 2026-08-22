@@ -8,168 +8,157 @@ Last updated: 2026-08-21
 - Default branch: `main`
 - Current public release: `v0.0.2-phase0`
 - Canonical long-range plan: `ai/MASTER_ROADMAP.md`
+- `main` remains at the P2.5-complete Class-A state until the remaining P2.6 runtime gate closes.
+
+## Completed merged milestones
+
 - Phase 1: COMPLETE — closing merge `61df7b8e2abc09ce387e09c9e4d6811a9ef6c40f`.
 - P2.1: COMPLETE — `a714e19ce871bf73136d52f85a1780109aa851dd`.
 - P2.2: COMPLETE — `f9c64267c5becb3bd80897efdb09ed65a6ce8697`.
 - P2.3: COMPLETE — `667230f51222746083efe89c72265d80ac9d3929`.
 - P2.4: COMPLETE — `fa0d40182cd0bc29a526b28a8b2b3b43fc8fc8ba`.
 - P2.5: COMPLETE — `c17f7c6146678e18cacabc44d85c67413a040f73`.
-- P2.5 Class-A sync: `306d74fdf2428af93feac2ce5e49296d508d9d2d`.
-- `main` remains at the P2.5-complete state while P2.6's final fixed-target runtime coverage is open.
+- P2.5 Class-A synchronization: `306d74fdf2428af93feac2ce5e49296d508d9d2d`.
 
-## Current Phase 2 integration branch
+## Current dependency chain
+
+### P2.6 / dev6 — corrected behavior proven, fixed-target chunk lifecycle coverage still open
 
 - Branch: `phase2/section-lifecycle-rebuild`.
-- PR #25: open/draft against `main`.
-- Current branch head contains corrected P2.6 plus validated P2.7.
-- P2.7 PR #27 was explicitly merge-authorized and merged into this branch as merge commit `91eb704e769fff5d872c628a710cd8128a3314ee`.
-- This stacked merge did **not** merge anything to `main` and did **not** waive P2.6's remaining fixed-target chunk-lifecycle gate.
-- User has standing merge authorization for both dev6 and dev7 once the remaining P2.6 gate passes and final exact-head CI is green.
-
-## P2.6 / dev6 — corrected behavior proven, final fixed-target chunk lifecycle coverage pending
-
-Evidence:
-
-- A-0080: section lifecycle/rebuild plan;
-- A-0081: exact Minecraft 26.2 lifecycle/API bytecode inspection;
-- A-0082: implementation/package;
-- A-0083: initial event-ring runtime defect + target-scoped sticky/coalesced bridge correction;
+- PR: #25, open/draft against `main`.
+- Corrected standalone version: `0.2.0-phase2-dev6`.
+- User has standing dev6 merge authorization conditional on the existing fixed-target runtime gate.
+- A-0080: lifecycle plan.
+- A-0081: exact Minecraft 26.2 lifecycle/API inspection.
+- A-0082: implementation/package.
+- A-0083: initial event-ring runtime defect + target-scoped sticky/coalesced bridge correction.
 - A-0084: corrected reference retest partial.
 
-### Exact lifecycle seams
+Corrected standalone dev6 package:
 
-Observation-only hooks preserve vanilla ownership:
+- JAR SHA-256 `486db6d80490170961d5a98debcb691e440e775e433283ab50b30c894821feb8`;
+- sources SHA-256 `786d3c2f54bdc5f1e29b6ff10f5d4009eba7398dc215606fec3bbd4e86354f0e`.
 
-- private `LevelExtractor.setSectionDirty(IIIZ)` central dirty sink;
-- `LevelExtractor.setLevel(ClientLevel)` world replacement/teardown;
-- `ClientLevel.onChunkLoaded(ChunkPos)`;
-- `ClientLevel.unload(LevelChunk)`;
-- successful `ModelManager.reload(...)` completion.
-
-Vanilla remains responsible for block/light/neighbor propagation. Obsidian consumes the resulting exact dirty-section coordinates.
-
-The corrected `SectionLifecycleEvents` bridge has no global event ring. It uses target-scoped sticky/coalesced counters and advances renderer validity only for the tracked section, its relevant chunk neighborhood, world replacement or resource reload.
-
-### Corrected standalone dev6 package
-
-- Version: `0.2.0-phase2-dev6`.
-- JAR SHA-256 `486db6d80490170961d5a98debcb691e440e775e433283ab50b30c894821feb8`.
-- Sources SHA-256 `786d3c2f54bdc5f1e29b6ff10f5d4009eba7398dc215606fec3bbd4e86354f0e`.
-- Exact final standalone run `32499796317`: Java 25 / Gradle 9.5.1 SUCCESS, Build SUCCESS, artifact upload SUCCESS, release SKIPPED.
-
-### Corrected retest result
-
-The user reported the corrected package looked good. Runtime proved:
-
-- `hardFailure=false`;
-- `installCount=18`, `rebuildInstalls=17`;
-- `dirtyEvents=878`, `playerDirtyEvents=432`;
-- `resourceReloadEvents=2`;
-- `droppedLifecycleEvents=0`;
-- no overflow/safety-invalidate reason;
-- `staleInstallRejections=0`;
-- deterministic Phase 2 capture/build invariants;
-- full staging reclamation `1,588,928 / 1,588,928` bytes;
-- arena retired/reclaimed `36 / 36`, used bytes `0`, fragmentation `0`;
-- deferred resources retired/released `18 / 18`, pending `0`;
-- process exit code `0`.
-
-The run did **not** exercise the fixed-target unload/return class:
+Corrected retest proved edit rebuilds, resource reload, zero dropped events, zero stale installs, deterministic Phase 2 capture/build invariants, full staging/arena/deferred-resource reclamation and exit 0. It did **not** exercise the required fixed-target unload/return class:
 
 - `chunkUnloadEvents=0`;
 - `chunkLoadEvents=0`;
 - `lifecycleGateReady=false`.
 
-This is a coverage gap, not evidence of another event-bridge defect.
+Therefore P2.6 remains formally open. Remaining closure requires the corrected standalone dev6 artifact to observe nonzero tracked-neighborhood chunk unload/load counters and end with `lifecycleGateReady=true`, zero dropped events, zero stale installs, full reclamation and exit 0.
 
-### Remaining P2.6 closure
+### P2.7 / dev7 — runtime + human validated and merge-authorized; integrated into P2.6 branch
 
-Run the corrected standalone dev6 artifact and require:
+- Version: `0.2.0-phase2-dev7`.
+- Original branch: `phase2/multi-section-scene`.
+- PR #27 was runtime + human visual validated and explicitly merge-authorized by the user.
+- Fresh exact evidence-head CI run `32512002699` passed Java 25 / Gradle 9.5.1, Build and artifact upload; release skipped.
+- PR #27 was merged into its P2.6 base using merge commit `91eb704e769fff5d872c628a710cd8128a3314ee`.
+- PR #25 now carries the combined corrected P2.6 + validated P2.7 stack.
+- Combined documentation-synchronized branch head `2bc4ece2b88d85c2e49e957e93a2d5f076271fd0` passed exact run `32512405528`.
 
-1. initial tracked section install;
-2. multiple edits/rebuilds;
-3. successful F3+T rebuild;
-4. travel far enough for the tracked section's 3x3 halo chunk neighborhood to unload;
-5. return so that neighborhood loads and the target rebuilds;
-6. nonzero `chunkUnloadEvents` and `chunkLoadEvents`;
-7. `droppedLifecycleEvents=0`, no overflow reason and zero stale install;
-8. full completion-gated staging/arena/resource cleanup;
-9. process exit 0 and shutdown `lifecycleGateReady=true`.
-
-Until that result exists, PR #25 stays draft and must not merge to `main`.
-
-## P2.7 / dev7 — runtime + human visual validated, authorized and integrated into the P2.6 branch
-
-Evidence:
-
-- A-0085: multi-section architecture;
-- A-0086: implementation/package;
-- A-0087: runtime-gate refinement;
-- A-0088: refined package;
-- A-0089: reference runtime success.
-
-### Validated architecture
-
-`RealMultiSectionSceneProbe` owns a fixed renderer-side 3x3 horizontal table:
-
-- maximum 9 section records at one section Y;
-- one shared scene generation/validity domain;
-- exact dirty events from any rendered scene section are relevant;
-- union halo chunk filtering radius 2, spanning a 5x5 chunk footprint;
-- no event ring;
-- correctness-first whole-window invalidation/rebuild;
-- one-record-at-a-time bounded upload admission;
-- fixed 4 MiB staging and 32 MiB geometry arena;
-- camera-driven scene recenter;
-- READY requires at least 3 simultaneous LIVE records and 2 adjacent pairs.
-
-### Package/CI
+P2.7 evidence: A-0085 through A-0089.
 
 Validated package:
 
-- `Obsidian-0.2.0-phase2-dev7.jar` SHA-256 `59dde49b210b802fdd88e1bbc2da7a9eae9b7be045b9c760ae1adc3827599725`;
+- JAR SHA-256 `59dde49b210b802fdd88e1bbc2da7a9eae9b7be045b9c760ae1adc3827599725`;
 - sources SHA-256 `c1ebbe080fa5262cb77d4a4ff48c805712880100126f05611ed99fa163d76c57`.
 
-Fresh evidence-synchronized dev7 head `143ab76df2b465274ee3075d45d34ddb9dd24a29` passed exact run `32512002699`: Java 25 / Gradle 9.5.1 SUCCESS, Build SUCCESS, artifact upload SUCCESS, release SKIPPED.
+Validated runtime included `sceneGateReady=true`, 16 ready transitions, 15 rebuilds, 144 record installs, 9 maximum live records, 12 adjacent pairs, two camera recenters, zero dropped lifecycle events, zero stale scene/probe installs, zero upload/retirement failures, full reclamation and exit 0. Human oracle passed with no persistent duplicate/missing borders or stale old-window geometry reported.
 
-### Runtime + human validation
+## Forward stacked work: Phase 3 P3.1 / dev1 — first worker proof runtime validated; production integration active
 
-Reference Vulkan/RX 6800 XT runtime proved:
+Phase 3 work is proceeding forward on top of validated dev7 while the Phase 2 branch waits for final P2.6 fixed-target coverage. Phase 3 remains non-mergeable until the P2.6 -> P2.7 chain reaches `main`.
 
-- `sceneGateReady=true`;
-- `sceneReadyTransitions=16`;
-- `sceneRebuilds=15`;
-- `recordInstalls=144`;
-- `maxLiveRecords=9`;
-- `maxAdjacentPairs=12`;
-- `cameraRecenterEvents=2`;
-- `dirtyEvents=709`, `playerDirtyEvents=342`;
-- `resourceReloadEvents=1`;
-- `droppedLifecycleEvents=0`;
-- `staleSceneRejections=0`;
-- `probeStaleInstallRejections=0`;
-- `uploadAdmissionDeferrals=0`;
-- zero retirement backpressure/registration failures;
-- staging submitted/reclaimed `11,087,992 / 11,087,992` bytes;
-- arena allocations `288`, failures `0`, retired/reclaimed `288 / 288`, used bytes `0`, fragmentation `0`;
-- deferred resources retired/released `144 / 144`, pending `0`;
+- Branch: `phase3/worker-job-architecture`.
+- Canonical stacked PR: #29, base `phase2/multi-section-scene`, draft.
+- Version: `0.3.0-phase3-dev1`.
+- No Phase 3 merge authorization exists.
+- A-0090: first-proof plan.
+- A-0091: implementation + package/bytecode evidence.
+- A-0092: reference runtime success for the first worker/job concurrency boundary.
+
+### Proven first P3.1 concurrency boundary
+
+Render/client thread ownership remains:
+
+- live world/chunk capture;
+- generalized model/material/light capture;
+- GPU allocation;
+- staging/upload;
+- draw encoding/install;
+- completion-gated GPU retirement.
+
+Workers receive only immutable renderer-owned `SectionSnapshot` + `SectionBakedQuadSnapshot` inputs with renderer generation, lifecycle event-sequence identity and bounded priority metadata. They perform pure `BakedSectionMesh.build(...)` work only and receive no live world/chunk/model/GPU objects.
+
+`SectionMeshWorkerPool` provides:
+
+- 1..4 dedicated daemon workers;
+- HIGH/NORMAL/LOW bounded priority lanes;
+- 16 queued jobs maximum per worker;
+- no fallback/unbounded growth;
+- least-depth normal admission;
+- peer work stealing;
+- generation + lifecycle sequence tags;
+- explicit cancellation;
+- terminal COMPLETED/CANCELLED/FAILED states;
+- deterministic duplicate pure mesh builds;
+- bounded shutdown;
+- queue/rejection/start/complete/cancel/fail/steal/depth/wait/execution metrics.
+
+### First worker proof runtime success
+
+Validated artifact:
+
+- JAR SHA-256 `7cd00dbc0db9cfef9ef0a4afc381abf4691ca32899f5bd02e58f8727deffb093`;
+- sources SHA-256 `63de62fa1a686f4c4ea029f8150aed98baf91c7fe41647e79932c5011b75ad2d`;
+- final pre-runtime head `b4cd6a81a9f49ba37ad62ef1a38adb2983ad12bb`;
+- exact CI run `32512330473`, artifact `9457491423`.
+
+Reference runtime A-0092 passed:
+
+- `phase3GateReady=true`;
+- `workerGateReady=true`;
+- `hardFailure=false`;
+- submitted `12` jobs;
+- started/completed `4/4`;
+- cancelled `8` from `8` cancellation requests;
+- stolen jobs `11`;
+- queue-full rejections `0`;
+- worker failures `0`;
+- stale worker batches `0`;
+- deterministic accepted worker matches `4`;
+- `workerWorldReadsAfterCapture=0`;
+- bounded priority queues/work stealing/generation tags all true.
+
+Instrumentation recorded max queue depth `9`, total/max queue wait `462,200 / 167,700 ns`, and total/max execution `22,622,800 / 5,872,300 ns`. These validate instrumentation and concurrency behavior, not production performance.
+
+Shutdown was fully clean:
+
+- staging submitted/reclaimed `7,211,648 / 7,211,648` bytes;
+- no staging backpressure/pending batch;
+- arena allocations `196`, failures `0`, retired/reclaimed `196/196`, used bytes `0`, fragmentation `0`;
+- deferred resources retired/released `98/98`, pending `0`;
 - process exit code `0`.
 
-Human oracle: the user reported the multi-section result looked completely fine; no persistent duplicate/missing shared borders or stale old-window geometry were reported.
+`sceneGateReady=false` in A-0092 is expected because the run intentionally did not perform the P2.7 recenter requirement (`cameraRecenterEvents=0`). P2.7 was separately validated in A-0089. The dev1 shutdown explicitly retained `productionSceneInstallStillSynchronous=true`, so no production async install claim is made.
 
-### Stacked merge
+### Active next P3.1 step
 
-The user explicitly authorized dev7 merge. After a fresh exact-head CI pass, PR #27 was merged into `phase2/section-lifecycle-rebuild` using merge commit `91eb704e769fff5d872c628a710cd8128a3314ee` so the validated dev7 head remains ancestry-visible.
+The first concurrency proof is complete. P3.1 now moves to production integration:
 
-PR #25 is now the sole Phase 2 integration PR to `main`. Once the remaining P2.6 fixed-target gate passes, the combined corrected P2.6 + validated P2.7 stack may be merged under the user's standing authorizations after final exact-head CI.
-
-## Forward Phase 3 work
-
-Phase 3 P3.1 worker/job architecture development has started on separate stacked branch `phase3/worker-job-architecture`, PR #29. It remains non-mergeable until this Phase 2 integration branch reaches `main`. Phase 3 does not change the outstanding P2.6 gate.
+1. persistent scene records must enqueue immutable mesh jobs rather than synchronously building their drawable mesh;
+2. worker-result handoff must be consumed on the render thread;
+3. result installation must re-check section generation + relevant lifecycle sequence before any GPU allocation/upload/install;
+4. stale/invalidated jobs must be cancelled or rejected without stale drawing;
+5. capture/model/material/light work stays on the render thread for now;
+6. GPU allocation/upload/draw/retirement stays on the render thread;
+7. priority must become relevance-aware rather than validation-only pinning;
+8. worker-local reusable scratch/allocation reduction and production queue/latency/output-size evidence remain P3.1 before P3.2 activates.
 
 ## Continuity model
 
-Read in order before architecture/status changes:
+Read in this order before changing architecture or milestone status:
 
 1. `ai/CURRENT_STATE.md`
 2. `ai/MASTER_ROADMAP.md`
