@@ -31,6 +31,7 @@ public final class FrameCoordinator implements AutoCloseable {
     private boolean firstFrameLogged;
     private boolean visualDelayLogged;
     private boolean runtimeInstructionsLogged;
+    private boolean fixedAnchorReturnSceneReady;
     private boolean hardFailure;
     private boolean closed;
 
@@ -41,15 +42,12 @@ public final class FrameCoordinator implements AutoCloseable {
         try {
             workers = new SectionMeshWorkerPool(SectionMeshWorkerPool.defaultWorkerCount());
             staging = new StagingUploadArena(
-                    device,
-                    () -> "Obsidian Phase 3 dev3 bounded scene staging ring",
+                    device, () -> "Obsidian Phase 3 dev3 bounded scene staging ring",
                     VALIDATION_STAGING_BYTES);
             arena = new DeviceGeometryArena(
-                    device,
-                    () -> "Obsidian Phase 3 dev3 scene device geometry arena",
+                    device, () -> "Obsidian Phase 3 dev3 scene device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
-            sceneProbe = new AsyncMultiSectionSceneProbe(
-                    device, staging, arena, deferredReleases, workers);
+            sceneProbe = new AsyncMultiSectionSceneProbe(device, staging, arena, deferredReleases, workers);
         } catch (RuntimeException e) {
             if (sceneProbe != null) try { sceneProbe.close(); } catch (RuntimeException ignored) { }
             if (workers != null) try { workers.close(); } catch (RuntimeException ignored) { }
@@ -70,12 +68,10 @@ public final class FrameCoordinator implements AutoCloseable {
         if (closed) return;
         frameIndex++;
         activeFrame = frameContexts.begin(frameIndex, System.nanoTime());
-
         if (sceneProbe != null) {
             sceneProbe.beginFrame(frameIndex);
             if (sceneProbe.hardFailure()) hardFailure = true;
         }
-
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
@@ -85,25 +81,23 @@ public final class FrameCoordinator implements AutoCloseable {
                             + ", meshQueueCapacity=" + (meshWorkers == null ? 0 : meshWorkers.queueCapacity())
                             + ", stagingCapacity=" + (stagingUploads == null ? 0 : stagingUploads.capacityBytes())
                             + ", deviceArenaCapacity=" + (deviceArena == null ? 0L : deviceArena.capacityBytes())
-                            + "; production scene jobs use global HIGH/NORMAL/LOW priority selection, bounded two-record frame admission, worker-local primitive scratch, and render-thread-only capture/GPU ownership.");
+                            + "; global relevance scheduling and fixed-anchor lifecycle evidence are armed.");
         }
     }
 
     public void afterWorldRender(GameRenderer renderer) {
         RenderSystem.assertOnRenderThread();
         if (closed || hardFailure || stagingUploads == null || deviceArena == null || meshWorkers == null) return;
-
         long nowNs = System.nanoTime();
         if (firstWorldRenderNs == 0L) firstWorldRenderNs = nowNs;
         if (nowNs - firstWorldRenderNs < VISUAL_ARM_DELAY_NS) {
             if (!visualDelayLogged) {
                 visualDelayLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev3 validation is delayed for 5 seconds after first world render so startup dirtiness/resource activity settles before production scene jobs are admitted.");
+                        "Phase 3 dev3 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
             }
             return;
         }
-
         if (sceneProbe != null) {
             sceneProbe.afterWorldRender(renderer, frameIndex);
             if (sceneProbe.hardFailure()) {
@@ -111,31 +105,34 @@ public final class FrameCoordinator implements AutoCloseable {
                 return;
             }
         }
-
         if (!runtimeInstructionsLogged && sceneProbe != null && sceneProbe.productionWorkerIntegrationReady()) {
             runtimeInstructionsLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev3 combined runtime gate is active. Verify the 3x3 scene visually; break/place blocks; perform F3+T and allow a READY rebuild; then travel far enough that the FIRST tracked scene neighborhood really unloads, return to that area so it loads again, wait for another READY scene, and exit normally. Final evidence must include schedulerEvidenceReady=true and phase2ChunkLifecycleEvidenceReady=true. synchronousSceneMeshBuilds=0, productionSceneInstallStillSynchronous=false, productionWorkerSceneIntegration=true.");
+                    "Phase 3 dev3 combined runtime gate is active. Verify the 3x3 scene visually; break/place blocks; perform F3+T and allow a READY rebuild; travel far enough that the FIRST tracked scene neighborhood really unloads; return to that area so it loads again; WAIT FOR THE ASYNC SCENE TO BECOME LIVE/READY AGAIN; then exit normally. Final evidence should include schedulerEvidenceReady=true and phase2ChunkLifecycleEvidenceReady=true.");
         }
     }
 
     public void endFrame() {
         RenderSystem.assertOnRenderThread();
         if (closed) return;
-
         FrameContext context = activeFrame;
         activeFrame = null;
         if (context != null) {
             long duration = context.finish(System.nanoTime());
             if (duration > 0L) cpuFrameTimings.record(duration);
         }
-
         deferredReleases.poll();
         if (stagingUploads != null) stagingUploads.pollReclaims();
         if (deviceArena != null) deviceArena.pollRetirements();
         if (sceneProbe != null) {
             sceneProbe.endFrame(frameIndex);
             if (sceneProbe.hardFailure()) hardFailure = true;
+            SectionLifecycleEvents.Cursor cursor = sceneProbe.lifecycleCursor();
+            if (cursor.fixedAnchorChunkUnloadEvents() > 0L
+                    && cursor.fixedAnchorChunkLoadEvents() > 0L
+                    && sceneProbe.state() == AsyncMultiSectionSceneProbe.State.LIVE) {
+                fixedAnchorReturnSceneReady = true;
+            }
         }
     }
 
@@ -159,47 +156,20 @@ public final class FrameCoordinator implements AutoCloseable {
         closed = true;
 
         AsyncMultiSectionSceneProbe probe = sceneProbe;
-        long usefulSubmissions = 0L;
-        long comparisonDraws = 0L;
-        long indirectCalls = 0L;
-        long resourceEpochChecks = 0L;
-        long retirementBackpressureEvents = 0L;
-        long retirementRegistrationFailures = 0L;
-        long sceneReadyTransitions = 0L;
-        long sceneRebuilds = 0L;
-        long recordInstallCount = 0L;
-        long cameraRecenterEvents = 0L;
-        long invalidationBatches = 0L;
-        long coalescedEvents = 0L;
-        long eligibilityScans = 0L;
-        long eligibilitySkips = 0L;
-        long unsafeStaleSceneInstalls = 0L;
-        long schedulerAdmissionDeferrals = 0L;
-        long admittedHighPriority = 0L;
-        long admittedNormalPriority = 0L;
-        long admittedLowPriority = 0L;
-        int maxAdmissionBurst = 0;
-        int observedReasonMask = 0;
-        int maxLiveRecords = 0;
-        int maxAdjacentPairs = 0;
-        int maxSimultaneousSceneJobs = 0;
-        long maxSceneQuads = 0L;
-        long maxSceneVertexBytes = 0L;
-        long maxSceneIndexBytes = 0L;
-        long sceneWorkerSubmitted = 0L;
-        long sceneWorkerCompleted = 0L;
-        long sceneWorkerCancelled = 0L;
-        long sceneWorkerCancellationRequests = 0L;
-        long sceneWorkerStaleDiscards = 0L;
-        long sceneWorkerInstalls = 0L;
-        long sceneWorkerQueueRejections = 0L;
-        long sceneInstallAdmissionDeferrals = 0L;
-        long synchronousSceneMeshBuilds = 0L;
-        long preinstallInvalidations = 0L;
+        long usefulSubmissions = 0L, comparisonDraws = 0L, indirectCalls = 0L, resourceEpochChecks = 0L;
+        long retirementBackpressureEvents = 0L, retirementRegistrationFailures = 0L;
+        long sceneReadyTransitions = 0L, sceneRebuilds = 0L, recordInstallCount = 0L;
+        long cameraRecenterEvents = 0L, invalidationBatches = 0L, coalescedEvents = 0L;
+        long eligibilityScans = 0L, eligibilitySkips = 0L, unsafeStaleSceneInstalls = 0L;
+        long schedulerAdmissionDeferrals = 0L, admittedHighPriority = 0L, admittedNormalPriority = 0L, admittedLowPriority = 0L;
+        int maxAdmissionBurst = 0, observedReasonMask = 0, maxLiveRecords = 0, maxAdjacentPairs = 0, maxSimultaneousSceneJobs = 0;
+        long maxSceneQuads = 0L, maxSceneVertexBytes = 0L, maxSceneIndexBytes = 0L;
+        long sceneWorkerSubmitted = 0L, sceneWorkerCompleted = 0L, sceneWorkerCancelled = 0L;
+        long sceneWorkerCancellationRequests = 0L, sceneWorkerStaleDiscards = 0L, sceneWorkerInstalls = 0L;
+        long sceneWorkerQueueRejections = 0L, sceneInstallAdmissionDeferrals = 0L, synchronousSceneMeshBuilds = 0L, preinstallInvalidations = 0L;
         long sceneGeneration = 0L;
         String center = "unbound";
-        boolean localSceneReady = false;
-        boolean productionWorkerIntegrationReady = false;
+        boolean localSceneReady = false, productionWorkerIntegrationReady = false;
         SectionLifecycleEvents.Cursor lifecycleCursor = null;
 
         if (probe != null) {
@@ -242,9 +212,7 @@ public final class FrameCoordinator implements AutoCloseable {
             preinstallInvalidations = probe.preinstallInvalidations();
             lifecycleCursor = probe.lifecycleCursor();
             sceneGeneration = probe.sceneGeneration();
-            center = probe.centerKnown()
-                    ? "(" + probe.centerSectionX() + "," + probe.centerSectionY() + "," + probe.centerSectionZ() + ")"
-                    : "unbound";
+            center = probe.centerKnown() ? "(" + probe.centerSectionX() + "," + probe.centerSectionY() + "," + probe.centerSectionZ() + ")" : "unbound";
             localSceneReady = probe.localSceneReady();
             productionWorkerIntegrationReady = probe.productionWorkerIntegrationReady();
             probe.close();
@@ -285,23 +253,12 @@ public final class FrameCoordinator implements AutoCloseable {
                 && deferredReleases.retiredCount() == deferredReleases.releasedCount();
 
         boolean phase3GateReady = !hardFailure
-                && productionWorkerIntegrationReady
-                && localSceneReady
-                && sceneReadyTransitions >= 2L
-                && sceneRebuilds >= 1L
-                && recordInstallCount >= 3L
-                && sceneWorkerInstalls == recordInstallCount
-                && sceneWorkerCompleted >= sceneWorkerInstalls
-                && synchronousSceneMeshBuilds == 0L
-                && dirtyEvents > 0L
-                && resourceReloadEvents > 0L
-                && droppedLifecycleEvents == 0L
-                && unsafeStaleSceneInstalls == 0L
-                && sceneWorkerQueueRejections == 0L
-                && workersClean
-                && stagingClean
-                && arenaClean
-                && resourcesClean;
+                && productionWorkerIntegrationReady && localSceneReady
+                && sceneReadyTransitions >= 2L && sceneRebuilds >= 1L && recordInstallCount >= 3L
+                && sceneWorkerInstalls == recordInstallCount && sceneWorkerCompleted >= sceneWorkerInstalls
+                && synchronousSceneMeshBuilds == 0L && dirtyEvents > 0L && resourceReloadEvents > 0L
+                && droppedLifecycleEvents == 0L && unsafeStaleSceneInstalls == 0L && sceneWorkerQueueRejections == 0L
+                && workersClean && stagingClean && arenaClean && resourcesClean;
 
         long workerHighSubmitted = meshWorkers == null ? 0L : meshWorkers.submittedJobs(SectionMeshWorkerPool.PRIORITY_HIGH);
         long workerNormalSubmitted = meshWorkers == null ? 0L : meshWorkers.submittedJobs(SectionMeshWorkerPool.PRIORITY_NORMAL);
@@ -320,142 +277,129 @@ public final class FrameCoordinator implements AutoCloseable {
                 && workerScratchBuildUses > 0L
                 && workerDeterminismAudits > 0L
                 && workerDeterminismAuditMatches == workerDeterminismAudits
-                && workerOutputQuads > 0L
-                && workerOutputVertexBytes > 0L
-                && workerOutputIndexBytes > 0L;
+                && workerOutputQuads > 0L && workerOutputVertexBytes > 0L && workerOutputIndexBytes > 0L;
 
         boolean phase2ChunkLifecycleEvidenceReady = phase3GateReady
                 && fixedAnchorChunkUnloadEvents > 0L
                 && fixedAnchorChunkLoadEvents > 0L
-                && sceneRebuilds >= 1L
+                && fixedAnchorReturnSceneReady
                 && droppedLifecycleEvents == 0L
                 && unsafeStaleSceneInstalls == 0L
-                && workersClean
-                && stagingClean
-                && arenaClean
-                && resourcesClean;
+                && workersClean && stagingClean && arenaClean && resourcesClean;
 
-        LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev3 frame coordinator closed after " + frameIndex + " frame(s): "
-                        + "phase3GateReady=" + phase3GateReady
-                        + ", schedulerEvidenceReady=" + schedulerEvidenceReady
-                        + ", phase2ChunkLifecycleEvidenceReady=" + phase2ChunkLifecycleEvidenceReady
-                        + ", productionWorkerIntegrationReady=" + productionWorkerIntegrationReady
-                        + ", hardFailure=" + hardFailure
-                        + ", productionSceneInstallStillSynchronous=false"
-                        + ", productionWorkerSceneIntegration=true"
-                        + ", renderThreadCaptureOwnership=true"
-                        + ", renderThreadGpuOwnership=true"
-                        + ", workerWorldReadsAfterCapture=0"
-                        + ", synchronousSceneMeshBuilds=" + synchronousSceneMeshBuilds
-                        + ", workerCount=" + (meshWorkers == null ? 0 : meshWorkers.workerCount())
-                        + ", workerQueueCapacity=" + (meshWorkers == null ? 0 : meshWorkers.queueCapacity())
-                        + ", workerSubmittedJobs=" + (meshWorkers == null ? 0L : meshWorkers.submittedJobs())
-                        + ", workerStartedJobs=" + (meshWorkers == null ? 0L : meshWorkers.startedJobs())
-                        + ", workerCompletedJobs=" + (meshWorkers == null ? 0L : meshWorkers.completedJobs())
-                        + ", workerCancelledJobs=" + (meshWorkers == null ? 0L : meshWorkers.cancelledJobs())
-                        + ", workerCancellationRequests=" + (meshWorkers == null ? 0L : meshWorkers.cancellationRequests())
-                        + ", workerStolenJobs=" + (meshWorkers == null ? 0L : meshWorkers.stolenJobs())
-                        + ", workerQueueFullRejections=" + (meshWorkers == null ? 0L : meshWorkers.queueFullRejections())
-                        + ", workerFailedJobs=" + (meshWorkers == null ? 0L : meshWorkers.failedJobs())
-                        + ", workerShutdownJoinFailures=" + (meshWorkers == null ? 0L : meshWorkers.shutdownJoinFailures())
-                        + ", workerMaxQueueDepth=" + (meshWorkers == null ? 0L : meshWorkers.maxObservedQueueDepth())
-                        + ", workerTotalQueueWaitNs=" + (meshWorkers == null ? 0L : meshWorkers.totalQueueWaitNs())
-                        + ", workerMaxQueueWaitNs=" + (meshWorkers == null ? 0L : meshWorkers.maxQueueWaitNs())
-                        + ", workerTotalExecutionNs=" + (meshWorkers == null ? 0L : meshWorkers.totalExecutionNs())
-                        + ", workerMaxExecutionNs=" + (meshWorkers == null ? 0L : meshWorkers.maxExecutionNs())
-                        + ", workerHighSubmitted=" + workerHighSubmitted
-                        + ", workerNormalSubmitted=" + workerNormalSubmitted
-                        + ", workerLowSubmitted=" + workerLowSubmitted
-                        + ", workerHighCompleted=" + (meshWorkers == null ? 0L : meshWorkers.completedJobs(SectionMeshWorkerPool.PRIORITY_HIGH))
-                        + ", workerNormalCompleted=" + (meshWorkers == null ? 0L : meshWorkers.completedJobs(SectionMeshWorkerPool.PRIORITY_NORMAL))
-                        + ", workerLowCompleted=" + (meshWorkers == null ? 0L : meshWorkers.completedJobs(SectionMeshWorkerPool.PRIORITY_LOW))
-                        + ", workerHighQueueWaitNs=" + (meshWorkers == null ? 0L : meshWorkers.totalQueueWaitNs(SectionMeshWorkerPool.PRIORITY_HIGH))
-                        + ", workerNormalQueueWaitNs=" + (meshWorkers == null ? 0L : meshWorkers.totalQueueWaitNs(SectionMeshWorkerPool.PRIORITY_NORMAL))
-                        + ", workerLowQueueWaitNs=" + (meshWorkers == null ? 0L : meshWorkers.totalQueueWaitNs(SectionMeshWorkerPool.PRIORITY_LOW))
-                        + ", workerHighMaxQueueWaitNs=" + (meshWorkers == null ? 0L : meshWorkers.maxQueueWaitNs(SectionMeshWorkerPool.PRIORITY_HIGH))
-                        + ", workerNormalMaxQueueWaitNs=" + (meshWorkers == null ? 0L : meshWorkers.maxQueueWaitNs(SectionMeshWorkerPool.PRIORITY_NORMAL))
-                        + ", workerLowMaxQueueWaitNs=" + (meshWorkers == null ? 0L : meshWorkers.maxQueueWaitNs(SectionMeshWorkerPool.PRIORITY_LOW))
-                        + ", workerOutputQuads=" + workerOutputQuads
-                        + ", workerOutputVertexBytes=" + workerOutputVertexBytes
-                        + ", workerOutputIndexBytes=" + workerOutputIndexBytes
-                        + ", workerMaxOutputBytes=" + (meshWorkers == null ? 0L : meshWorkers.maxOutputBytes())
-                        + ", workerScratchBuildUses=" + workerScratchBuildUses
-                        + ", workerMaxScratchQuads=" + (meshWorkers == null ? 0L : meshWorkers.maxScratchQuads())
-                        + ", workerDeterminismAudits=" + workerDeterminismAudits
-                        + ", workerDeterminismAuditMatches=" + workerDeterminismAuditMatches
-                        + ", sceneWorkerSubmitted=" + sceneWorkerSubmitted
-                        + ", sceneWorkerCompleted=" + sceneWorkerCompleted
-                        + ", sceneWorkerCancelled=" + sceneWorkerCancelled
-                        + ", sceneWorkerCancellationRequests=" + sceneWorkerCancellationRequests
-                        + ", sceneWorkerStaleDiscards=" + sceneWorkerStaleDiscards
-                        + ", sceneWorkerInstalls=" + sceneWorkerInstalls
-                        + ", sceneWorkerQueueRejections=" + sceneWorkerQueueRejections
-                        + ", preinstallInvalidations=" + preinstallInvalidations
-                        + ", maxSimultaneousSceneJobs=" + maxSimultaneousSceneJobs
-                        + ", maxAdmissionBurst=" + maxAdmissionBurst
-                        + ", schedulerAdmissionDeferrals=" + schedulerAdmissionDeferrals
-                        + ", admittedHighPriority=" + admittedHighPriority
-                        + ", admittedNormalPriority=" + admittedNormalPriority
-                        + ", admittedLowPriority=" + admittedLowPriority
-                        + ", sceneInstallAdmissionDeferrals=" + sceneInstallAdmissionDeferrals
-                        + ", localSceneReady=" + localSceneReady
-                        + ", center=" + center
-                        + ", sceneGeneration=" + sceneGeneration
-                        + ", sceneReadyTransitions=" + sceneReadyTransitions
-                        + ", sceneRebuilds=" + sceneRebuilds
-                        + ", recordInstalls=" + recordInstallCount
-                        + ", maxLiveRecords=" + maxLiveRecords
-                        + ", maxAdjacentPairs=" + maxAdjacentPairs
-                        + ", cameraRecenterEvents=" + cameraRecenterEvents
-                        + ", invalidationBatches=" + invalidationBatches
-                        + ", coalescedEvents=" + coalescedEvents
-                        + ", dirtyEvents=" + dirtyEvents
-                        + ", playerDirtyEvents=" + playerDirtyEvents
-                        + ", chunkLoadEvents=" + chunkLoadEvents
-                        + ", chunkUnloadEvents=" + chunkUnloadEvents
-                        + ", fixedAnchorChunkLoadEvents=" + fixedAnchorChunkLoadEvents
-                        + ", fixedAnchorChunkUnloadEvents=" + fixedAnchorChunkUnloadEvents
-                        + ", worldChangeEvents=" + worldChangeEvents
-                        + ", resourceReloadEvents=" + resourceReloadEvents
-                        + ", droppedLifecycleEvents=" + droppedLifecycleEvents
-                        + ", observedReasons=" + SectionLifecycleEvents.describeReasons(observedReasonMask)
-                        + ", eligibilityScans=" + eligibilityScans
-                        + ", eligibilitySkips=" + eligibilitySkips
-                        + ", unsafeStaleSceneInstalls=" + unsafeStaleSceneInstalls
-                        + ", maxSceneQuads=" + maxSceneQuads
-                        + ", maxSceneVertexBytes=" + maxSceneVertexBytes
-                        + ", maxSceneIndexBytes=" + maxSceneIndexBytes
-                        + ", usefulSubmissions=" + usefulSubmissions
-                        + ", comparisonDraws=" + comparisonDraws
-                        + ", indirectCalls=" + indirectCalls
-                        + ", resourceEpochChecks=" + resourceEpochChecks
-                        + ", retirementBackpressureEvents=" + retirementBackpressureEvents
-                        + ", retirementRegistrationFailures=" + retirementRegistrationFailures
-                        + ", workersClean=" + workersClean
-                        + ", stagingClean=" + stagingClean
-                        + ", arenaClean=" + arenaClean
-                        + ", resourcesClean=" + resourcesClean
-                        + ", stagingSubmittedBytes=" + (stagingUploads == null ? 0L : stagingUploads.submittedBytes())
-                        + ", stagingReclaimedBytes=" + (stagingUploads == null ? 0L : stagingUploads.reclaimedBytes())
-                        + ", stagingBackpressureEvents=" + (stagingUploads == null ? 0L : stagingUploads.backpressureEvents())
-                        + ", pendingUploadBatches=" + (stagingUploads == null ? 0 : stagingUploads.pendingBatches())
-                        + ", stagingAbandoned=" + (stagingUploads != null && stagingUploads.abandonedForDeviceShutdown())
-                        + ", arenaUsedBytes=" + (deviceArena == null ? 0L : deviceArena.usedBytes())
-                        + ", arenaHighWaterBytes=" + (deviceArena == null ? 0L : deviceArena.highWaterBytes())
-                        + ", arenaAllocations=" + (deviceArena == null ? 0L : deviceArena.successfulAllocations())
-                        + ", arenaAllocationFailures=" + (deviceArena == null ? 0L : deviceArena.allocationFailures())
-                        + ", arenaRetired=" + (deviceArena == null ? 0L : deviceArena.retiredAllocations())
-                        + ", arenaReclaimed=" + (deviceArena == null ? 0L : deviceArena.reclaimedAllocations())
-                        + ", arenaRetirementBackpressureEvents=" + (deviceArena == null ? 0L : deviceArena.retirementBackpressureEvents())
-                        + ", arenaStaleHandleRejections=" + (deviceArena == null ? 0L : deviceArena.staleHandleRejections())
-                        + ", arenaFreeSpans=" + (deviceArena == null ? 0 : deviceArena.freeSpanCount())
-                        + ", arenaLargestFree=" + (deviceArena == null ? 0L : deviceArena.largestFreeBlockBytes())
-                        + ", arenaFragmentationPermille=" + (deviceArena == null ? 0 : deviceArena.fragmentationPermille())
-                        + ", pendingArenaRetirementBatches=" + (deviceArena == null ? 0 : deviceArena.pendingRetirementBatches())
-                        + ", arenaAbandoned=" + (deviceArena != null && deviceArena.abandonedForDeviceShutdown())
-                        + ", retiredResources=" + deferredReleases.retiredCount()
-                        + ", releasedResources=" + deferredReleases.releasedCount()
-                        + ", pendingRetirements=" + deferredReleases.pendingCount() + ".");
+        StringBuilder out = new StringBuilder(4096);
+        out.append("Phase 3 dev3 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
+                .append("phase3GateReady=").append(phase3GateReady)
+                .append(", schedulerEvidenceReady=").append(schedulerEvidenceReady)
+                .append(", phase2ChunkLifecycleEvidenceReady=").append(phase2ChunkLifecycleEvidenceReady)
+                .append(", fixedAnchorReturnSceneReady=").append(fixedAnchorReturnSceneReady)
+                .append(", productionWorkerIntegrationReady=").append(productionWorkerIntegrationReady)
+                .append(", hardFailure=").append(hardFailure)
+                .append(", productionSceneInstallStillSynchronous=false, productionWorkerSceneIntegration=true")
+                .append(", renderThreadCaptureOwnership=true, renderThreadGpuOwnership=true, workerWorldReadsAfterCapture=0")
+                .append(", synchronousSceneMeshBuilds=").append(synchronousSceneMeshBuilds)
+                .append(", workerCount=").append(meshWorkers == null ? 0 : meshWorkers.workerCount())
+                .append(", workerQueueCapacity=").append(meshWorkers == null ? 0 : meshWorkers.queueCapacity())
+                .append(", workerSubmittedJobs=").append(meshWorkers == null ? 0L : meshWorkers.submittedJobs())
+                .append(", workerStartedJobs=").append(meshWorkers == null ? 0L : meshWorkers.startedJobs())
+                .append(", workerCompletedJobs=").append(meshWorkers == null ? 0L : meshWorkers.completedJobs())
+                .append(", workerCancelledJobs=").append(meshWorkers == null ? 0L : meshWorkers.cancelledJobs())
+                .append(", workerCancellationRequests=").append(meshWorkers == null ? 0L : meshWorkers.cancellationRequests())
+                .append(", workerStolenJobs=").append(meshWorkers == null ? 0L : meshWorkers.stolenJobs())
+                .append(", workerQueueFullRejections=").append(meshWorkers == null ? 0L : meshWorkers.queueFullRejections())
+                .append(", workerFailedJobs=").append(meshWorkers == null ? 0L : meshWorkers.failedJobs())
+                .append(", workerShutdownJoinFailures=").append(meshWorkers == null ? 0L : meshWorkers.shutdownJoinFailures())
+                .append(", workerMaxQueueDepth=").append(meshWorkers == null ? 0L : meshWorkers.maxObservedQueueDepth())
+                .append(", workerTotalQueueWaitNs=").append(meshWorkers == null ? 0L : meshWorkers.totalQueueWaitNs())
+                .append(", workerMaxQueueWaitNs=").append(meshWorkers == null ? 0L : meshWorkers.maxQueueWaitNs())
+                .append(", workerTotalExecutionNs=").append(meshWorkers == null ? 0L : meshWorkers.totalExecutionNs())
+                .append(", workerMaxExecutionNs=").append(meshWorkers == null ? 0L : meshWorkers.maxExecutionNs())
+                .append(", workerHighSubmitted=").append(workerHighSubmitted)
+                .append(", workerNormalSubmitted=").append(workerNormalSubmitted)
+                .append(", workerLowSubmitted=").append(workerLowSubmitted)
+                .append(", workerHighCompleted=").append(meshWorkers == null ? 0L : meshWorkers.completedJobs(SectionMeshWorkerPool.PRIORITY_HIGH))
+                .append(", workerNormalCompleted=").append(meshWorkers == null ? 0L : meshWorkers.completedJobs(SectionMeshWorkerPool.PRIORITY_NORMAL))
+                .append(", workerLowCompleted=").append(meshWorkers == null ? 0L : meshWorkers.completedJobs(SectionMeshWorkerPool.PRIORITY_LOW))
+                .append(", workerHighQueueWaitNs=").append(meshWorkers == null ? 0L : meshWorkers.totalQueueWaitNs(SectionMeshWorkerPool.PRIORITY_HIGH))
+                .append(", workerNormalQueueWaitNs=").append(meshWorkers == null ? 0L : meshWorkers.totalQueueWaitNs(SectionMeshWorkerPool.PRIORITY_NORMAL))
+                .append(", workerLowQueueWaitNs=").append(meshWorkers == null ? 0L : meshWorkers.totalQueueWaitNs(SectionMeshWorkerPool.PRIORITY_LOW))
+                .append(", workerOutputQuads=").append(workerOutputQuads)
+                .append(", workerOutputVertexBytes=").append(workerOutputVertexBytes)
+                .append(", workerOutputIndexBytes=").append(workerOutputIndexBytes)
+                .append(", workerMaxOutputBytes=").append(meshWorkers == null ? 0L : meshWorkers.maxOutputBytes())
+                .append(", workerScratchBuildUses=").append(workerScratchBuildUses)
+                .append(", workerMaxScratchQuads=").append(meshWorkers == null ? 0L : meshWorkers.maxScratchQuads())
+                .append(", workerDeterminismAudits=").append(workerDeterminismAudits)
+                .append(", workerDeterminismAuditMatches=").append(workerDeterminismAuditMatches)
+                .append(", sceneWorkerSubmitted=").append(sceneWorkerSubmitted)
+                .append(", sceneWorkerCompleted=").append(sceneWorkerCompleted)
+                .append(", sceneWorkerCancelled=").append(sceneWorkerCancelled)
+                .append(", sceneWorkerCancellationRequests=").append(sceneWorkerCancellationRequests)
+                .append(", sceneWorkerStaleDiscards=").append(sceneWorkerStaleDiscards)
+                .append(", sceneWorkerInstalls=").append(sceneWorkerInstalls)
+                .append(", sceneWorkerQueueRejections=").append(sceneWorkerQueueRejections)
+                .append(", preinstallInvalidations=").append(preinstallInvalidations)
+                .append(", maxSimultaneousSceneJobs=").append(maxSimultaneousSceneJobs)
+                .append(", maxAdmissionBurst=").append(maxAdmissionBurst)
+                .append(", schedulerAdmissionDeferrals=").append(schedulerAdmissionDeferrals)
+                .append(", admittedHighPriority=").append(admittedHighPriority)
+                .append(", admittedNormalPriority=").append(admittedNormalPriority)
+                .append(", admittedLowPriority=").append(admittedLowPriority)
+                .append(", sceneInstallAdmissionDeferrals=").append(sceneInstallAdmissionDeferrals)
+                .append(", localSceneReady=").append(localSceneReady)
+                .append(", center=").append(center)
+                .append(", sceneGeneration=").append(sceneGeneration)
+                .append(", sceneReadyTransitions=").append(sceneReadyTransitions)
+                .append(", sceneRebuilds=").append(sceneRebuilds)
+                .append(", recordInstalls=").append(recordInstallCount)
+                .append(", maxLiveRecords=").append(maxLiveRecords)
+                .append(", maxAdjacentPairs=").append(maxAdjacentPairs)
+                .append(", cameraRecenterEvents=").append(cameraRecenterEvents)
+                .append(", invalidationBatches=").append(invalidationBatches)
+                .append(", coalescedEvents=").append(coalescedEvents)
+                .append(", dirtyEvents=").append(dirtyEvents)
+                .append(", playerDirtyEvents=").append(playerDirtyEvents)
+                .append(", chunkLoadEvents=").append(chunkLoadEvents)
+                .append(", chunkUnloadEvents=").append(chunkUnloadEvents)
+                .append(", fixedAnchorChunkLoadEvents=").append(fixedAnchorChunkLoadEvents)
+                .append(", fixedAnchorChunkUnloadEvents=").append(fixedAnchorChunkUnloadEvents)
+                .append(", worldChangeEvents=").append(worldChangeEvents)
+                .append(", resourceReloadEvents=").append(resourceReloadEvents)
+                .append(", droppedLifecycleEvents=").append(droppedLifecycleEvents)
+                .append(", observedReasons=").append(SectionLifecycleEvents.describeReasons(observedReasonMask))
+                .append(", eligibilityScans=").append(eligibilityScans)
+                .append(", eligibilitySkips=").append(eligibilitySkips)
+                .append(", unsafeStaleSceneInstalls=").append(unsafeStaleSceneInstalls)
+                .append(", maxSceneQuads=").append(maxSceneQuads)
+                .append(", maxSceneVertexBytes=").append(maxSceneVertexBytes)
+                .append(", maxSceneIndexBytes=").append(maxSceneIndexBytes)
+                .append(", usefulSubmissions=").append(usefulSubmissions)
+                .append(", comparisonDraws=").append(comparisonDraws)
+                .append(", indirectCalls=").append(indirectCalls)
+                .append(", resourceEpochChecks=").append(resourceEpochChecks)
+                .append(", retirementBackpressureEvents=").append(retirementBackpressureEvents)
+                .append(", retirementRegistrationFailures=").append(retirementRegistrationFailures)
+                .append(", workersClean=").append(workersClean)
+                .append(", stagingClean=").append(stagingClean)
+                .append(", arenaClean=").append(arenaClean)
+                .append(", resourcesClean=").append(resourcesClean)
+                .append(", stagingSubmittedBytes=").append(stagingUploads == null ? 0L : stagingUploads.submittedBytes())
+                .append(", stagingReclaimedBytes=").append(stagingUploads == null ? 0L : stagingUploads.reclaimedBytes())
+                .append(", pendingUploadBatches=").append(stagingUploads == null ? 0 : stagingUploads.pendingBatches())
+                .append(", stagingAbandoned=").append(stagingUploads != null && stagingUploads.abandonedForDeviceShutdown())
+                .append(", arenaUsedBytes=").append(deviceArena == null ? 0L : deviceArena.usedBytes())
+                .append(", arenaHighWaterBytes=").append(deviceArena == null ? 0L : deviceArena.highWaterBytes())
+                .append(", arenaAllocations=").append(deviceArena == null ? 0L : deviceArena.successfulAllocations())
+                .append(", arenaAllocationFailures=").append(deviceArena == null ? 0L : deviceArena.allocationFailures())
+                .append(", arenaRetired=").append(deviceArena == null ? 0L : deviceArena.retiredAllocations())
+                .append(", arenaReclaimed=").append(deviceArena == null ? 0L : deviceArena.reclaimedAllocations())
+                .append(", arenaStaleHandleRejections=").append(deviceArena == null ? 0L : deviceArena.staleHandleRejections())
+                .append(", arenaFragmentationPermille=").append(deviceArena == null ? 0 : deviceArena.fragmentationPermille())
+                .append(", pendingArenaRetirementBatches=").append(deviceArena == null ? 0 : deviceArena.pendingRetirementBatches())
+                .append(", arenaAbandoned=").append(deviceArena != null && deviceArena.abandonedForDeviceShutdown())
+                .append(", retiredResources=").append(deferredReleases.retiredCount())
+                .append(", releasedResources=").append(deferredReleases.releasedCount())
+                .append(", pendingRetirements=").append(deferredReleases.pendingCount()).append('.');
+        LOG.log(System.Logger.Level.INFO, out.toString());
     }
 }
