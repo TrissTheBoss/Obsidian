@@ -33,6 +33,44 @@ public final class BakedSectionMesh {
 
     private static final long FNV_OFFSET_BASIS = 0xcbf29ce484222325L;
     private static final long FNV_PRIME = 0x100000001b3L;
+    private static final Direction[] DIRECTIONS = Direction.values();
+
+    /**
+     * Worker-local reusable primitive scratch. The retained mesh output arrays
+     * still belong to the returned mesh; only temporary source ordering is
+     * reused across jobs.
+     */
+    public static final class BuildScratch {
+        private final int[] orderedSourceQuads = new int[SectionBakedQuadSnapshot.MAX_QUADS];
+        private long uses;
+        private int highWaterQuads;
+
+        private int prepare(SectionBakedQuadSnapshot source) {
+            int output = 0;
+            for (byte targetLayer = SectionBakedQuadSnapshot.LAYER_SOLID;
+                 targetLayer <= SectionBakedQuadSnapshot.LAYER_CUTOUT;
+                 targetLayer++) {
+                for (int sourceQuad = 0; sourceQuad < source.quadCount(); sourceQuad++) {
+                    if (source.layer(sourceQuad) == targetLayer) {
+                        orderedSourceQuads[output++] = sourceQuad;
+                    }
+                }
+            }
+            if (output != source.quadCount()) {
+                throw new IllegalStateException("P2.5 layer/source ordering mismatch");
+            }
+            uses++;
+            highWaterQuads = Math.max(highWaterQuads, output);
+            return output;
+        }
+
+        private int sourceQuad(int outputQuad) {
+            return orderedSourceQuads[outputQuad];
+        }
+
+        public long uses() { return uses; }
+        public int highWaterQuads() { return highWaterQuads; }
+    }
 
     private final int sectionX;
     private final int sectionY;
@@ -96,8 +134,15 @@ public final class BakedSectionMesh {
     }
 
     public static BakedSectionMesh build(SectionSnapshot snapshot, SectionBakedQuadSnapshot source) {
-        if (snapshot == null || source == null) {
-            throw new NullPointerException("snapshot and generalized quad source are required");
+        return build(snapshot, source, new BuildScratch());
+    }
+
+    public static BakedSectionMesh build(
+            SectionSnapshot snapshot,
+            SectionBakedQuadSnapshot source,
+            BuildScratch scratch) {
+        if (snapshot == null || source == null || scratch == null) {
+            throw new NullPointerException("snapshot, generalized quad source, and build scratch are required");
         }
         if (source.sectionX() != snapshot.sectionX()
                 || source.sectionY() != snapshot.sectionY()
@@ -111,6 +156,7 @@ public final class BakedSectionMesh {
 
         long startNs = System.nanoTime();
         int quadCount = source.quadCount();
+        int orderedCount = scratch.prepare(source);
         float[] positions = new float[quadCount * VERTICES_PER_QUAD * 3];
         float[] uvs = new float[quadCount * VERTICES_PER_QUAD * 2];
         int[] comparison = new int[quadCount * VERTICES_PER_QUAD];
@@ -120,74 +166,67 @@ public final class BakedSectionMesh {
         int[] sourceQuads = new int[quadCount];
         int[] materialIds = new int[quadCount];
         byte[] layers = new byte[quadCount];
-        int outputQuad = 0;
         long hash = FNV_OFFSET_BASIS;
 
-        for (byte targetLayer = SectionBakedQuadSnapshot.LAYER_SOLID;
-             targetLayer <= SectionBakedQuadSnapshot.LAYER_CUTOUT;
-             targetLayer++) {
-            for (int sourceQuad = 0; sourceQuad < source.quadCount(); sourceQuad++) {
-                if (source.layer(sourceQuad) != targetLayer) {
-                    continue;
-                }
-                int out = outputQuad++;
-                int positionBase = out * VERTICES_PER_QUAD * 3;
-                int uvBase = out * VERTICES_PER_QUAD * 2;
-                int vertexBase = out * VERTICES_PER_QUAD;
+        for (int out = 0; out < orderedCount; out++) {
+            int sourceQuad = scratch.sourceQuad(out);
+            byte targetLayer = source.layer(sourceQuad);
+            int positionBase = out * VERTICES_PER_QUAD * 3;
+            int uvBase = out * VERTICES_PER_QUAD * 2;
+            int vertexBase = out * VERTICES_PER_QUAD;
 
-                float offsetX = 0.0f;
-                float offsetY = 0.0f;
-                float offsetZ = 0.0f;
-                int directionOrdinal = source.direction(sourceQuad);
-                if (directionOrdinal >= 0 && directionOrdinal < Direction.values().length) {
-                    Direction direction = Direction.values()[directionOrdinal];
-                    offsetX = direction.getStepX() * COMPARISON_FACE_OFFSET;
-                    offsetY = direction.getStepY() * COMPARISON_FACE_OFFSET;
-                    offsetZ = direction.getStepZ() * COMPARISON_FACE_OFFSET;
-                }
+            float offsetX = 0.0f;
+            float offsetY = 0.0f;
+            float offsetZ = 0.0f;
+            int directionOrdinal = source.direction(sourceQuad);
+            if (directionOrdinal >= 0 && directionOrdinal < DIRECTIONS.length) {
+                Direction direction = DIRECTIONS[directionOrdinal];
+                offsetX = direction.getStepX() * COMPARISON_FACE_OFFSET;
+                offsetY = direction.getStepY() * COMPARISON_FACE_OFFSET;
+                offsetZ = direction.getStepZ() * COMPARISON_FACE_OFFSET;
+            }
 
-                for (int vertex = 0; vertex < VERTICES_PER_QUAD; vertex++) {
-                    int p = positionBase + vertex * 3;
-                    positions[p] = source.position(sourceQuad, vertex, 0) + offsetX;
-                    positions[p + 1] = source.position(sourceQuad, vertex, 1) + offsetY;
-                    positions[p + 2] = source.position(sourceQuad, vertex, 2) + offsetZ;
-                    int uv = uvBase + vertex * 2;
-                    uvs[uv] = source.u(sourceQuad, vertex);
-                    uvs[uv + 1] = source.v(sourceQuad, vertex);
-                    int exactColor = source.exactArgbColor(sourceQuad, vertex);
-                    exact[vertexBase + vertex] = exactColor;
-                    comparison[vertexBase + vertex] = comparisonRgba(exactColor);
-                    lights[vertexBase + vertex] = source.packedLight(sourceQuad, vertex);
-                }
+            for (int vertex = 0; vertex < VERTICES_PER_QUAD; vertex++) {
+                int p = positionBase + vertex * 3;
+                positions[p] = source.position(sourceQuad, vertex, 0) + offsetX;
+                positions[p + 1] = source.position(sourceQuad, vertex, 1) + offsetY;
+                positions[p + 2] = source.position(sourceQuad, vertex, 2) + offsetZ;
+                int uv = uvBase + vertex * 2;
+                uvs[uv] = source.u(sourceQuad, vertex);
+                uvs[uv + 1] = source.v(sourceQuad, vertex);
+                int exactColor = source.exactArgbColor(sourceQuad, vertex);
+                exact[vertexBase + vertex] = exactColor;
+                comparison[vertexBase + vertex] = comparisonRgba(exactColor);
+                lights[vertexBase + vertex] = source.packedLight(sourceQuad, vertex);
+            }
 
-                int baseVertex = out * VERTICES_PER_QUAD;
-                int index = out * INDICES_PER_QUAD;
-                indices[index] = baseVertex;
-                indices[index + 1] = baseVertex + 1;
-                indices[index + 2] = baseVertex + 2;
-                indices[index + 3] = baseVertex;
-                indices[index + 4] = baseVertex + 2;
-                indices[index + 5] = baseVertex + 3;
-                sourceQuads[out] = sourceQuad;
-                materialIds[out] = source.materialId(sourceQuad);
-                layers[out] = targetLayer;
+            int baseVertex = out * VERTICES_PER_QUAD;
+            int index = out * INDICES_PER_QUAD;
+            indices[index] = baseVertex;
+            indices[index + 1] = baseVertex + 1;
+            indices[index + 2] = baseVertex + 2;
+            indices[index + 3] = baseVertex;
+            indices[index + 4] = baseVertex + 2;
+            indices[index + 5] = baseVertex + 3;
+            sourceQuads[out] = sourceQuad;
+            materialIds[out] = source.materialId(sourceQuad);
+            layers[out] = targetLayer;
 
-                hash = hashInt(hash, sourceQuad);
-                hash = hashInt(hash, materialIds[out]);
-                hash = hashInt(hash, Byte.toUnsignedInt(targetLayer));
-                for (int i = 0; i < VERTICES_PER_QUAD * 3; i++) {
-                    hash = hashInt(hash, Float.floatToRawIntBits(positions[positionBase + i]));
-                }
-                for (int vertex = 0; vertex < VERTICES_PER_QUAD; vertex++) {
-                    hash = hashInt(hash, Float.floatToRawIntBits(uvs[uvBase + vertex * 2]));
-                    hash = hashInt(hash, Float.floatToRawIntBits(uvs[uvBase + vertex * 2 + 1]));
-                    hash = hashInt(hash, exact[vertexBase + vertex]);
-                    hash = hashInt(hash, lights[vertexBase + vertex]);
-                }
+            hash = hashInt(hash, sourceQuad);
+            hash = hashInt(hash, materialIds[out]);
+            hash = hashInt(hash, Byte.toUnsignedInt(targetLayer));
+            for (int i = 0; i < VERTICES_PER_QUAD * 3; i++) {
+                hash = hashInt(hash, Float.floatToRawIntBits(positions[positionBase + i]));
+            }
+            for (int vertex = 0; vertex < VERTICES_PER_QUAD; vertex++) {
+                hash = hashInt(hash, Float.floatToRawIntBits(uvs[uvBase + vertex * 2]));
+                hash = hashInt(hash, Float.floatToRawIntBits(uvs[uvBase + vertex * 2 + 1]));
+                hash = hashInt(hash, exact[vertexBase + vertex]);
+                hash = hashInt(hash, lights[vertexBase + vertex]);
             }
         }
 
-        if (outputQuad != quadCount
+        if (orderedCount != quadCount
                 || source.solidQuads() + source.cutoutQuads() != quadCount
                 || source.solidQuads() < 0
                 || source.cutoutQuads() < 0) {
