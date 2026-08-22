@@ -7,6 +7,7 @@ import dev.obsidian.render.terrain.GreedySectionRectangles;
 import dev.obsidian.render.terrain.OrdinaryQuadEmissionSafety;
 import dev.obsidian.render.terrain.ReferenceFaceMesh;
 import dev.obsidian.render.terrain.RenderMergeCandidates;
+import dev.obsidian.render.terrain.RepeatAwareUvDescriptors;
 import dev.obsidian.render.terrain.SectionBakedQuadSnapshot;
 import dev.obsidian.render.terrain.SectionSnapshot;
 
@@ -25,10 +26,10 @@ import java.util.concurrent.atomic.AtomicLongArray;
  * P3.3 partitions that proven topology into deterministic greedy rectangles,
  * P3.4 dev6 maps conservative canonical faces to exact baked render keys,
  * dev7 partitions only those eligible faces into render-key-aware merge
- * candidates, and dev8 classifies whether those candidates preserve captured
- * color/light/UV fields as one ordinary four-vertex rectangle. The existing
- * baked mesh remains the production drawable. No worker touches Minecraft
- * world/chunk/model state or GPU objects.</p>
+ * candidates, dev8 classifies ordinary four-vertex emission safety, and dev9
+ * proves exact sprite-local repeat-aware UV descriptors for multi-face
+ * candidates. The existing baked mesh remains the production drawable. No
+ * worker touches Minecraft world/chunk/model state or GPU objects.</p>
  */
 public final class SectionMeshWorkerPool implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/SectionMeshWorkers");
@@ -63,6 +64,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private volatile CanonicalFaceRenderKeys renderKeys;
         private volatile RenderMergeCandidates mergeCandidates;
         private volatile OrdinaryQuadEmissionSafety emissionSafety;
+        private volatile RepeatAwareUvDescriptors repeatAwareUv;
         private volatile BakedSectionMesh mesh;
         private volatile Throwable failure;
         private volatile long startNs;
@@ -102,6 +104,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         public CanonicalFaceRenderKeys renderKeys() { return renderKeys; }
         public RenderMergeCandidates mergeCandidates() { return mergeCandidates; }
         public OrdinaryQuadEmissionSafety emissionSafety() { return emissionSafety; }
+        public RepeatAwareUvDescriptors repeatAwareUv() { return repeatAwareUv; }
         public BakedSectionMesh mesh() { return mesh; }
         public Throwable failure() { return failure; }
         public long queueWaitNs() { return startNs == 0L ? 0L : Math.max(0L, startNs - enqueueNs); }
@@ -171,6 +174,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private final CanonicalFaceRenderKeys.BuildScratch renderKeyScratch = new CanonicalFaceRenderKeys.BuildScratch();
         private final RenderMergeCandidates.BuildScratch mergeCandidateScratch = new RenderMergeCandidates.BuildScratch();
         private final OrdinaryQuadEmissionSafety.BuildScratch emissionSafetyScratch = new OrdinaryQuadEmissionSafety.BuildScratch();
+        private final RepeatAwareUvDescriptors.BuildScratch repeatAwareUvScratch = new RepeatAwareUvDescriptors.BuildScratch();
         private long completedLocalBuilds;
         private long lastFingerprint;
 
@@ -348,6 +352,37 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     return;
                 }
 
+                RepeatAwareUvDescriptors firstRepeatAwareUv = RepeatAwareUvDescriptors.build(
+                        firstMergeCandidates, firstRenderKeys, firstEmissionSafety,
+                        ticket.bakedSnapshot, repeatAwareUvScratch);
+                recordRepeatAwareUvScratchUse(repeatAwareUvScratch);
+                repeatAwareUvBuilds.incrementAndGet();
+                totalRepeatAwareUvMultiFace.addAndGet(firstRepeatAwareUv.sourceMultiFaceCandidates());
+                totalRepeatAwareUvRepresentable.addAndGet(firstRepeatAwareUv.representableMultiFace());
+                totalRepeatAwareUvUnrepresentable.addAndGet(firstRepeatAwareUv.unrepresentableMultiFace());
+                totalRepeatAwareUvFourVertexSafe.addAndGet(firstRepeatAwareUv.repeatAwareFourVertexSafe());
+                totalRepeatAwareUvFourVertexUnsafe.addAndGet(firstRepeatAwareUv.repeatAwareFourVertexUnsafe());
+                totalRepeatAwareUvSafeCoveredFaces.addAndGet(firstRepeatAwareUv.safeCoveredFaces());
+                totalRepeatAwareUvSafeFacesSaved.addAndGet(firstRepeatAwareUv.safeFacesSaved());
+                totalRepeatAwareUvRetainedBytes.addAndGet(firstRepeatAwareUv.retainedBytes());
+                totalRepeatAwareUvBuildNs.addAndGet(firstRepeatAwareUv.buildTimeNs());
+                updateMax(maxRepeatAwareUvDescriptors, firstRepeatAwareUv.descriptorCount());
+                updateMax(maxRepeatAwareUvBuildNs, firstRepeatAwareUv.buildTimeNs());
+                repeatAwareUvClassificationAudits.incrementAndGet();
+                repeatAwareUvClassificationAuditMatches.incrementAndGet();
+                for (int direction = 0; direction < BinarySectionVisibility.DIRECTION_COUNT; direction++) {
+                    repeatAwareUvRepresentableByDirection.addAndGet(
+                            direction, firstRepeatAwareUv.directionRepresentableCount(direction));
+                    repeatAwareUvSafeByDirection.addAndGet(
+                            direction, firstRepeatAwareUv.directionSafeCount(direction));
+                    repeatAwareUvSafeCoveredFacesByDirection.addAndGet(
+                            direction, firstRepeatAwareUv.directionSafeCoveredFaces(direction));
+                }
+                if (ticket.cancellationRequested || closed) {
+                    cancelTicket(ticket);
+                    return;
+                }
+
                 BakedSectionMesh first = BakedSectionMesh.build(
                         ticket.snapshot, ticket.bakedSnapshot, buildScratch);
                 recordScratchUse(buildScratch);
@@ -416,6 +451,16 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     }
                     emissionSafetyDeterminismAuditMatches.incrementAndGet();
 
+                    repeatAwareUvDeterminismAudits.incrementAndGet();
+                    RepeatAwareUvDescriptors secondRepeatAwareUv = RepeatAwareUvDescriptors.build(
+                            secondMergeCandidates, secondRenderKeys, secondEmissionSafety,
+                            ticket.bakedSnapshot, repeatAwareUvScratch);
+                    recordRepeatAwareUvScratchUse(repeatAwareUvScratch);
+                    if (!firstRepeatAwareUv.contentEquals(secondRepeatAwareUv)) {
+                        throw new IllegalStateException("Worker-produced repeat-aware UV descriptor sidecar was nondeterministic");
+                    }
+                    repeatAwareUvDeterminismAuditMatches.incrementAndGet();
+
                     determinismAudits.incrementAndGet();
                     BakedSectionMesh second = BakedSectionMesh.build(
                             ticket.snapshot, ticket.bakedSnapshot, buildScratch);
@@ -435,6 +480,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 ticket.renderKeys = firstRenderKeys;
                 ticket.mergeCandidates = firstMergeCandidates;
                 ticket.emissionSafety = firstEmissionSafety;
+                ticket.repeatAwareUv = firstRepeatAwareUv;
                 ticket.mesh = first;
                 ticket.endNs = System.nanoTime();
                 ticket.state = TicketState.COMPLETED;
@@ -581,6 +627,25 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLong emissionSafetyDeterminismAudits = new AtomicLong();
     private final AtomicLong emissionSafetyDeterminismAuditMatches = new AtomicLong();
 
+    private final AtomicLong repeatAwareUvBuilds = new AtomicLong();
+    private final AtomicLong totalRepeatAwareUvMultiFace = new AtomicLong();
+    private final AtomicLong totalRepeatAwareUvRepresentable = new AtomicLong();
+    private final AtomicLong totalRepeatAwareUvUnrepresentable = new AtomicLong();
+    private final AtomicLong totalRepeatAwareUvFourVertexSafe = new AtomicLong();
+    private final AtomicLong totalRepeatAwareUvFourVertexUnsafe = new AtomicLong();
+    private final AtomicLong totalRepeatAwareUvSafeCoveredFaces = new AtomicLong();
+    private final AtomicLong totalRepeatAwareUvSafeFacesSaved = new AtomicLong();
+    private final AtomicLong totalRepeatAwareUvRetainedBytes = new AtomicLong();
+    private final AtomicLong totalRepeatAwareUvBuildNs = new AtomicLong();
+    private final AtomicLong maxRepeatAwareUvBuildNs = new AtomicLong();
+    private final AtomicLong maxRepeatAwareUvDescriptors = new AtomicLong();
+    private final AtomicLong repeatAwareUvScratchBuildUses = new AtomicLong();
+    private final AtomicLong maxRepeatAwareUvScratchDescriptors = new AtomicLong();
+    private final AtomicLong repeatAwareUvClassificationAudits = new AtomicLong();
+    private final AtomicLong repeatAwareUvClassificationAuditMatches = new AtomicLong();
+    private final AtomicLong repeatAwareUvDeterminismAudits = new AtomicLong();
+    private final AtomicLong repeatAwareUvDeterminismAuditMatches = new AtomicLong();
+
     private final AtomicLong shutdownJoinFailures = new AtomicLong();
 
     private final AtomicLongArray submittedByPriority = new AtomicLongArray(PRIORITY_COUNT);
@@ -605,6 +670,12 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLongArray emissionSafetyOrdinarySafeByDirection =
             new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
     private final AtomicLongArray emissionSafetyOrdinarySafeCoveredFacesByDirection =
+            new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
+    private final AtomicLongArray repeatAwareUvRepresentableByDirection =
+            new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
+    private final AtomicLongArray repeatAwareUvSafeByDirection =
+            new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
+    private final AtomicLongArray repeatAwareUvSafeCoveredFacesByDirection =
             new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
 
     private volatile boolean closed;
@@ -761,6 +832,11 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private void recordEmissionSafetyScratchUse(OrdinaryQuadEmissionSafety.BuildScratch scratch) {
         emissionSafetyScratchBuildUses.incrementAndGet();
         updateMax(maxEmissionSafetyScratchCandidates, scratch.highWaterCandidates());
+    }
+
+    private void recordRepeatAwareUvScratchUse(RepeatAwareUvDescriptors.BuildScratch scratch) {
+        repeatAwareUvScratchBuildUses.incrementAndGet();
+        updateMax(maxRepeatAwareUvScratchDescriptors, scratch.highWaterDescriptors());
     }
 
     private static void validateJob(
@@ -973,6 +1049,43 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
             throw new IllegalArgumentException("Invalid emission-safety direction");
         }
         return emissionSafetyOrdinarySafeCoveredFacesByDirection.get(direction);
+    }
+
+    public long repeatAwareUvBuilds() { return repeatAwareUvBuilds.get(); }
+    public long totalRepeatAwareUvMultiFace() { return totalRepeatAwareUvMultiFace.get(); }
+    public long totalRepeatAwareUvRepresentable() { return totalRepeatAwareUvRepresentable.get(); }
+    public long totalRepeatAwareUvUnrepresentable() { return totalRepeatAwareUvUnrepresentable.get(); }
+    public long totalRepeatAwareUvFourVertexSafe() { return totalRepeatAwareUvFourVertexSafe.get(); }
+    public long totalRepeatAwareUvFourVertexUnsafe() { return totalRepeatAwareUvFourVertexUnsafe.get(); }
+    public long totalRepeatAwareUvSafeCoveredFaces() { return totalRepeatAwareUvSafeCoveredFaces.get(); }
+    public long totalRepeatAwareUvSafeFacesSaved() { return totalRepeatAwareUvSafeFacesSaved.get(); }
+    public long totalRepeatAwareUvRetainedBytes() { return totalRepeatAwareUvRetainedBytes.get(); }
+    public long totalRepeatAwareUvBuildNs() { return totalRepeatAwareUvBuildNs.get(); }
+    public long maxRepeatAwareUvBuildNs() { return maxRepeatAwareUvBuildNs.get(); }
+    public long maxRepeatAwareUvDescriptors() { return maxRepeatAwareUvDescriptors.get(); }
+    public long repeatAwareUvScratchBuildUses() { return repeatAwareUvScratchBuildUses.get(); }
+    public long maxRepeatAwareUvScratchDescriptors() { return maxRepeatAwareUvScratchDescriptors.get(); }
+    public long repeatAwareUvClassificationAudits() { return repeatAwareUvClassificationAudits.get(); }
+    public long repeatAwareUvClassificationAuditMatches() { return repeatAwareUvClassificationAuditMatches.get(); }
+    public long repeatAwareUvDeterminismAudits() { return repeatAwareUvDeterminismAudits.get(); }
+    public long repeatAwareUvDeterminismAuditMatches() { return repeatAwareUvDeterminismAuditMatches.get(); }
+    public long repeatAwareUvRepresentable(int direction) {
+        if (direction < 0 || direction >= BinarySectionVisibility.DIRECTION_COUNT) {
+            throw new IllegalArgumentException("Invalid repeat-aware UV direction");
+        }
+        return repeatAwareUvRepresentableByDirection.get(direction);
+    }
+    public long repeatAwareUvSafe(int direction) {
+        if (direction < 0 || direction >= BinarySectionVisibility.DIRECTION_COUNT) {
+            throw new IllegalArgumentException("Invalid repeat-aware UV direction");
+        }
+        return repeatAwareUvSafeByDirection.get(direction);
+    }
+    public long repeatAwareUvSafeCoveredFaces(int direction) {
+        if (direction < 0 || direction >= BinarySectionVisibility.DIRECTION_COUNT) {
+            throw new IllegalArgumentException("Invalid repeat-aware UV direction");
+        }
+        return repeatAwareUvSafeCoveredFacesByDirection.get(direction);
     }
 
     public long shutdownJoinFailures() { return shutdownJoinFailures.get(); }
