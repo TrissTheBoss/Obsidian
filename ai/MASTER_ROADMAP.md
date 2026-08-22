@@ -202,43 +202,11 @@ Validated as `0.3.0-phase3-dev4`; PR #36 merge `54ca3cb2d64eda958579407728e757eb
 
 `BinarySectionVisibility` provides deterministic six-direction conservative topology at exactly 3,072 retained bytes/section, with reusable machine-word scratch, scalar correctness validation and permanent independent `ReferenceFaceMesh` differential proof.
 
-Reference closure: 288/288 jobs, 102,367 visible faces, exact directional/byte accounting, determinism `7/7`, reference audits `7/7`, clean lifetime and exit 0.
-
 #### P3.3 — Greedy rectangle extraction — COMPLETE
 
 Validated as `0.3.0-phase3-dev5`; PR #37 merge `34caa19a9de70ba8e0395a2992180f3a24a3f7aa`.
 
-Evidence: A-0108, A-0110, A-0111.
-
-Completed contract:
-
-- deterministic primitive topology rectangles consuming only P3.2 masks;
-- fixed direction/plane coordinate semantics;
-- exact no-missing/no-extra/no-overlap expansion to P3.2 visibility;
-- direct independent `ReferenceFaceMesh` equivalence on audit cadence;
-- packed 4-byte retained rectangle records;
-- bounded reusable scratch;
-- production worker sidecar integration while `BakedSectionMesh` remains drawable;
-- scheduler/generation/event/resource/completion-gated lifetime behavior preserved.
-
-Reference dev5 runtime:
-
-- `phase3GateReady=true`;
-- `schedulerEvidenceReady=true`;
-- `binaryVisibilityEvidenceReady=true`;
-- `greedyRectangleEvidenceReady=true`;
-- 162/162 worker jobs completed;
-- 48,261 visible canonical faces -> 21,286 topology rectangles;
-- 26,975 faces saved = **55.8% topology reduction**;
-- retained rectangle bytes `85,144 = 21,286 * 4`;
-- primary mask audits `162/162`;
-- rectangle determinism `4/4`;
-- independent rectangle/reference audits `4/4`;
-- zero queue rejection/failure/join failure;
-- clean lifetime and exit 0;
-- positive human visual regression verdict.
-
-P3.3 did not emit greedy rectangles to the GPU.
+`GreedySectionRectangles` deterministically partitions P3.2 topology into packed 4-byte rectangles with exact no-gap/no-overlap expansion, permanent independent reference checks and bounded reusable scratch. P3.3 does not emit topology rectangles to the GPU.
 
 #### P3.4 — Render-correct merge and emission semantics — ACTIVE
 
@@ -246,29 +214,56 @@ Goal: move from topology-only greedy rectangles to render-correct merge candidat
 
 **dev6 — canonical render-key sidecar — COMPLETE.** Validated as `0.3.0-phase3-dev6`; PR #38 merge `967c4511cd11cd721886feae6d146f4412790a6d`.
 
-Dev6 maps a canonical face only when exactly one baked SOLID/CUTOUT quad from the same source block is proven to be the exact full unit-cube face for that direction. Exact render equivalence includes direction, layer, full material/sprite/tint/shade/emission/animation identity, corner/winding signature, raw per-corner UV bits, exact ARGB and packed light. Arbitrary generalized geometry remains passthrough. Runtime closure proved `renderMergeKeyEvidenceReady=true`, exact accounting/determinism, clean lifetime and exit 0.
+Dev6 maps a canonical face only when exactly one baked SOLID/CUTOUT quad from the same source block is proven to be the exact full unit-cube face for that direction. Exact render equivalence includes direction, layer, full material/sprite/tint/shade/emission/animation identity, corner/winding signature, raw per-corner UV bits, exact ARGB and packed light. Arbitrary generalized geometry remains passthrough.
 
 **dev7 — render-key-aware merge candidates — COMPLETE.** Validated as `0.3.0-phase3-dev7`; PR #39 merge `cec4ecb2432ec92f17a94a358895de6c2f21257e`.
 
-`RenderMergeCandidates` partitions the complete dev6-eligible canonical face set directly into deterministic same-render-key rectangles; P3.3 topology boundaries are not mandatory candidate boundaries. Retained payload is 6 logical bytes/candidate. Reference runtime proved 85,880 candidates covering exactly 95,805 eligible faces with 23,617 canonical passthrough faces, 7,318 multi-face candidates and 9,925 saved faces (10.3%), exact `263/263` coverage audits, `6/6` determinism, clean lifetime and exit 0.
+`RenderMergeCandidates` partitions the complete dev6-eligible canonical face set directly into deterministic same-render-key rectangles; P3.3 topology boundaries are not mandatory candidate boundaries. Retained payload is 6 logical bytes/candidate. Runtime closure proved exact eligible coverage, positive multi-face savings, deterministic audits and clean lifetime.
 
-Dev7 deliberately did not change GPU geometry. Same per-face payload equality is necessary but not sufficient proof that one four-vertex large quad reproduces repeated unit-face interpolation or atlas-UV resets.
+**dev8 — ordinary four-vertex emission-safety classifier — COMPLETE.** Validated as `0.3.0-phase3-dev8`; PR #40 merge `7a15f857a081fba642fcc28811ce88363b5abb66`.
 
-**dev8 — ordinary four-vertex emission-safety classifier — ACTIVE.** Version `0.3.0-phase3-dev8`, branch `phase3/rectangle-emission-safety`, draft PR #40.
+For repeated corner payload `P[0..3]`, a merged width requires `P0==P1 && P2==P3`; a merged height requires `P0==P2 && P1==P3`. The rule is applied independently to exact ARGB, packed light and raw atlas `(u,v)` bits. Runtime evidence proved ordinary atlas UV reset fails for every observed multi-face candidate while light succeeds for all and color succeeds for nearly all, forcing a repeat-aware UV representation rather than stretched atlas UVs.
 
-A-0122 freezes the exact dev8 contract. For a repeated four-corner payload `P[0..3]`, a merged width requires `P0==P1 && P2==P3`; a merged height requires `P0==P2 && P1==P3`. Apply independently to exact ARGB, packed light and raw atlas `(u,v)` bits. Both-axis merges therefore require a constant four-corner field for each attribute.
+**dev9 — repeat-aware UV descriptor / representability — COMPLETE.** Validated as `0.3.0-phase3-dev9`; PR #41 merge `59471127162aaf02c9c87e679e1c4c361f968fac`.
 
-`OrdinaryQuadEmissionSafety` retains one flag byte/candidate and classifies color-safe, light-safe, UV-safe and combined ordinary-attribute-safe state. Workers retain the sidecar and report exact safe/unsafe distributions, per-direction accounting, one-byte retained accounting, primary classification audits and deterministic duplicate audits. `ordinaryQuadEmissionSafetyEvidenceReady=true` is the dev8 runtime gate in addition to all prior gates.
+`RepeatAwareUvDescriptors` proves that the representative canonical quad has exactly two raw U values × two raw V values with all four combinations exactly once and an affine square flip/rotation mapping from geometric corners to UV corners. Repeat is defined in candidate-local sprite coordinates before remapping into the same source atlas rectangle; full-atlas wrapping is never the correctness model. Retained descriptor size is 19 logical bytes.
 
-A zero ordinary-safe multi-face result is valid evidence; the gate must not manufacture a useful ordinary-quad subset. If atlas UV reset dominates, the next P3.4 slice should design/prove a sprite-local repeat-aware representation rather than stretching atlas UVs or weakening correctness.
+Reference dev9 runtime (A-0131):
 
-Through dev8:
+- all prior gates plus `repeatAwareUvEvidenceReady=true`;
+- 261/261 worker jobs, zero rejection/failure/join failure;
+- dev7 multi-face candidates: 5,267;
+- repeat-aware UV representable/unrepresentable: **5,267 / 0**;
+- repeat-aware four-vertex safe/unsafe after color/light constraints: **5,266 / 1**;
+- light safe: 5,267 / 5,267;
+- color safe: 5,266 / 5,267;
+- ordinary atlas UV safe: 0 / 5,267;
+- retained bytes `100,073 = 5,267 * 19`;
+- classification audits `261/261`, determinism `6/6`;
+- clean worker/staging/arena/resource lifetime and Prism exit code 0.
+
+The observed dev9 result removes UV representation and light interpolation as blockers for the multi-face candidate set. The sole observed four-vertex exclusion is color interpolation.
+
+**dev10 — repeat-aware transport/sampling correctness proof — ACTIVE.** Target version `0.3.0-phase3-dev10`.
+
+Dev10 is proof-first and **must not change emitted terrain geometry**. It must freeze and validate the representation that a later emission slice could consume:
+
+- exact candidate-local repeat-coordinate transport;
+- exact preservation of dev9 raw atlas bounds and orientation;
+- deterministic repeat/remap equations at integer cell boundaries and candidate edges;
+- source-atlas filtering, padding/inset, mip and edge assumptions necessary to avoid adjacent-sprite bleeding or seams;
+- preservation of material/sprite/layer/tint/shade/emission/animation identity;
+- bounded primitive metadata and deterministic validation;
+- exact worker/render-thread ownership and prior lifetime gates;
+- raster/T-junction obligations relevant to the eventual large-quad path, following D-0024's preference for stable positions and targeted selective mitigation rather than global conforming subdivision.
+
+Through dev10:
 
 - `greedyRectangleGpuEmission=false`;
 - `renderCorrectMergeKeyComplete=false`;
 - `BakedSectionMesh` remains the authoritative GPU drawable.
 
-Any later P3.4 slice that changes emitted GPU geometry requires renewed explicit human visual validation. A future emission slice must also preserve later P3.6 T-junction/rasterization policy obligations rather than treating attribute-safety alone as final proof.
+A later geometry-changing P3.4 slice may consume dev10 proof only after its own frozen emission contract is established. Any geometry-changing P3.4 runtime slice requires renewed explicit human visual validation before promotion.
 
 #### P3.5 — Border/halo correctness — PLANNED
 
@@ -276,7 +271,7 @@ Validate face visibility, light/AO and rebuild invalidation across section bound
 
 #### P3.6 — T-junction policy — PLANNED
 
-Default to greedy topology unless real Vulkan hardware shows cracks. Prefer stable positions and targeted mitigation/splitting over globally abandoning greedy meshing.
+Default to greedy topology unless real Vulkan hardware shows cracks. Prefer stable positions and targeted mitigation/splitting over globally abandoning greedy meshing. P3.4 emission work must identify any immediate raster obligations without falsely declaring P3.6 complete.
 
 #### P3.7 — Differential correctness framework — PLANNED
 
@@ -340,8 +335,9 @@ Configuration/UI polish, presets/migration, crash diagnostics, benchmark export,
 - [COMPLETE foundation] Deterministic topology rectangle extraction.
 - [COMPLETE foundation] Canonical render-key classification.
 - [COMPLETE foundation] Render-key-aware merge-candidate partition.
-- [ACTIVE] Ordinary four-vertex emission-safety classification.
-- [PLANNED] Repeat-aware emission representation if dev8 evidence requires it.
+- [COMPLETE foundation] Ordinary four-vertex emission-safety classification.
+- [COMPLETE foundation] Repeat-aware UV descriptor / representability proof.
+- [ACTIVE] Repeat-aware transport/sampling correctness proof.
 - [PLANNED] Key-aware production greedy geometry emission.
 - [PLANNED] Full production opaque/cutout terrain replacement.
 - [COMPLETE foundation] Supported lighting/AO/tint/material/UV capture truth.
@@ -418,6 +414,8 @@ Development versions may be direct test JARs/CI artifacts. Internal milestone me
 
 Experiments must declare capability requirements, expected benefit, failure modes, memory impact, restart/reload requirements and fallback. Where feasible, validation/crash markers should disable only the offending experiment on next launch.
 
+Candidate experiments include Hi-Z, async compute culling, GPU transparency sorting, mesh shaders, alternate compressed geometry, device-address paths, native indirect-count consumption, partial remeshing, optional LOD and async defrag. None are baseline merely because hardware supports them.
+
 ---
 
 ## 14. Dependency rules
@@ -447,26 +445,31 @@ Newer durable decisions override stale roadmap text until synchronized. Always p
 
 ## 16. Roadmap revision log
 
+### 2026-08-23 — dev8/dev9 completion and dev10 activation
+
+- completed dev8 ordinary four-vertex emission-safety classification via PR #40 merge `7a15f857a081fba642fcc28811ce88363b5abb66`;
+- dev8 proved ordinary atlas UV reset failed for every observed multi-face candidate while light succeeded for all and color for nearly all;
+- completed dev9 repeat-aware UV descriptor / representability via PR #41 merge `59471127162aaf02c9c87e679e1c4c361f968fac`;
+- A-0131 proved 5,267/5,267 observed multi-face candidates repeat-aware UV representable and 5,266/5,267 repeat-aware four-vertex safe after color/light constraints;
+- activated dev10 repeat-aware transport/sampling correctness proof;
+- kept `BakedSectionMesh` authoritative and greedy GPU emission disabled;
+- retained explicit future visual-validation requirement for any geometry-changing P3.4 slice.
+
 ### 2026-08-23 — P3.4 dev6/dev7 completion and dev8 activation
 
 - completed dev6 canonical render-key sidecar via PR #38 merge `967c4511cd11cd721886feae6d146f4412790a6d`;
 - completed dev7 render-key-aware merge-candidate sidecar via PR #39 merge `cec4ecb2432ec92f17a94a358895de6c2f21257e`;
-- recorded dev7 real-terrain 95,805 eligible faces -> 85,880 candidates, 7,318 multi-face candidates and 9,925 saved faces (10.3%), exact coverage/determinism and clean lifetime;
+- recorded dev7 real-terrain eligible/candidate coverage and deterministic clean lifetime;
 - source inspection proved same face key is not sufficient for one ordinary four-vertex rectangle because per-cell color/light interpolation and atlas UV resets can differ;
-- activated dev8 ordinary four-vertex emission-safety classification on `phase3/rectangle-emission-safety`, draft PR #40;
-- froze exact repeated-field continuity equations and allowed zero ordinary-safe multi-face candidates as a valid measured outcome;
+- activated dev8 ordinary four-vertex emission-safety classification;
 - kept `BakedSectionMesh` authoritative and greedy GPU emission disabled.
 
 ### 2026-08-22 — P3.3 completion / P3.4 activation
 
 - completed and merged P3.3 greedy rectangle extraction via PR #37 merge `34caa19a9de70ba8e0395a2992180f3a24a3f7aa`;
 - recorded successful dev5 runtime with all Phase 3/P3.2/P3.3 gates true;
-- recorded 48,261 source faces -> 21,286 rectangles, 55.8% topology reduction, exact mask/reference coverage and clean lifetime;
-- retained `BakedSectionMesh` as drawable, so greedy GPU emission remains unclaimed;
-- activated P3.4 render-correct merge key;
-- froze dev6 correctness-first canonical render-key sidecar in A-0112 and opened draft PR #38;
-- preserved arbitrary generalized geometry passthrough and complete visual-key correctness requirements;
-- all promotion/synchronization commits use `[no-release]`.
+- retained `BakedSectionMesh` as drawable, so greedy GPU emission remained unclaimed;
+- activated P3.4 render-correct merge key.
 
 ### 2026-08-22 — P3.2 completion / P3.3 activation
 
@@ -492,8 +495,8 @@ Created the canonical master roadmap and formal governance model.
 - Phase 3: ACTIVE.
 - P3.1: COMPLETE through `0.3.0-phase3-dev3`.
 - P3.2: COMPLETE through `0.3.0-phase3-dev4`, PR #36.
-- P3.3: COMPLETE through `0.3.0-phase3-dev5`, PR #37 merge `34caa19a9de70ba8e0395a2992180f3a24a3f7aa`.
-- P3.4: ACTIVE — dev6 and dev7 complete; dev8 ordinary four-vertex emission-safety classifier is active on draft PR #40; no greedy GPU geometry is claimed yet.
+- P3.3: COMPLETE through `0.3.0-phase3-dev5`, PR #37.
+- P3.4: ACTIVE — dev6/dev7/dev8/dev9 COMPLETE; **dev10 repeat-aware transport/sampling correctness proof ACTIVE**; no greedy GPU geometry is claimed yet.
 - P3.5-P3.9 remain PLANNED/EXPERIMENTAL as marked.
 - Phases 4-12 retain their planned order/scope.
 
