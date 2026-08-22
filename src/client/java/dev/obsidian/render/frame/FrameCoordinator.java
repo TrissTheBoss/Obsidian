@@ -4,14 +4,13 @@ import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.obsidian.render.memory.DeviceGeometryArena;
 import dev.obsidian.render.mesh.SectionMeshWorkerPool;
-import dev.obsidian.render.mesh.WorkerMeshValidationProbe;
 import dev.obsidian.render.resource.DeferredReleaseQueue;
-import dev.obsidian.render.terrain.RealMultiSectionSceneProbe;
+import dev.obsidian.render.terrain.AsyncMultiSectionSceneProbe;
 import dev.obsidian.render.terrain.SectionLifecycleEvents;
 import dev.obsidian.render.upload.StagingUploadArena;
 import net.minecraft.client.renderer.GameRenderer;
 
-/** Render-thread lifecycle root for the active Obsidian milestone. */
+/** Render-thread lifecycle root for the active Phase 3 dev2 integration milestone. */
 public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
     private static final int VALIDATION_STAGING_BYTES = 4 * 1024 * 1024;
@@ -21,13 +20,11 @@ public final class FrameCoordinator implements AutoCloseable {
     private final FrameTimings cpuFrameTimings = new FrameTimings();
     private final FrameContextRing frameContexts = new FrameContextRing();
     private final DeferredReleaseQueue deferredReleases = new DeferredReleaseQueue();
-    private final GpuDevice device;
     private final StagingUploadArena stagingUploads;
     private final DeviceGeometryArena deviceArena;
     private final SectionMeshWorkerPool meshWorkers;
-    private final WorkerMeshValidationProbe workerProbe;
 
-    private RealMultiSectionSceneProbe sceneProbe;
+    private AsyncMultiSectionSceneProbe sceneProbe;
     private FrameContext activeFrame;
     private long frameIndex;
     private long firstWorldRenderNs;
@@ -38,36 +35,32 @@ public final class FrameCoordinator implements AutoCloseable {
     private boolean closed;
 
     public FrameCoordinator(GpuDevice device) {
-        this.device = device;
-
         StagingUploadArena staging = null;
         DeviceGeometryArena arena = null;
         SectionMeshWorkerPool workers = null;
-        WorkerMeshValidationProbe workerValidation = null;
         try {
             workers = new SectionMeshWorkerPool(SectionMeshWorkerPool.defaultWorkerCount());
-            workerValidation = new WorkerMeshValidationProbe(workers);
             staging = new StagingUploadArena(
                     device,
-                    () -> "Obsidian Phase 3 dev1 bounded validation staging ring",
+                    () -> "Obsidian Phase 3 dev2 bounded scene staging ring",
                     VALIDATION_STAGING_BYTES);
             arena = new DeviceGeometryArena(
                     device,
-                    () -> "Obsidian Phase 3 dev1 validation device geometry arena",
+                    () -> "Obsidian Phase 3 dev2 scene device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
-            sceneProbe = new RealMultiSectionSceneProbe(device, staging, arena, deferredReleases);
+            sceneProbe = new AsyncMultiSectionSceneProbe(
+                    device, staging, arena, deferredReleases, workers);
         } catch (RuntimeException e) {
             if (sceneProbe != null) try { sceneProbe.close(); } catch (RuntimeException ignored) { }
-            if (workerValidation != null) try { workerValidation.close(); } catch (RuntimeException ignored) { }
             if (workers != null) try { workers.close(); } catch (RuntimeException ignored) { }
-            if (arena != null) try { arena.close(); } catch (RuntimeException ignored) { }
             if (staging != null) try { staging.close(); } catch (RuntimeException ignored) { }
+            if (arena != null) try { arena.close(); } catch (RuntimeException ignored) { }
+            try { deferredReleases.close(); } catch (RuntimeException ignored) { }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev1 worker/job architecture initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 3 dev2 async scene integration initialization failed; Minecraft will continue for diagnosis.", e);
             hardFailure = true;
         }
         meshWorkers = workers;
-        workerProbe = workerValidation;
         stagingUploads = staging;
         deviceArena = arena;
     }
@@ -82,16 +75,12 @@ public final class FrameCoordinator implements AutoCloseable {
             sceneProbe.beginFrame(frameIndex);
             if (sceneProbe.hardFailure()) hardFailure = true;
         }
-        if (workerProbe != null && workerProbe.state() == WorkerMeshValidationProbe.State.FAILED) {
-            hardFailure = true;
-        }
 
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev1 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, meshWorkers={2}, meshQueueCapacity={3}, stagingCapacity={4}, deviceArenaCapacity={5}; P3.1 validates bounded priority queues, work stealing, cancellation and immutable worker mesh builds beside the already-validated Phase 2 multi-section scene.",
-                    frameContexts.size(),
-                    cpuFrameTimings.capacity(),
+                    "Phase 3 dev2 frame coordinator active. contextSlots={0}, cpuTimingCapacity={1}, meshWorkers={2}, meshQueueCapacity={3}, stagingCapacity={4}, deviceArenaCapacity={5}; persistent scene mesh construction is worker-backed while capture and GPU ownership remain render-thread-only.",
+                    frameContexts.size(), cpuFrameTimings.capacity(),
                     meshWorkers == null ? 0 : meshWorkers.workerCount(),
                     meshWorkers == null ? 0 : meshWorkers.queueCapacity(),
                     stagingUploads == null ? 0 : stagingUploads.capacityBytes(),
@@ -101,7 +90,7 @@ public final class FrameCoordinator implements AutoCloseable {
 
     public void afterWorldRender(GameRenderer renderer) {
         RenderSystem.assertOnRenderThread();
-        if (closed || hardFailure || stagingUploads == null || deviceArena == null) return;
+        if (closed || hardFailure || stagingUploads == null || deviceArena == null || meshWorkers == null) return;
 
         long nowNs = System.nanoTime();
         if (firstWorldRenderNs == 0L) firstWorldRenderNs = nowNs;
@@ -109,17 +98,9 @@ public final class FrameCoordinator implements AutoCloseable {
             if (!visualDelayLogged) {
                 visualDelayLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev1 validation is delayed for 5 seconds after first world render so startup dirtiness/resource activity settles before real-section worker jobs are admitted.");
+                        "Phase 3 dev2 validation is delayed for 5 seconds after first world render so startup dirtiness/resource activity settles before production scene jobs are admitted.");
             }
             return;
-        }
-
-        if (workerProbe != null) {
-            workerProbe.afterWorldRender(frameIndex);
-            if (workerProbe.state() == WorkerMeshValidationProbe.State.FAILED) {
-                hardFailure = true;
-                return;
-            }
         }
 
         if (sceneProbe != null) {
@@ -130,10 +111,10 @@ public final class FrameCoordinator implements AutoCloseable {
             }
         }
 
-        if (!runtimeInstructionsLogged && workerProbe != null && workerProbe.gateReady()) {
+        if (!runtimeInstructionsLogged && sceneProbe != null && sceneProbe.productionWorkerIntegrationReady()) {
             runtimeInstructionsLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev1 worker proof is verified for this session. The current dev8 milestone intentionally leaves the proven Phase 2 scene install path synchronous; this run proves only the immutable worker/job boundary, bounded priority queues, work stealing, cancellation and deterministic worker mesh output before production integration replaces that path.");
+                    "Phase 3 dev2 production worker scene integration is active. Verify the 3x3 scene visually, break/place blocks, perform F3+T once, allow worker-backed rebuilds to become READY, then exit normally. synchronousSceneMeshBuilds=0, productionSceneInstallStillSynchronous=false, productionWorkerSceneIntegration=true.");
         }
     }
 
@@ -155,9 +136,6 @@ public final class FrameCoordinator implements AutoCloseable {
             sceneProbe.endFrame(frameIndex);
             if (sceneProbe.hardFailure()) hardFailure = true;
         }
-        if (workerProbe != null && workerProbe.state() == WorkerMeshValidationProbe.State.FAILED) {
-            hardFailure = true;
-        }
     }
 
     public long frameIndex() { return frameIndex; }
@@ -165,10 +143,12 @@ public final class FrameCoordinator implements AutoCloseable {
     public FrameTimings cpuFrameTimings() { return cpuFrameTimings; }
     public int pendingRetirements() { return deferredReleases.pendingCount(); }
     public int pendingUploadBatches() { return stagingUploads == null ? 0 : stagingUploads.pendingBatches(); }
-    public int pendingArenaRetirementBatches() { return deviceArena == null ? 0 : deviceArena.pendingRetirementBatches(); }
-    public RealMultiSectionSceneProbe.State sceneProbeState() {
+    public int pendingArenaRetirementBatches() {
+        return deviceArena == null ? 0 : deviceArena.pendingRetirementBatches();
+    }
+    public AsyncMultiSectionSceneProbe.State sceneProbeState() {
         if (sceneProbe != null) return sceneProbe.state();
-        return hardFailure ? RealMultiSectionSceneProbe.State.FAILED : RealMultiSectionSceneProbe.State.WAITING_WORLD;
+        return hardFailure ? AsyncMultiSectionSceneProbe.State.FAILED : AsyncMultiSectionSceneProbe.State.WAITING_WORLD;
     }
 
     @Override
@@ -177,14 +157,13 @@ public final class FrameCoordinator implements AutoCloseable {
         if (closed) return;
         closed = true;
 
-        RealMultiSectionSceneProbe probe = sceneProbe;
+        AsyncMultiSectionSceneProbe probe = sceneProbe;
         long usefulSubmissions = 0L;
         long comparisonDraws = 0L;
         long indirectCalls = 0L;
         long resourceEpochChecks = 0L;
         long retirementBackpressureEvents = 0L;
         long retirementRegistrationFailures = 0L;
-        long probeStaleInstallRejections = 0L;
         long sceneReadyTransitions = 0L;
         long sceneRebuilds = 0L;
         long recordInstallCount = 0L;
@@ -193,18 +172,29 @@ public final class FrameCoordinator implements AutoCloseable {
         long coalescedEvents = 0L;
         long eligibilityScans = 0L;
         long eligibilitySkips = 0L;
-        long uploadAdmissionDeferrals = 0L;
-        long staleSceneRejections = 0L;
+        long unsafeStaleSceneInstalls = 0L;
         int observedReasonMask = 0;
         int maxLiveRecords = 0;
         int maxAdjacentPairs = 0;
+        int maxSimultaneousSceneJobs = 0;
         long maxSceneQuads = 0L;
         long maxSceneVertexBytes = 0L;
         long maxSceneIndexBytes = 0L;
-        SectionLifecycleEvents.Cursor lifecycleCursor = null;
+        long sceneWorkerSubmitted = 0L;
+        long sceneWorkerCompleted = 0L;
+        long sceneWorkerCancelled = 0L;
+        long sceneWorkerCancellationRequests = 0L;
+        long sceneWorkerStaleDiscards = 0L;
+        long sceneWorkerInstalls = 0L;
+        long sceneWorkerQueueRejections = 0L;
+        long sceneInstallAdmissionDeferrals = 0L;
+        long synchronousSceneMeshBuilds = 0L;
+        long preinstallInvalidations = 0L;
         long sceneGeneration = 0L;
         String center = "unbound";
-        boolean localSceneGateReady = false;
+        boolean localSceneReady = false;
+        boolean productionWorkerIntegrationReady = false;
+        SectionLifecycleEvents.Cursor lifecycleCursor = null;
 
         if (probe != null) {
             usefulSubmissions = probe.usefulSubmissions();
@@ -213,7 +203,6 @@ public final class FrameCoordinator implements AutoCloseable {
             resourceEpochChecks = probe.resourceEpochChecks();
             retirementBackpressureEvents = probe.retirementBackpressureEvents();
             retirementRegistrationFailures = probe.retirementRegistrationFailures();
-            probeStaleInstallRejections = probe.probeStaleInstallRejections();
             sceneReadyTransitions = probe.sceneReadyTransitions();
             sceneRebuilds = probe.sceneRebuilds();
             recordInstallCount = probe.recordInstallCount();
@@ -222,30 +211,34 @@ public final class FrameCoordinator implements AutoCloseable {
             coalescedEvents = probe.coalescedEvents();
             eligibilityScans = probe.eligibilityScans();
             eligibilitySkips = probe.eligibilitySkips();
-            uploadAdmissionDeferrals = probe.uploadAdmissionDeferrals();
-            staleSceneRejections = probe.staleSceneRejections();
+            unsafeStaleSceneInstalls = probe.unsafeStaleSceneInstalls();
             observedReasonMask = probe.observedReasonMask();
             maxLiveRecords = probe.maxLiveRecords();
             maxAdjacentPairs = probe.maxAdjacentPairs();
+            maxSimultaneousSceneJobs = probe.maxSimultaneousSceneJobs();
             maxSceneQuads = probe.maxSceneQuads();
             maxSceneVertexBytes = probe.maxSceneVertexBytes();
             maxSceneIndexBytes = probe.maxSceneIndexBytes();
+            sceneWorkerSubmitted = probe.workerJobsSubmitted();
+            sceneWorkerCompleted = probe.workerJobsCompleted();
+            sceneWorkerCancelled = probe.workerJobsCancelled();
+            sceneWorkerCancellationRequests = probe.workerCancellationRequests();
+            sceneWorkerStaleDiscards = probe.staleWorkerResultDiscards();
+            sceneWorkerInstalls = probe.workerResultInstalls();
+            sceneWorkerQueueRejections = probe.workerQueueRejections();
+            sceneInstallAdmissionDeferrals = probe.installAdmissionDeferrals();
+            synchronousSceneMeshBuilds = probe.synchronousSceneMeshBuilds();
+            preinstallInvalidations = probe.preinstallInvalidations();
             lifecycleCursor = probe.lifecycleCursor();
             sceneGeneration = probe.sceneGeneration();
             center = probe.centerKnown()
                     ? "(" + probe.centerSectionX() + "," + probe.centerSectionY() + "," + probe.centerSectionZ() + ")"
                     : "unbound";
-            localSceneGateReady = probe.sceneGateReady();
+            localSceneReady = probe.localSceneReady();
+            productionWorkerIntegrationReady = probe.productionWorkerIntegrationReady();
             probe.close();
             sceneProbe = null;
         }
-
-        boolean workerGateReady = workerProbe != null && workerProbe.gateReady();
-        long workerStaleBatches = workerProbe == null ? 0L : workerProbe.staleBatches();
-        long workerAcceptedCompleted = workerProbe == null ? 0L : workerProbe.acceptedCompleted();
-        long workerAcceptedCancelled = workerProbe == null ? 0L : workerProbe.acceptedCancelled();
-        long workerDeterministicMatches = workerProbe == null ? 0L : workerProbe.deterministicMatches();
-        if (workerProbe != null) workerProbe.close();
 
         if (meshWorkers != null) meshWorkers.close();
         if (stagingUploads != null) stagingUploads.close();
@@ -260,39 +253,46 @@ public final class FrameCoordinator implements AutoCloseable {
         long resourceReloadEvents = lifecycleCursor == null ? 0L : lifecycleCursor.resourceReloadEvents();
         long droppedLifecycleEvents = lifecycleCursor == null ? 0L : lifecycleCursor.droppedEvents();
 
-        boolean sceneGateReady = !hardFailure
-                && localSceneGateReady
+        boolean workersClean = meshWorkers != null
+                && meshWorkers.queueFullRejections() == 0L
+                && meshWorkers.failedJobs() == 0L
+                && meshWorkers.queuedJobs() == 0
+                && meshWorkers.runningJobs() == 0;
+        boolean stagingClean = stagingUploads != null
+                && !stagingUploads.abandonedForDeviceShutdown()
+                && stagingUploads.pendingBatches() == 0
+                && stagingUploads.submittedBytes() == stagingUploads.reclaimedBytes();
+        boolean arenaClean = deviceArena != null
+                && !deviceArena.abandonedForDeviceShutdown()
+                && deviceArena.pendingRetirementBatches() == 0
+                && deviceArena.usedBytes() == 0L
+                && deviceArena.retiredAllocations() == deviceArena.reclaimedAllocations();
+        boolean resourcesClean = deferredReleases.pendingCount() == 0
+                && deferredReleases.retiredCount() == deferredReleases.releasedCount();
+
+        boolean phase3GateReady = !hardFailure
+                && productionWorkerIntegrationReady
+                && localSceneReady
                 && sceneReadyTransitions >= 2L
                 && sceneRebuilds >= 1L
-                && cameraRecenterEvents >= 1L
+                && recordInstallCount >= 3L
+                && sceneWorkerInstalls == recordInstallCount
+                && sceneWorkerCompleted >= sceneWorkerInstalls
+                && synchronousSceneMeshBuilds == 0L
                 && dirtyEvents > 0L
                 && resourceReloadEvents > 0L
                 && droppedLifecycleEvents == 0L
-                && staleSceneRejections == 0L
-                && probeStaleInstallRejections == 0L
-                && (stagingUploads == null || stagingUploads.pendingBatches() == 0)
-                && (deviceArena == null || deviceArena.pendingRetirementBatches() == 0)
-                && deferredReleases.pendingCount() == 0;
-
-        boolean phase3GateReady = !hardFailure
-                && workerGateReady
-                && meshWorkers != null
-                && meshWorkers.queueFullRejections() == 0L
-                && meshWorkers.failedJobs() == 0L
-                && meshWorkers.stolenJobs() > 0L
-                && meshWorkers.cancelledJobs() > 0L
-                && meshWorkers.queuedJobs() == 0
-                && meshWorkers.runningJobs() == 0
-                && (stagingUploads == null || stagingUploads.pendingBatches() == 0)
-                && (deviceArena == null || deviceArena.pendingRetirementBatches() == 0)
-                && deferredReleases.pendingCount() == 0;
+                && unsafeStaleSceneInstalls == 0L
+                && sceneWorkerQueueRejections == 0L
+                && workersClean
+                && stagingClean
+                && arenaClean
+                && resourcesClean;
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev1 frame coordinator closed after {0} frame(s): phase3GateReady={1}, workerGateReady={2}, hardFailure={3}, workerCount={4}, workerQueueCapacity={5}, workerSubmittedJobs={6}, workerStartedJobs={7}, workerCompletedJobs={8}, workerCancelledJobs={9}, workerCancellationRequests={10}, workerStolenJobs={11}, workerQueueFullRejections={12}, workerFailedJobs={13}, workerAcceptedCompleted={14}, workerAcceptedCancelled={15}, workerDeterministicMatches={16}, workerStaleBatches={17}, workerMaxQueueDepth={18}, workerTotalQueueWaitNs={19}, workerMaxQueueWaitNs={20}, workerTotalExecutionNs={21}, workerMaxExecutionNs={22}, workerWorldReadsAfterCapture=0, boundedPriorityQueues=true, workStealing=true, generationTaggedJobs=true, productionSceneInstallStillSynchronous=true, sceneGateReady={23}, center={24}, sceneGeneration={25}, sceneReadyTransitions={26}, sceneRebuilds={27}, recordInstalls={28}, maxLiveRecords={29}, maxAdjacentPairs={30}, cameraRecenterEvents={31}, invalidationBatches={32}, coalescedEvents={33}, dirtyEvents={34}, playerDirtyEvents={35}, chunkLoadEvents={36}, chunkUnloadEvents={37}, worldChangeEvents={38}, resourceReloadEvents={39}, droppedLifecycleEvents={40}, observedReasons={41}, eligibilityScans={42}, eligibilitySkips={43}, uploadAdmissionDeferrals={44}, staleSceneRejections={45}, probeStaleInstallRejections={46}, maxSceneQuads={47}, maxSceneVertexBytes={48}, maxSceneIndexBytes={49}, usefulSubmissions={50}, comparisonDraws={51}, indirectCalls={52}, resourceEpochChecks={53}, retirementBackpressureEvents={54}, retirementRegistrationFailures={55}, nativeGraphicsSeam=false, indexedIndirect=true, stagingSubmittedBytes={56}, stagingReclaimedBytes={57}, stagingBackpressureEvents={58}, pendingUploadBatches={59}, arenaUsedBytes={60}, arenaHighWaterBytes={61}, arenaAllocations={62}, arenaAllocationFailures={63}, arenaRetired={64}, arenaReclaimed={65}, arenaRetirementBackpressureEvents={66}, arenaStaleHandleRejections={67}, arenaFreeSpans={68}, arenaLargestFree={69}, arenaFragmentationPermille={70}, pendingArenaRetirementBatches={71}, retiredResources={72}, releasedResources={73}, pendingRetirements={74}.",
-                frameIndex,
-                phase3GateReady,
-                workerGateReady,
-                hardFailure,
+                "Phase 3 dev2 frame coordinator closed after {0} frame(s): phase3GateReady={1}, productionWorkerIntegrationReady={2}, hardFailure={3}, productionSceneInstallStillSynchronous=false, productionWorkerSceneIntegration=true, renderThreadCaptureOwnership=true, renderThreadGpuOwnership=true, workerWorldReadsAfterCapture=0, synchronousSceneMeshBuilds={4}, workerCount={5}, workerQueueCapacity={6}, workerSubmittedJobs={7}, workerStartedJobs={8}, workerCompletedJobs={9}, workerCancelledJobs={10}, workerCancellationRequests={11}, workerStolenJobs={12}, workerQueueFullRejections={13}, workerFailedJobs={14}, workerMaxQueueDepth={15}, workerTotalQueueWaitNs={16}, workerMaxQueueWaitNs={17}, workerTotalExecutionNs={18}, workerMaxExecutionNs={19}, sceneWorkerSubmitted={20}, sceneWorkerCompleted={21}, sceneWorkerCancelled={22}, sceneWorkerCancellationRequests={23}, sceneWorkerStaleDiscards={24}, sceneWorkerInstalls={25}, sceneWorkerQueueRejections={26}, preinstallInvalidations={27}, maxSimultaneousSceneJobs={28}, sceneInstallAdmissionDeferrals={29}, localSceneReady={30}, center={31}, sceneGeneration={32}, sceneReadyTransitions={33}, sceneRebuilds={34}, recordInstalls={35}, maxLiveRecords={36}, maxAdjacentPairs={37}, cameraRecenterEvents={38}, invalidationBatches={39}, coalescedEvents={40}, dirtyEvents={41}, playerDirtyEvents={42}, chunkLoadEvents={43}, chunkUnloadEvents={44}, worldChangeEvents={45}, resourceReloadEvents={46}, droppedLifecycleEvents={47}, observedReasons={48}, eligibilityScans={49}, eligibilitySkips={50}, unsafeStaleSceneInstalls={51}, maxSceneQuads={52}, maxSceneVertexBytes={53}, maxSceneIndexBytes={54}, usefulSubmissions={55}, comparisonDraws={56}, indirectCalls={57}, resourceEpochChecks={58}, retirementBackpressureEvents={59}, retirementRegistrationFailures={60}, workersClean={61}, stagingClean={62}, arenaClean={63}, resourcesClean={64}, stagingSubmittedBytes={65}, stagingReclaimedBytes={66}, stagingBackpressureEvents={67}, pendingUploadBatches={68}, stagingAbandoned={69}, arenaUsedBytes={70}, arenaHighWaterBytes={71}, arenaAllocations={72}, arenaAllocationFailures={73}, arenaRetired={74}, arenaReclaimed={75}, arenaRetirementBackpressureEvents={76}, arenaStaleHandleRejections={77}, arenaFreeSpans={78}, arenaLargestFree={79}, arenaFragmentationPermille={80}, pendingArenaRetirementBatches={81}, arenaAbandoned={82}, retiredResources={83}, releasedResources={84}, pendingRetirements={85}.",
+                frameIndex, phase3GateReady, productionWorkerIntegrationReady, hardFailure,
+                synchronousSceneMeshBuilds,
                 meshWorkers == null ? 0 : meshWorkers.workerCount(),
                 meshWorkers == null ? 0 : meshWorkers.queueCapacity(),
                 meshWorkers == null ? 0L : meshWorkers.submittedJobs(),
@@ -303,52 +303,29 @@ public final class FrameCoordinator implements AutoCloseable {
                 meshWorkers == null ? 0L : meshWorkers.stolenJobs(),
                 meshWorkers == null ? 0L : meshWorkers.queueFullRejections(),
                 meshWorkers == null ? 0L : meshWorkers.failedJobs(),
-                workerAcceptedCompleted,
-                workerAcceptedCancelled,
-                workerDeterministicMatches,
-                workerStaleBatches,
                 meshWorkers == null ? 0L : meshWorkers.maxObservedQueueDepth(),
                 meshWorkers == null ? 0L : meshWorkers.totalQueueWaitNs(),
                 meshWorkers == null ? 0L : meshWorkers.maxQueueWaitNs(),
                 meshWorkers == null ? 0L : meshWorkers.totalExecutionNs(),
                 meshWorkers == null ? 0L : meshWorkers.maxExecutionNs(),
-                sceneGateReady,
-                center,
-                sceneGeneration,
-                sceneReadyTransitions,
-                sceneRebuilds,
-                recordInstallCount,
-                maxLiveRecords,
-                maxAdjacentPairs,
-                cameraRecenterEvents,
-                invalidationBatches,
-                coalescedEvents,
-                dirtyEvents,
-                playerDirtyEvents,
-                chunkLoadEvents,
-                chunkUnloadEvents,
-                worldChangeEvents,
-                resourceReloadEvents,
-                droppedLifecycleEvents,
-                SectionLifecycleEvents.describeReasons(observedReasonMask),
-                eligibilityScans,
-                eligibilitySkips,
-                uploadAdmissionDeferrals,
-                staleSceneRejections,
-                probeStaleInstallRejections,
-                maxSceneQuads,
-                maxSceneVertexBytes,
-                maxSceneIndexBytes,
-                usefulSubmissions,
-                comparisonDraws,
-                indirectCalls,
-                resourceEpochChecks,
-                retirementBackpressureEvents,
-                retirementRegistrationFailures,
+                sceneWorkerSubmitted, sceneWorkerCompleted, sceneWorkerCancelled,
+                sceneWorkerCancellationRequests, sceneWorkerStaleDiscards, sceneWorkerInstalls,
+                sceneWorkerQueueRejections, preinstallInvalidations, maxSimultaneousSceneJobs,
+                sceneInstallAdmissionDeferrals, localSceneReady, center, sceneGeneration,
+                sceneReadyTransitions, sceneRebuilds, recordInstallCount, maxLiveRecords,
+                maxAdjacentPairs, cameraRecenterEvents, invalidationBatches, coalescedEvents,
+                dirtyEvents, playerDirtyEvents, chunkLoadEvents, chunkUnloadEvents,
+                worldChangeEvents, resourceReloadEvents, droppedLifecycleEvents,
+                SectionLifecycleEvents.describeReasons(observedReasonMask), eligibilityScans,
+                eligibilitySkips, unsafeStaleSceneInstalls, maxSceneQuads, maxSceneVertexBytes,
+                maxSceneIndexBytes, usefulSubmissions, comparisonDraws, indirectCalls,
+                resourceEpochChecks, retirementBackpressureEvents, retirementRegistrationFailures,
+                workersClean, stagingClean, arenaClean, resourcesClean,
                 stagingUploads == null ? 0L : stagingUploads.submittedBytes(),
                 stagingUploads == null ? 0L : stagingUploads.reclaimedBytes(),
                 stagingUploads == null ? 0L : stagingUploads.backpressureEvents(),
                 stagingUploads == null ? 0 : stagingUploads.pendingBatches(),
+                stagingUploads != null && stagingUploads.abandonedForDeviceShutdown(),
                 deviceArena == null ? 0L : deviceArena.usedBytes(),
                 deviceArena == null ? 0L : deviceArena.highWaterBytes(),
                 deviceArena == null ? 0L : deviceArena.successfulAllocations(),
@@ -361,8 +338,8 @@ public final class FrameCoordinator implements AutoCloseable {
                 deviceArena == null ? 0L : deviceArena.largestFreeBlockBytes(),
                 deviceArena == null ? 0 : deviceArena.fragmentationPermille(),
                 deviceArena == null ? 0 : deviceArena.pendingRetirementBatches(),
-                deferredReleases.retiredCount(),
-                deferredReleases.releasedCount(),
+                deviceArena != null && deviceArena.abandonedForDeviceShutdown(),
+                deferredReleases.retiredCount(), deferredReleases.releasedCount(),
                 deferredReleases.pendingCount());
     }
 }
