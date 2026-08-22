@@ -31,10 +31,7 @@ public final class OrdinaryQuadEmissionSafety {
         private long uses;
         private int highWaterCandidates;
 
-        private void beginBuild() {
-            uses++;
-        }
-
+        private void beginBuild() { uses++; }
         private void observeCandidateCount(int candidates) {
             highWaterCandidates = Math.max(highWaterCandidates, candidates);
         }
@@ -126,7 +123,8 @@ public final class OrdinaryQuadEmissionSafety {
             CanonicalFaceRenderKeys renderKeys,
             SectionBakedQuadSnapshot baked,
             BuildScratch scratch) {
-        validateInputs(candidates, renderKeys, baked, scratch);
+        validateSource(candidates, renderKeys, baked);
+        if (scratch == null) throw new NullPointerException("build scratch is required");
         long startNs = System.nanoTime();
         scratch.beginBuild();
 
@@ -150,8 +148,9 @@ public final class OrdinaryQuadEmissionSafety {
             int width = RenderMergeCandidates.width(packed);
             int height = RenderMergeCandidates.height(packed);
             int area = width * height;
-            int representative = candidates.representativeSourceQuad(i);
-            byte classified = classify(representative, RenderMergeCandidates.direction(packed), width, height, baked);
+            int direction = RenderMergeCandidates.direction(packed);
+            byte classified = classify(
+                    candidates.representativeSourceQuad(i), direction, width, height, baked);
             scratch.flags[i] = classified;
 
             if (area == 1) {
@@ -170,7 +169,6 @@ public final class OrdinaryQuadEmissionSafety {
                 ordinarySafe++;
                 safeCovered += area;
                 safeSaved += area - 1;
-                int direction = RenderMergeCandidates.direction(packed);
                 safeCountsByDirection[direction]++;
                 safeFacesByDirection[direction] += area;
             } else {
@@ -232,13 +230,12 @@ public final class OrdinaryQuadEmissionSafety {
         return result;
     }
 
-    private static void validateInputs(
+    private static void validateSource(
             RenderMergeCandidates candidates,
             CanonicalFaceRenderKeys renderKeys,
-            SectionBakedQuadSnapshot baked,
-            BuildScratch scratch) {
-        if (candidates == null || renderKeys == null || baked == null || scratch == null) {
-            throw new NullPointerException("merge candidates, render keys, baked snapshot and scratch are required");
+            SectionBakedQuadSnapshot baked) {
+        if (candidates == null || renderKeys == null || baked == null) {
+            throw new NullPointerException("merge candidates, render keys and baked snapshot are required");
         }
         if (candidates.candidateCount() < 0 || candidates.candidateCount() > MAX_CANDIDATES
                 || candidates.sourceRenderKeyFingerprint() != renderKeys.fingerprint()
@@ -253,7 +250,7 @@ public final class OrdinaryQuadEmissionSafety {
             RenderMergeCandidates candidates,
             CanonicalFaceRenderKeys renderKeys,
             SectionBakedQuadSnapshot baked) {
-        validateInputs(candidates, renderKeys, baked, new BuildScratch());
+        validateSource(candidates, renderKeys, baked);
         if (sourceCandidateFingerprint != candidates.fingerprint()
                 || sourceRenderKeyFingerprint != renderKeys.fingerprint()
                 || sourceBakedFingerprint != baked.fingerprint()
@@ -284,8 +281,9 @@ public final class OrdinaryQuadEmissionSafety {
             int width = RenderMergeCandidates.width(packed);
             int height = RenderMergeCandidates.height(packed);
             int area = width * height;
-            int representative = candidates.representativeSourceQuad(i);
-            byte expected = classify(representative, RenderMergeCandidates.direction(packed), width, height, baked);
+            int direction = RenderMergeCandidates.direction(packed);
+            byte expected = classify(
+                    candidates.representativeSourceQuad(i), direction, width, height, baked);
             if (flags[i] != expected) {
                 throw new IllegalStateException("Dev8 stored classification differs from exact recomputation");
             }
@@ -305,7 +303,6 @@ public final class OrdinaryQuadEmissionSafety {
                 ordinarySafe++;
                 safeCovered += area;
                 safeSaved += area - 1;
-                int direction = RenderMergeCandidates.direction(packed);
                 safeCountsByDirection[direction]++;
                 safeFacesByDirection[direction] += area;
             } else {
@@ -354,33 +351,26 @@ public final class OrdinaryQuadEmissionSafety {
         }
 
         int packedSource = baked.sourceBlock(representative);
-        int sourceX = sourceX(packedSource);
-        int sourceY = sourceY(packedSource);
-        int sourceZ = sourceZ(packedSource);
-        int vertex0 = vertexForCorner(baked, representative, sourceX, sourceY, sourceZ, direction, 0);
-        int vertex1 = vertexForCorner(baked, representative, sourceX, sourceY, sourceZ, direction, 1);
-        int vertex2 = vertexForCorner(baked, representative, sourceX, sourceY, sourceZ, direction, 2);
-        int vertex3 = vertexForCorner(baked, representative, sourceX, sourceY, sourceZ, direction, 3);
-        if (vertex0 < 0 || vertex1 < 0 || vertex2 < 0 || vertex3 < 0) {
+        int x = sourceX(packedSource);
+        int y = sourceY(packedSource);
+        int z = sourceZ(packedSource);
+        int v0 = vertexForCorner(baked, representative, x, y, z, direction, 0);
+        int v1 = vertexForCorner(baked, representative, x, y, z, direction, 1);
+        int v2 = vertexForCorner(baked, representative, x, y, z, direction, 2);
+        int v3 = vertexForCorner(baked, representative, x, y, z, direction, 3);
+        if (v0 < 0 || v1 < 0 || v2 < 0 || v3 < 0) {
             throw new IllegalStateException("Dev8 representative is not an exact canonical four-corner face");
         }
 
-        int color0 = baked.exactArgbColor(representative, vertex0);
-        int color1 = baked.exactArgbColor(representative, vertex1);
-        int color2 = baked.exactArgbColor(representative, vertex2);
-        int color3 = baked.exactArgbColor(representative, vertex3);
-        int light0 = baked.packedLight(representative, vertex0);
-        int light1 = baked.packedLight(representative, vertex1);
-        int light2 = baked.packedLight(representative, vertex2);
-        int light3 = baked.packedLight(representative, vertex3);
-        long uv0 = rawUvPair(baked, representative, vertex0);
-        long uv1 = rawUvPair(baked, representative, vertex1);
-        long uv2 = rawUvPair(baked, representative, vertex2);
-        long uv3 = rawUvPair(baked, representative, vertex3);
-
-        boolean colorSafe = repeatedFieldSafe(width, height, color0, color1, color2, color3);
-        boolean lightSafe = repeatedFieldSafe(width, height, light0, light1, light2, light3);
-        boolean uvSafe = repeatedFieldSafe(width, height, uv0, uv1, uv2, uv3);
+        boolean colorSafe = repeatedFieldSafe(width, height,
+                baked.exactArgbColor(representative, v0), baked.exactArgbColor(representative, v1),
+                baked.exactArgbColor(representative, v2), baked.exactArgbColor(representative, v3));
+        boolean lightSafe = repeatedFieldSafe(width, height,
+                baked.packedLight(representative, v0), baked.packedLight(representative, v1),
+                baked.packedLight(representative, v2), baked.packedLight(representative, v3));
+        boolean uvSafe = repeatedFieldSafe(width, height,
+                rawUvPair(baked, representative, v0), rawUvPair(baked, representative, v1),
+                rawUvPair(baked, representative, v2), rawUvPair(baked, representative, v3));
 
         byte result = 0;
         if (colorSafe) result |= COLOR_INTERPOLATION_SAFE;
@@ -392,16 +382,14 @@ public final class OrdinaryQuadEmissionSafety {
 
     private static boolean repeatedFieldSafe(
             int width, int height, int p0, int p1, int p2, int p3) {
-        boolean uSafe = width == 1 || (p0 == p1 && p2 == p3);
-        boolean vSafe = height == 1 || (p0 == p2 && p1 == p3);
-        return uSafe && vSafe;
+        return (width == 1 || (p0 == p1 && p2 == p3))
+                && (height == 1 || (p0 == p2 && p1 == p3));
     }
 
     private static boolean repeatedFieldSafe(
             int width, int height, long p0, long p1, long p2, long p3) {
-        boolean uSafe = width == 1 || (p0 == p1 && p2 == p3);
-        boolean vSafe = height == 1 || (p0 == p2 && p1 == p3);
-        return uSafe && vSafe;
+        return (width == 1 || (p0 == p1 && p2 == p3))
+                && (height == 1 || (p0 == p2 && p1 == p3));
     }
 
     private static long rawUvPair(SectionBakedQuadSnapshot baked, int quad, int vertex) {
@@ -411,13 +399,8 @@ public final class OrdinaryQuadEmissionSafety {
     }
 
     private static int vertexForCorner(
-            SectionBakedQuadSnapshot baked,
-            int quad,
-            int x,
-            int y,
-            int z,
-            int direction,
-            int targetCorner) {
+            SectionBakedQuadSnapshot baked, int quad, int x, int y, int z,
+            int direction, int targetCorner) {
         int found = -1;
         for (int vertex = 0; vertex < SectionBakedQuadSnapshot.VERTICES_PER_QUAD; vertex++) {
             if (cornerCode(baked, quad, vertex, x, y, z, direction) == targetCorner) {
@@ -429,13 +412,8 @@ public final class OrdinaryQuadEmissionSafety {
     }
 
     private static int cornerCode(
-            SectionBakedQuadSnapshot baked,
-            int quad,
-            int vertex,
-            int x,
-            int y,
-            int z,
-            int direction) {
+            SectionBakedQuadSnapshot baked, int quad, int vertex,
+            int x, int y, int z, int direction) {
         float px = baked.position(quad, vertex, 0);
         float py = baked.position(quad, vertex, 1);
         float pz = baked.position(quad, vertex, 2);
