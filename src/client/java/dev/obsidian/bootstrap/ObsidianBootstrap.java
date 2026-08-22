@@ -73,7 +73,7 @@ public final class ObsidianBootstrap {
             LOG.log(System.Logger.Level.DEBUG, "Backend description: {0}", caps.backendDescription());
         }
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 2 dev5 broader MODEL semantics probe armed. The permanent P2.1 cube oracle remains independent; dev5 calls exact Minecraft 26.2 ModelBlockRenderer on the render thread and freezes vanilla-emitted arbitrary directional/general quads after culling, offsets, AO/light and tint. Accepted blocks must emit only blocks-atlas SOLID/CUTOUT quads; leaves, fluids, block entities, translucent and unsupported-material blocks remain explicit rejects. The pure renderer-owned mesh groups SOLID and CUTOUT into separate public BLOCK/lightmap indexed-indirect comparison passes while vanilla terrain remains active. Event-driven lifecycle remains P2.6 and translucent/fluid terrain remains Phase 6.");
+                "Obsidian Phase 2 dev7 multi-section scene probe armed. A persistent renderer-owned 3x3 horizontal section table reuses the proven dev6 immutable capture, generalized SOLID/CUTOUT build, public BLOCK/lightmap indexed-indirect drawing and completion-gated GPU ownership. Exact vanilla dirtiness within the scene plus the union 5x5 chunk halo, world replacement and successful resource reload drive one lossless validity domain. Upload admission is one record at a time; this correctness milestone rebuilds the whole scene window after relevant invalidation. Vanilla terrain remains active. Production per-section async scheduling and binary greedy meshing remain Phase 3.");
     }
 
     public static void onFrameStart() {

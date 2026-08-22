@@ -4,11 +4,8 @@ import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.obsidian.render.memory.DeviceGeometryArena;
 import dev.obsidian.render.resource.DeferredReleaseQueue;
-import dev.obsidian.render.terrain.BakedSectionMesh;
-import dev.obsidian.render.terrain.RealSectionBroadModelProbe;
-import dev.obsidian.render.terrain.ReferenceFaceMesh;
-import dev.obsidian.render.terrain.SectionBakedQuadSnapshot;
-import dev.obsidian.render.terrain.SectionSnapshot;
+import dev.obsidian.render.terrain.RealMultiSectionSceneProbe;
+import dev.obsidian.render.terrain.SectionLifecycleEvents;
 import dev.obsidian.render.upload.StagingUploadArena;
 import net.minecraft.client.renderer.GameRenderer;
 
@@ -16,9 +13,8 @@ import net.minecraft.client.renderer.GameRenderer;
 public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
     private static final int VALIDATION_STAGING_BYTES = 4 * 1024 * 1024;
-    private static final int VALIDATION_DEVICE_ARENA_BYTES = 4 * 1024 * 1024;
+    private static final int VALIDATION_DEVICE_ARENA_BYTES = 32 * 1024 * 1024;
     private static final long VISUAL_ARM_DELAY_NS = 5_000_000_000L;
-    private static final int VISUAL_COMPARISON_PASSES = 6;
 
     private final FrameTimings cpuFrameTimings = new FrameTimings();
     private final FrameContextRing frameContexts = new FrameContextRing();
@@ -26,35 +22,42 @@ public final class FrameCoordinator implements AutoCloseable {
     private final GpuDevice device;
     private final StagingUploadArena stagingUploads;
     private final DeviceGeometryArena deviceArena;
-    private RealSectionBroadModelProbe sectionProbe;
 
+    private RealMultiSectionSceneProbe sceneProbe;
     private FrameContext activeFrame;
     private long frameIndex;
     private long firstWorldRenderNs;
-    private int completedVisualPasses;
     private boolean firstFrameLogged;
     private boolean visualDelayLogged;
+    private boolean runtimeInstructionsLogged;
+    private boolean hardFailure;
     private boolean closed;
 
     public FrameCoordinator(GpuDevice device) {
         this.device = device;
+
         StagingUploadArena staging = null;
         DeviceGeometryArena arena = null;
-        RealSectionBroadModelProbe probe = null;
         try {
-            staging = new StagingUploadArena(device, () -> "Obsidian Phase 2 dev5 bounded staging ring", VALIDATION_STAGING_BYTES);
-            arena = new DeviceGeometryArena(device, () -> "Obsidian Phase 2 dev5 device geometry arena", VALIDATION_DEVICE_ARENA_BYTES);
-            probe = new RealSectionBroadModelProbe(device, staging, arena, deferredReleases);
+            staging = new StagingUploadArena(
+                    device,
+                    () -> "Obsidian Phase 2 dev7 bounded multi-section staging ring",
+                    VALIDATION_STAGING_BYTES);
+            arena = new DeviceGeometryArena(
+                    device,
+                    () -> "Obsidian Phase 2 dev7 multi-section device geometry arena",
+                    VALIDATION_DEVICE_ARENA_BYTES);
+            sceneProbe = new RealMultiSectionSceneProbe(device, staging, arena, deferredReleases);
         } catch (RuntimeException e) {
-            if (probe != null) try { probe.close(); } catch (RuntimeException ignored) { }
+            if (sceneProbe != null) try { sceneProbe.close(); } catch (RuntimeException ignored) { }
             if (arena != null) try { arena.close(); } catch (RuntimeException ignored) { }
             if (staging != null) try { staging.close(); } catch (RuntimeException ignored) { }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 2 dev5 generalized-section initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 2 dev7 multi-section scene initialization failed; Minecraft will continue for diagnosis.", e);
+            hardFailure = true;
         }
         stagingUploads = staging;
         deviceArena = arena;
-        sectionProbe = probe;
     }
 
     public void beginFrame() {
@@ -62,11 +65,18 @@ public final class FrameCoordinator implements AutoCloseable {
         if (closed) return;
         frameIndex++;
         activeFrame = frameContexts.begin(frameIndex, System.nanoTime());
+
+        if (sceneProbe != null) {
+            sceneProbe.beginFrame(frameIndex);
+            if (sceneProbe.hardFailure()) hardFailure = true;
+        }
+
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 2 dev5 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, stagingCapacity={2}, deviceArenaCapacity={3}; dev5 captures exact vanilla-emitted arbitrary MODEL quads and compares deterministic SOLID+CUTOUT BLOCK-format ranges while the permanent P2.1 cube oracle remains independent.",
-                    frameContexts.size(), cpuFrameTimings.capacity(),
+                    "Phase 2 dev7 frame coordinator active. contextSlots={0}, CPU timing ring capacity={1}, stagingCapacity={2}, deviceArenaCapacity={3}; persistent 3x3 section scene records reuse the proven P2.6 generation-safe drawable path with whole-window invalidation and bounded one-record upload admission.",
+                    frameContexts.size(),
+                    cpuFrameTimings.capacity(),
                     stagingUploads == null ? 0 : stagingUploads.capacityBytes(),
                     deviceArena == null ? 0L : deviceArena.capacityBytes());
         }
@@ -74,49 +84,51 @@ public final class FrameCoordinator implements AutoCloseable {
 
     public void afterWorldRender(GameRenderer renderer) {
         RenderSystem.assertOnRenderThread();
-        if (closed || sectionProbe == null) return;
+        if (closed || hardFailure || sceneProbe == null || stagingUploads == null || deviceArena == null) return;
+
         long nowNs = System.nanoTime();
         if (firstWorldRenderNs == 0L) firstWorldRenderNs = nowNs;
-        if (completedVisualPasses == 0 && nowNs - firstWorldRenderNs < VISUAL_ARM_DELAY_NS) {
+        if (nowNs - firstWorldRenderNs < VISUAL_ARM_DELAY_NS) {
             if (!visualDelayLogged) {
                 visualDelayLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 2 dev5 SOLID+CUTOUT comparison is armed but intentionally delayed for 5 seconds after first world render so the human validation window is not consumed during world entry.");
+                        "Phase 2 dev7 multi-section comparison is intentionally delayed for 5 seconds after first world render so startup dirtiness/resource activity settles before scene ownership is admitted.");
             }
             return;
         }
-        sectionProbe.afterWorldRender(renderer, frameIndex);
+
+        sceneProbe.afterWorldRender(renderer, frameIndex);
+        if (sceneProbe.hardFailure()) {
+            hardFailure = true;
+            return;
+        }
+
+        if (!runtimeInstructionsLogged
+                && sceneProbe.state() == RealMultiSectionSceneProbe.State.LIVE
+                && sceneProbe.sceneReadyTransitions() > 0L) {
+            runtimeInstructionsLogged = true;
+            LOG.log(System.Logger.Level.INFO,
+                    "Phase 2 dev7 runtime gate: inspect the simultaneous neighboring section overlay for missing/duplicate borders while moving and turning. Break/place blocks inside the visible 3x3 scene, perform F3+T, then move far enough to force at least one scene recenter. A whole-window blank interval during rebuild is allowed; stale or overlapping old geometry is not. Chunk load/unload counters remain diagnostic here because P2.6 separately owns the mandatory exact chunk-lifecycle gate.");
+        }
     }
 
     public void endFrame() {
         RenderSystem.assertOnRenderThread();
         if (closed) return;
+
         FrameContext context = activeFrame;
         activeFrame = null;
         if (context != null) {
             long duration = context.finish(System.nanoTime());
             if (duration > 0L) cpuFrameTimings.record(duration);
         }
+
         deferredReleases.poll();
         if (stagingUploads != null) stagingUploads.pollReclaims();
         if (deviceArena != null) deviceArena.pollRetirements();
-        if (sectionProbe != null) {
-            sectionProbe.poll(frameIndex);
-            if (sectionProbe.state() == RealSectionBroadModelProbe.State.VERIFIED
-                    && completedVisualPasses < VISUAL_COMPARISON_PASSES) {
-                completedVisualPasses++;
-                if (completedVisualPasses < VISUAL_COMPARISON_PASSES) {
-                    sectionProbe.close();
-                    sectionProbe = new RealSectionBroadModelProbe(device, stagingUploads, deviceArena, deferredReleases);
-                    LOG.log(System.Logger.Level.INFO,
-                            "Phase 2 dev5 generalized comparison pass {0}/{1} completed; re-arming immediately so arbitrary geometry, SOLID/CUTOUT layer identity, tint, light and AO remain observable across fresh captures.",
-                            completedVisualPasses, VISUAL_COMPARISON_PASSES);
-                } else {
-                    LOG.log(System.Logger.Level.INFO,
-                            "Phase 2 dev5 sustained generalized comparison completed all {0} pass(es); awaiting shutdown/runtime review.",
-                            VISUAL_COMPARISON_PASSES);
-                }
-            }
+        if (sceneProbe != null) {
+            sceneProbe.endFrame(frameIndex);
+            if (sceneProbe.hardFailure()) hardFailure = true;
         }
     }
 
@@ -126,8 +138,9 @@ public final class FrameCoordinator implements AutoCloseable {
     public int pendingRetirements() { return deferredReleases.pendingCount(); }
     public int pendingUploadBatches() { return stagingUploads == null ? 0 : stagingUploads.pendingBatches(); }
     public int pendingArenaRetirementBatches() { return deviceArena == null ? 0 : deviceArena.pendingRetirementBatches(); }
-    public RealSectionBroadModelProbe.State sectionProbeState() {
-        return sectionProbe == null ? RealSectionBroadModelProbe.State.FAILED : sectionProbe.state();
+    public RealMultiSectionSceneProbe.State sceneProbeState() {
+        if (sceneProbe != null) return sceneProbe.state();
+        return hardFailure ? RealMultiSectionSceneProbe.State.FAILED : RealMultiSectionSceneProbe.State.WAITING_WORLD;
     }
 
     @Override
@@ -136,55 +149,150 @@ public final class FrameCoordinator implements AutoCloseable {
         if (closed) return;
         closed = true;
 
-        RealSectionBroadModelProbe.State stateBeforeClose =
-                sectionProbe == null ? RealSectionBroadModelProbe.State.FAILED : sectionProbe.state();
-        SectionSnapshot snapshot = sectionProbe == null ? null : sectionProbe.snapshot();
-        ReferenceFaceMesh reference = sectionProbe == null ? null : sectionProbe.referenceMesh();
-        SectionBakedQuadSnapshot baked = sectionProbe == null ? null : sectionProbe.bakedSnapshot();
-        BakedSectionMesh drawable = sectionProbe == null ? null : sectionProbe.drawableMesh();
-        boolean pipelineValid = sectionProbe != null && sectionProbe.pipelineValid();
-        long resourceChecks = sectionProbe == null ? 0L : sectionProbe.resourceEpochChecks();
-        long useful = sectionProbe == null ? 0L : sectionProbe.usefulSubmissions();
-        long draws = sectionProbe == null ? 0L : sectionProbe.drawSubmissions();
-        long indirectCalls = sectionProbe == null ? 0L : sectionProbe.indirectCalls();
+        RealMultiSectionSceneProbe probe = sceneProbe;
+        long usefulSubmissions = 0L;
+        long comparisonDraws = 0L;
+        long indirectCalls = 0L;
+        long resourceEpochChecks = 0L;
+        long retirementBackpressureEvents = 0L;
+        long retirementRegistrationFailures = 0L;
+        long probeStaleInstallRejections = 0L;
+        long sceneReadyTransitions = 0L;
+        long sceneRebuilds = 0L;
+        long recordInstallCount = 0L;
+        long cameraRecenterEvents = 0L;
+        long invalidationBatches = 0L;
+        long coalescedEvents = 0L;
+        long eligibilityScans = 0L;
+        long eligibilitySkips = 0L;
+        long uploadAdmissionDeferrals = 0L;
+        long staleSceneRejections = 0L;
+        int observedReasonMask = 0;
+        int maxLiveRecords = 0;
+        int maxAdjacentPairs = 0;
+        long maxSceneQuads = 0L;
+        long maxSceneVertexBytes = 0L;
+        long maxSceneIndexBytes = 0L;
+        SectionLifecycleEvents.Cursor lifecycleCursor = null;
+        long sceneGeneration = 0L;
+        String center = "unbound";
+        boolean localSceneGateReady = false;
 
-        if (sectionProbe != null) sectionProbe.close();
+        if (probe != null) {
+            usefulSubmissions = probe.usefulSubmissions();
+            comparisonDraws = probe.drawSubmissions();
+            indirectCalls = probe.indirectCalls();
+            resourceEpochChecks = probe.resourceEpochChecks();
+            retirementBackpressureEvents = probe.retirementBackpressureEvents();
+            retirementRegistrationFailures = probe.retirementRegistrationFailures();
+            probeStaleInstallRejections = probe.probeStaleInstallRejections();
+            sceneReadyTransitions = probe.sceneReadyTransitions();
+            sceneRebuilds = probe.sceneRebuilds();
+            recordInstallCount = probe.recordInstallCount();
+            cameraRecenterEvents = probe.cameraRecenterEvents();
+            invalidationBatches = probe.invalidationBatches();
+            coalescedEvents = probe.coalescedEvents();
+            eligibilityScans = probe.eligibilityScans();
+            eligibilitySkips = probe.eligibilitySkips();
+            uploadAdmissionDeferrals = probe.uploadAdmissionDeferrals();
+            staleSceneRejections = probe.staleSceneRejections();
+            observedReasonMask = probe.observedReasonMask();
+            maxLiveRecords = probe.maxLiveRecords();
+            maxAdjacentPairs = probe.maxAdjacentPairs();
+            maxSceneQuads = probe.maxSceneQuads();
+            maxSceneVertexBytes = probe.maxSceneVertexBytes();
+            maxSceneIndexBytes = probe.maxSceneIndexBytes();
+            lifecycleCursor = probe.lifecycleCursor();
+            sceneGeneration = probe.sceneGeneration();
+            center = probe.centerKnown()
+                    ? "(" + probe.centerSectionX() + "," + probe.centerSectionY() + "," + probe.centerSectionZ() + ")"
+                    : "unbound";
+            localSceneGateReady = probe.sceneGateReady();
+            probe.close();
+            sceneProbe = null;
+        }
+
         if (stagingUploads != null) stagingUploads.close();
         if (deviceArena != null) deviceArena.close();
         deferredReleases.close();
 
+        long dirtyEvents = lifecycleCursor == null ? 0L : lifecycleCursor.sectionDirtyEvents();
+        long playerDirtyEvents = lifecycleCursor == null ? 0L : lifecycleCursor.playerDirtyEvents();
+        long chunkLoadEvents = lifecycleCursor == null ? 0L : lifecycleCursor.chunkLoadEvents();
+        long chunkUnloadEvents = lifecycleCursor == null ? 0L : lifecycleCursor.chunkUnloadEvents();
+        long worldChangeEvents = lifecycleCursor == null ? 0L : lifecycleCursor.worldChangeEvents();
+        long resourceReloadEvents = lifecycleCursor == null ? 0L : lifecycleCursor.resourceReloadEvents();
+        long droppedLifecycleEvents = lifecycleCursor == null ? 0L : lifecycleCursor.droppedEvents();
+
+        boolean sceneGateReady = !hardFailure
+                && localSceneGateReady
+                && sceneReadyTransitions >= 2L
+                && sceneRebuilds >= 1L
+                && cameraRecenterEvents >= 1L
+                && dirtyEvents > 0L
+                && resourceReloadEvents > 0L
+                && droppedLifecycleEvents == 0L
+                && staleSceneRejections == 0L
+                && probeStaleInstallRejections == 0L
+                && (stagingUploads == null || stagingUploads.pendingBatches() == 0)
+                && (deviceArena == null || deviceArena.pendingRetirementBatches() == 0)
+                && deferredReleases.pendingCount() == 0;
+
         LOG.log(System.Logger.Level.INFO,
-                "Phase 2 dev5 frame coordinator closed after {0} frame(s): generalizedSectionResult={1}, section=({2},{3},{4}), sampledCells={5}, interiorAir={6}, interiorSupported={7}, interiorUnsupported={8}, cubeReferenceFaces={9}, modelBlocksScanned={10}, acceptedBlocks={11}, noVisibleBlocks={12}, rejectedBlocks={13}, rejectedLeaves={14}, rejectedFluid={15}, rejectedBlockEntity={16}, rejectedMissingModel={17}, rejectedMaterial={18}, rejectedTranslucent={19}, rejectedAtlas={20}, generalizedQuads={21}, solidQuads={22}, cutoutQuads={23}, materialCount={24}, tintedQuads={25}, blockLightRange={26}..{27}, skyLightRange={28}..{29}, snapshotFingerprint={30}, cubeReferenceFingerprint={31}, generalizedFingerprint={32}, drawableFingerprint={33}, drawableVertices={34}, drawableIndices={35}, drawableVertexBytes={36}, drawableIndexBytes={37}, pipelineValid={38}, resourceEpochChecks={39}, usefulSubmissions={40}, comparisonDraws={41}, indirectCalls={42}, completedVisualPasses={43}, profilerOnlySubmissions=0, worldReadsAfterGeneralizedCapture=0, cubeOraclePreserved=true, oneBlockHaloSufficientForCapturedCullingLightSamples=true, nativeGraphicsSeam=false, indexedIndirect=true, textured=true, blockVertexFormat=true, blocksAtlasBound=true, lightmapBound=true, solidPipeline=true, cutoutPipeline=true, cutoutAlphaThreshold=0.5, comparisonColorScale=3/4, comparisonFaceOffset=1/512, vanillaTerrainActive=true, stagingSubmittedBytes={44}, stagingReclaimedBytes={45}, stagingHighWater={46}, stagingBackpressureEvents={47}, pendingUploadBatches={48}, arenaUsedBytes={49}, arenaHighWater={50}, arenaAllocations={51}, arenaAllocationFailures={52}, arenaRetired={53}, arenaReclaimed={54}, arenaRetirementBackpressureEvents={55}, arenaStaleHandleRejections={56}, arenaFreeSpans={57}, arenaLargestFree={58}, arenaFragmentationPermille={59}, pendingArenaRetirementBatches={60}, retiredResources={61}, releasedResources={62}, pendingRetirements={63}.",
-                frameIndex, stateBeforeClose,
-                snapshot == null ? 0 : snapshot.sectionX(), snapshot == null ? 0 : snapshot.sectionY(), snapshot == null ? 0 : snapshot.sectionZ(),
-                snapshot == null ? 0 : snapshot.sampledCells(), snapshot == null ? 0 : snapshot.interiorAirCells(),
-                snapshot == null ? 0 : snapshot.interiorSupportedCells(), snapshot == null ? 0 : snapshot.interiorUnsupportedCells(),
-                reference == null ? 0 : reference.faceCount(), baked == null ? 0 : baked.modelBlocksScanned(),
-                baked == null ? 0 : baked.acceptedBlocks(), baked == null ? 0 : baked.noVisibleQuadBlocks(),
-                baked == null ? 0 : baked.rejectedBlocks(), baked == null ? 0 : baked.rejectedLeavesBlocks(),
-                baked == null ? 0 : baked.rejectedFluidBlocks(), baked == null ? 0 : baked.rejectedBlockEntityBlocks(),
-                baked == null ? 0 : baked.rejectedMissingModelBlocks(), baked == null ? 0 : baked.rejectedMaterialBlocks(),
-                baked == null ? 0 : baked.rejectedTranslucentBlocks(), baked == null ? 0 : baked.rejectedAtlasBlocks(),
-                baked == null ? 0 : baked.quadCount(), baked == null ? 0 : baked.solidQuads(), baked == null ? 0 : baked.cutoutQuads(),
-                baked == null ? 0 : baked.materialCount(), baked == null ? 0 : baked.tintedQuads(),
-                baked == null ? 0 : baked.minBlockLight(), baked == null ? 0 : baked.maxBlockLight(),
-                baked == null ? 0 : baked.minSkyLight(), baked == null ? 0 : baked.maxSkyLight(),
-                snapshot == null ? "none" : Long.toUnsignedString(snapshot.fingerprint()),
-                reference == null ? "none" : Long.toUnsignedString(reference.fingerprint()),
-                baked == null ? "none" : Long.toUnsignedString(baked.fingerprint()),
-                drawable == null ? "none" : Long.toUnsignedString(drawable.fingerprint()),
-                drawable == null ? 0 : drawable.vertexCount(), drawable == null ? 0 : drawable.indexCount(),
-                drawable == null ? 0 : drawable.vertexBytes(), drawable == null ? 0 : drawable.indexBytes(),
-                pipelineValid, resourceChecks, useful, draws, indirectCalls, completedVisualPasses,
-                stagingUploads == null ? 0L : stagingUploads.submittedBytes(), stagingUploads == null ? 0L : stagingUploads.reclaimedBytes(),
-                stagingUploads == null ? 0L : stagingUploads.highWaterBytes(), stagingUploads == null ? 0L : stagingUploads.backpressureEvents(),
-                stagingUploads == null ? 0 : stagingUploads.pendingBatches(), deviceArena == null ? 0L : deviceArena.usedBytes(),
-                deviceArena == null ? 0L : deviceArena.highWaterBytes(), deviceArena == null ? 0L : deviceArena.successfulAllocations(),
-                deviceArena == null ? 0L : deviceArena.allocationFailures(), deviceArena == null ? 0L : deviceArena.retiredAllocations(),
-                deviceArena == null ? 0L : deviceArena.reclaimedAllocations(), deviceArena == null ? 0L : deviceArena.retirementBackpressureEvents(),
-                deviceArena == null ? 0L : deviceArena.staleHandleRejections(), deviceArena == null ? 0 : deviceArena.freeSpanCount(),
-                deviceArena == null ? 0L : deviceArena.largestFreeBlockBytes(), deviceArena == null ? 0 : deviceArena.fragmentationPermille(),
-                deviceArena == null ? 0 : deviceArena.pendingRetirementBatches(), deferredReleases.retiredCount(),
-                deferredReleases.releasedCount(), deferredReleases.pendingCount());
+                "Phase 2 dev7 frame coordinator closed after {0} frame(s): sceneGateReady={1}, hardFailure={2}, center={3}, sceneGeneration={4}, sceneReadyTransitions={5}, sceneRebuilds={6}, recordInstalls={7}, maxLiveRecords={8}, maxAdjacentPairs={9}, cameraRecenterEvents={10}, invalidationBatches={11}, coalescedEvents={12}, dirtyEvents={13}, playerDirtyEvents={14}, chunkLoadEvents={15}, chunkUnloadEvents={16}, worldChangeEvents={17}, resourceReloadEvents={18}, droppedLifecycleEvents={19}, observedReasons={20}, eligibilityScans={21}, eligibilitySkips={22}, uploadAdmissionDeferrals={23}, staleSceneRejections={24}, probeStaleInstallRejections={25}, maxSceneQuads={26}, maxSceneVertexBytes={27}, maxSceneIndexBytes={28}, usefulSubmissions={29}, comparisonDraws={30}, indirectCalls={31}, resourceEpochChecks={32}, retirementBackpressureEvents={33}, retirementRegistrationFailures={34}, wholeWindowInvalidation=true, boundedOneRecordAdmission=true, sceneRecordCapacity=9, chunkLifecycleCountersDiagnostic=true, nativeGraphicsSeam=false, indexedIndirect=true, stagingSubmittedBytes={35}, stagingReclaimedBytes={36}, stagingBackpressureEvents={37}, pendingUploadBatches={38}, arenaUsedBytes={39}, arenaHighWaterBytes={40}, arenaAllocations={41}, arenaAllocationFailures={42}, arenaRetired={43}, arenaReclaimed={44}, arenaRetirementBackpressureEvents={45}, arenaStaleHandleRejections={46}, arenaFreeSpans={47}, arenaLargestFree={48}, arenaFragmentationPermille={49}, pendingArenaRetirementBatches={50}, retiredResources={51}, releasedResources={52}, pendingRetirements={53}.",
+                frameIndex,
+                sceneGateReady,
+                hardFailure,
+                center,
+                sceneGeneration,
+                sceneReadyTransitions,
+                sceneRebuilds,
+                recordInstallCount,
+                maxLiveRecords,
+                maxAdjacentPairs,
+                cameraRecenterEvents,
+                invalidationBatches,
+                coalescedEvents,
+                dirtyEvents,
+                playerDirtyEvents,
+                chunkLoadEvents,
+                chunkUnloadEvents,
+                worldChangeEvents,
+                resourceReloadEvents,
+                droppedLifecycleEvents,
+                SectionLifecycleEvents.describeReasons(observedReasonMask),
+                eligibilityScans,
+                eligibilitySkips,
+                uploadAdmissionDeferrals,
+                staleSceneRejections,
+                probeStaleInstallRejections,
+                maxSceneQuads,
+                maxSceneVertexBytes,
+                maxSceneIndexBytes,
+                usefulSubmissions,
+                comparisonDraws,
+                indirectCalls,
+                resourceEpochChecks,
+                retirementBackpressureEvents,
+                retirementRegistrationFailures,
+                stagingUploads == null ? 0L : stagingUploads.submittedBytes(),
+                stagingUploads == null ? 0L : stagingUploads.reclaimedBytes(),
+                stagingUploads == null ? 0L : stagingUploads.backpressureEvents(),
+                stagingUploads == null ? 0 : stagingUploads.pendingBatches(),
+                deviceArena == null ? 0L : deviceArena.usedBytes(),
+                deviceArena == null ? 0L : deviceArena.highWaterBytes(),
+                deviceArena == null ? 0L : deviceArena.successfulAllocations(),
+                deviceArena == null ? 0L : deviceArena.allocationFailures(),
+                deviceArena == null ? 0L : deviceArena.retiredAllocations(),
+                deviceArena == null ? 0L : deviceArena.reclaimedAllocations(),
+                deviceArena == null ? 0L : deviceArena.retirementBackpressureEvents(),
+                deviceArena == null ? 0L : deviceArena.staleHandleRejections(),
+                deviceArena == null ? 0 : deviceArena.freeSpanCount(),
+                deviceArena == null ? 0L : deviceArena.largestFreeBlockBytes(),
+                deviceArena == null ? 0 : deviceArena.fragmentationPermille(),
+                deviceArena == null ? 0 : deviceArena.pendingRetirementBatches(),
+                deferredReleases.retiredCount(),
+                deferredReleases.releasedCount(),
+                deferredReleases.pendingCount());
     }
 }

@@ -104,7 +104,33 @@ public final class SectionSnapshot {
         if (sectionY == Integer.MIN_VALUE) {
             return null;
         }
+        return tryCaptureSection(level, sectionX, sectionY, sectionZ);
+    }
 
+    /**
+     * Captures one exact section identity for P2.6 lifecycle rebuilds. The
+     * complete 3x3 chunk neighborhood must already be FULL; this never asks
+     * Minecraft to generate or synchronously load missing chunks.
+     */
+    public static SectionSnapshot tryCaptureSection(int sectionX, int sectionY, int sectionZ) {
+        RenderSystem.assertOnRenderThread();
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) {
+            return null;
+        }
+        return tryCaptureSection(level, sectionX, sectionY, sectionZ);
+    }
+
+    private static SectionSnapshot tryCaptureSection(
+            ClientLevel level,
+            int sectionX,
+            int sectionY,
+            int sectionZ) {
+        if (sectionY < level.getMinSectionY() || sectionY >= level.getMaxSectionY()) {
+            return null;
+        }
+
+        ClientChunkCache source = level.getChunkSource();
         LevelChunk[][] chunks = new LevelChunk[3][3];
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
@@ -288,39 +314,13 @@ public final class SectionSnapshot {
         return stateIds[indexRaw(storageCoord(localX), storageCoord(localY), storageCoord(localZ))];
     }
 
-    public int sectionX() {
-        return sectionX;
-    }
-
-    public int sectionY() {
-        return sectionY;
-    }
-
-    public int sectionZ() {
-        return sectionZ;
-    }
-
-    public long fingerprint() {
-        return fingerprint;
-    }
-
-    public int interiorAirCells() {
-        return interiorAirCells;
-    }
-
-    public int interiorSupportedCells() {
-        return interiorSupportedCells;
-    }
-
-    public int interiorUnsupportedCells() {
-        return interiorUnsupportedCells;
-    }
-
-    public int sampledCells() {
-        return sampledCells;
-    }
-
-    public long captureTimeNs() {
-        return captureTimeNs;
-    }
+    public int sectionX() { return sectionX; }
+    public int sectionY() { return sectionY; }
+    public int sectionZ() { return sectionZ; }
+    public long fingerprint() { return fingerprint; }
+    public int interiorAirCells() { return interiorAirCells; }
+    public int interiorSupportedCells() { return interiorSupportedCells; }
+    public int interiorUnsupportedCells() { return interiorUnsupportedCells; }
+    public int sampledCells() { return sampledCells; }
+    public long captureTimeNs() { return captureTimeNs; }
 }
