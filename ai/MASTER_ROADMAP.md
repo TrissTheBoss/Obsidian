@@ -1,6 +1,6 @@
 # Obsidian Master Roadmap and Product Plan
 
-Last materially revised: 2026-08-22  
+Last materially revised: 2026-08-23  
 Roadmap schema: v1  
 Canonical repository: `TrissTheBoss/Obsidian`
 
@@ -240,28 +240,35 @@ Reference dev5 runtime:
 
 P3.3 did not emit greedy rectangles to the GPU.
 
-#### P3.4 — Render-correct merge key — ACTIVE
+#### P3.4 — Render-correct merge and emission semantics — ACTIVE
 
-Current implementation slice: `0.3.0-phase3-dev6`, branch `phase3/render-correct-merge-key`, draft PR #38. A-0112 freezes the dev6 contract.
+Goal: move from topology-only greedy rectangles to render-correct merge candidates and eventually GPU-emitted greedy geometry without weakening exact material/UV/color/light/model semantics.
 
-Goal: determine whether topology-adjacent canonical faces are truly render-equivalent using exact renderer-owned baked truth. Never merge merely because block/state IDs match.
+**dev6 — canonical render-key sidecar — COMPLETE.** Validated as `0.3.0-phase3-dev6`; PR #38 merge `967c4511cd11cd721886feae6d146f4412790a6d`.
 
-Dev6 correctness-first sidecar contract:
+Dev6 maps a canonical face only when exactly one baked SOLID/CUTOUT quad from the same source block is proven to be the exact full unit-cube face for that direction. Exact render equivalence includes direction, layer, full material/sprite/tint/shade/emission/animation identity, corner/winding signature, raw per-corner UV bits, exact ARGB and packed light. Arbitrary generalized geometry remains passthrough. Runtime closure proved `renderMergeKeyEvidenceReady=true`, exact accounting/determinism, clean lifetime and exit 0.
 
-- consume immutable `SectionSnapshot`, P3.2 visibility and exact `SectionBakedQuadSnapshot`;
-- map a canonical face only when exactly one baked SOLID/CUTOUT quad from the same source block is proven to be the exact full unit-cube face for that direction;
-- explicitly map Minecraft `Direction` to P3.2 direction order;
-- reject offset, partial, inset, rotated/non-axis-aligned, duplicate-corner and ambiguous generalized geometry;
-- compare exact direction, layer, full captured material/sprite/tint/shade/emission/animation identity, corner-order/winding signature, raw per-corner UV bits, exact ARGB color and packed light;
-- keep zero-match, multi-match and arbitrary generalized baked geometry on exact passthrough;
-- retain a fixed 24,576-entry `short` mapping = exactly 49,152 bytes/build;
-- measure unique/unmapped/ambiguous faces, canonical/ignored baked quads and same/different/ineligible adjacency comparisons;
-- deterministically audit duplicate sidecar builds;
-- keep `BakedSectionMesh` as GPU drawable.
+**dev7 — render-key-aware merge candidates — COMPLETE.** Validated as `0.3.0-phase3-dev7`; PR #39 merge `cec4ecb2432ec92f17a94a358895de6c2f21257e`.
 
-Dev6 runtime gate: `renderMergeKeyEvidenceReady=true` in addition to all prior Phase 3/P3.2/P3.3 gates. It requires exact visible-face accounting, nonzero unique mappings, nonzero recognized canonical quads, both same-key and different-key adjacency observations, exact retained-byte accounting, matching determinism audits and clean lifetime shutdown.
+`RenderMergeCandidates` partitions the complete dev6-eligible canonical face set directly into deterministic same-render-key rectangles; P3.3 topology boundaries are not mandatory candidate boundaries. Retained payload is 6 logical bytes/candidate. Reference runtime proved 85,880 candidates covering exactly 95,805 eligible faces with 23,617 canonical passthrough faces, 7,318 multi-face candidates and 9,925 saved faces (10.3%), exact `263/263` coverage audits, `6/6` determinism, clean lifetime and exit 0.
 
-Dev6 explicitly keeps `greedyRectangleGpuEmission=false` and `renderCorrectMergeKeyComplete=false`. Any later P3.4 step that changes emitted GPU geometry requires renewed human visual validation.
+Dev7 deliberately did not change GPU geometry. Same per-face payload equality is necessary but not sufficient proof that one four-vertex large quad reproduces repeated unit-face interpolation or atlas-UV resets.
+
+**dev8 — ordinary four-vertex emission-safety classifier — ACTIVE.** Version `0.3.0-phase3-dev8`, branch `phase3/rectangle-emission-safety`, draft PR #40.
+
+A-0122 freezes the exact dev8 contract. For a repeated four-corner payload `P[0..3]`, a merged width requires `P0==P1 && P2==P3`; a merged height requires `P0==P2 && P1==P3`. Apply independently to exact ARGB, packed light and raw atlas `(u,v)` bits. Both-axis merges therefore require a constant four-corner field for each attribute.
+
+`OrdinaryQuadEmissionSafety` retains one flag byte/candidate and classifies color-safe, light-safe, UV-safe and combined ordinary-attribute-safe state. Workers retain the sidecar and report exact safe/unsafe distributions, per-direction accounting, one-byte retained accounting, primary classification audits and deterministic duplicate audits. `ordinaryQuadEmissionSafetyEvidenceReady=true` is the dev8 runtime gate in addition to all prior gates.
+
+A zero ordinary-safe multi-face result is valid evidence; the gate must not manufacture a useful ordinary-quad subset. If atlas UV reset dominates, the next P3.4 slice should design/prove a sprite-local repeat-aware representation rather than stretching atlas UVs or weakening correctness.
+
+Through dev8:
+
+- `greedyRectangleGpuEmission=false`;
+- `renderCorrectMergeKeyComplete=false`;
+- `BakedSectionMesh` remains the authoritative GPU drawable.
+
+Any later P3.4 slice that changes emitted GPU geometry requires renewed explicit human visual validation. A future emission slice must also preserve later P3.6 T-junction/rasterization policy obligations rather than treating attribute-safety alone as final proof.
 
 #### P3.5 — Border/halo correctness — PLANNED
 
@@ -331,7 +338,10 @@ Configuration/UI polish, presets/migration, crash diagnostics, benchmark export,
 - [COMPLETE] Permanent independent reference oracle.
 - [COMPLETE] Production binary/bitmask visibility foundation.
 - [COMPLETE foundation] Deterministic topology rectangle extraction.
-- [ACTIVE] Render-correct canonical face merge-key foundation.
+- [COMPLETE foundation] Canonical render-key classification.
+- [COMPLETE foundation] Render-key-aware merge-candidate partition.
+- [ACTIVE] Ordinary four-vertex emission-safety classification.
+- [PLANNED] Repeat-aware emission representation if dev8 evidence requires it.
 - [PLANNED] Key-aware production greedy geometry emission.
 - [PLANNED] Full production opaque/cutout terrain replacement.
 - [COMPLETE foundation] Supported lighting/AO/tint/material/UV capture truth.
@@ -437,6 +447,16 @@ Newer durable decisions override stale roadmap text until synchronized. Always p
 
 ## 16. Roadmap revision log
 
+### 2026-08-23 — P3.4 dev6/dev7 completion and dev8 activation
+
+- completed dev6 canonical render-key sidecar via PR #38 merge `967c4511cd11cd721886feae6d146f4412790a6d`;
+- completed dev7 render-key-aware merge-candidate sidecar via PR #39 merge `cec4ecb2432ec92f17a94a358895de6c2f21257e`;
+- recorded dev7 real-terrain 95,805 eligible faces -> 85,880 candidates, 7,318 multi-face candidates and 9,925 saved faces (10.3%), exact coverage/determinism and clean lifetime;
+- source inspection proved same face key is not sufficient for one ordinary four-vertex rectangle because per-cell color/light interpolation and atlas UV resets can differ;
+- activated dev8 ordinary four-vertex emission-safety classification on `phase3/rectangle-emission-safety`, draft PR #40;
+- froze exact repeated-field continuity equations and allowed zero ordinary-safe multi-face candidates as a valid measured outcome;
+- kept `BakedSectionMesh` authoritative and greedy GPU emission disabled.
+
 ### 2026-08-22 — P3.3 completion / P3.4 activation
 
 - completed and merged P3.3 greedy rectangle extraction via PR #37 merge `34caa19a9de70ba8e0395a2992180f3a24a3f7aa`;
@@ -473,7 +493,7 @@ Created the canonical master roadmap and formal governance model.
 - P3.1: COMPLETE through `0.3.0-phase3-dev3`.
 - P3.2: COMPLETE through `0.3.0-phase3-dev4`, PR #36.
 - P3.3: COMPLETE through `0.3.0-phase3-dev5`, PR #37 merge `34caa19a9de70ba8e0395a2992180f3a24a3f7aa`.
-- P3.4: ACTIVE — dev6 render-correct canonical face merge-key sidecar, draft PR #38; no greedy GPU geometry is claimed yet.
+- P3.4: ACTIVE — dev6 and dev7 complete; dev8 ordinary four-vertex emission-safety classifier is active on draft PR #40; no greedy GPU geometry is claimed yet.
 - P3.5-P3.9 remain PLANNED/EXPERIMENTAL as marked.
 - Phases 4-12 retain their planned order/scope.
 
