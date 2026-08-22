@@ -7,9 +7,9 @@ Last updated: 2026-08-23
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
 - Product phase: **Phase 3 — production asynchronous CPU mesher / greedy meshing**.
-- Active milestone: **P3.4 dev9 — repeat-aware UV descriptor / representability sidecar**.
-- Target branch: `phase3/repeat-aware-uv-descriptor`.
-- Target version: `0.3.0-phase3-dev9`.
+- Active milestone: **P3.4 dev10 — repeat-aware transport/sampling correctness proof**.
+- Dev10 target branch: to be cut from synchronized `main`.
+- Dev10 target version: `0.3.0-phase3-dev10`.
 - Public release intent: keep the existing public checkpoint until a separate release decision.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
 
@@ -24,6 +24,7 @@ Last updated: 2026-08-23
 - P3.4 dev6 canonical render-key sidecar: COMPLETE — PR #38 merge `967c4511cd11cd721886feae6d146f4412790a6d`.
 - P3.4 dev7 render-key-aware merge candidates: COMPLETE — PR #39 merge `cec4ecb2432ec92f17a94a358895de6c2f21257e`.
 - P3.4 dev8 ordinary four-vertex emission-safety classifier: COMPLETE — PR #40 merge `7a15f857a081fba642fcc28811ce88363b5abb66`.
+- P3.4 dev9 repeat-aware UV descriptor / representability: COMPLETE — PR #41 merge `59471127162aaf02c9c87e679e1c4c361f968fac`.
 
 A-0101 remains the canonical fixed-target unload/return lifecycle proof. Later Phase 3 slices do not repeat the old far-travel sequence unless lifecycle semantics change.
 
@@ -37,77 +38,75 @@ A-0101 remains the canonical fixed-target unload/return lifecycle proof. Later P
 
 `RenderMergeCandidates` scans the full dev6-eligible face set and forms deterministic same-render-key rectangles. P3.3 topology boundaries do not artificially cap candidates. Each candidate retains a packed rectangle plus representative source quad = 6 logical bytes/candidate, with exact eligible coverage and passthrough accounting.
 
-`OrdinaryQuadEmissionSafety` classifies whether a dev7 candidate can be represented by one ordinary four-vertex quad under the current captured block-vertex fields. For a repeated geometric-corner field `P[0..3]`, width > 1 requires `P0==P1 && P2==P3`; height > 1 requires `P0==P2 && P1==P3`. The rule is applied independently to exact ARGB, packed light and raw atlas UV pairs.
+`OrdinaryQuadEmissionSafety` classifies whether a dev7 candidate can be represented by one ordinary four-vertex quad under captured color/light/raw-atlas-UV fields. Dev8 proved ordinary atlas UV reset is the dominant blocker.
+
+`RepeatAwareUvDescriptors` proves whether a multi-face candidate can preserve the representative source sprite by repeating in candidate-local sprite coordinates and remapping into the same exact raw atlas rectangle/orientation. Full-atlas sampler wrapping is not the correctness model.
 
 The generalized `BakedSectionMesh` remains the authoritative GPU drawable.
 
-## P3.4 dev8 closure — COMPLETE
+## P3.4 dev9 closure — COMPLETE
 
 Canonical runtime package:
 
-- `Obsidian-0.3.0-phase3-dev8.jar`
-- size `337,502` bytes
-- SHA-256 `f7155754683c6f484356cc4e729bd5de262b4acd355df05a49e55122903f9f4e`
-- package source head `cc7e4d64bdf000635ed765a6e68a6c30cc9c2a8f`
+- `Obsidian-0.3.0-phase3-dev9.jar`
+- size `354,912` bytes
+- SHA-256 `4f06323d7d60288a2c2bb48676918842e3e9cfa9bd604156c9e24aa1aedc0b46`
+- package source head `0bca09023876cf661171749f7ef86f7f287307c0`
 
-A-0126 records reference runtime SUCCESS. Final evidence head `f4b8028cb46708a8990b1c4456bc29e5bd993fa9` passed workflow `32604062038`; build/upload succeeded and release publishing was skipped. PR #40 merged with `[no-release]` as `7a15f857a081fba642fcc28811ce88363b5abb66`.
+A-0131 records reference runtime SUCCESS. Final evidence head `378677a08f71c6b783750d47cfc3bac818705e60` passed workflow `32605212651`; build/upload succeeded and release publishing was skipped. PR #41 merged with `[no-release]` as `59471127162aaf02c9c87e679e1c4c361f968fac`. A-0132 records promotion and dev10 activation.
 
 Reference runtime:
 
-- all Phase 3/P3.2/P3.3/dev6/dev7/dev8 gates true, including `ordinaryQuadEmissionSafetyEvidenceReady=true`;
-- workers submitted/started/completed `234/234/234`, 190 steals, zero queue-full rejection/failure/shutdown-join failure;
-- visibility: 234 builds / 94,258 faces, exact bytes, determinism/reference `5/5`;
-- topology rectangles: 38,884 covering all 94,258 faces, 55,374 saved = 58.7%, coverage/determinism/reference exact;
-- render keys: visible/eligible/unmapped/ambiguous `94,258 / 74,152 / 0 / 20,106`, determinism `5/5`;
-- dev7 candidates: 65,533 covering 74,152 eligible faces exactly, passthrough 20,106, singleton/multi `59,150 / 6,383`, faces saved 8,619 = 11.6%, coverage `234/234`, determinism `5/5`;
-- dev8 color-safe/unsafe multi-face `6,352 / 31`;
-- dev8 light-safe/unsafe multi-face `6,383 / 0`;
-- dev8 ordinary-atlas-UV-safe/unsafe multi-face `0 / 6,383`;
-- dev8 combined ordinary-safe/unsafe multi-face `0 / 6,383`;
-- repeat-aware-required `6,383`;
-- dev8 retained bytes `65,533 = 65,533 * 1`, classification audits `234/234`, determinism `5/5`;
-- worker world reads after capture 0; synchronous scene mesh builds 0;
+- all Phase 3/P3.2/P3.3/dev6/dev7/dev8/dev9 gates true, including `repeatAwareUvEvidenceReady=true`;
+- workers submitted/started/completed `261/261/261`, 193 steals, zero cancellation/queue-full rejection/failure/shutdown-join failure;
+- visibility: 261 builds / 77,748 faces, exact retained bytes, determinism/reference `6/6`;
+- topology rectangles: 34,559 covering all 77,748 faces, 43,189 saved = 55.5%, coverage/determinism/reference exact;
+- render keys: visible/eligible/unmapped/ambiguous `77,748 / 54,290 / 0 / 23,458`, determinism `6/6`;
+- dev7 candidates: 47,688 covering 54,290 eligible faces exactly, passthrough 23,458, singleton/multi `42,421 / 5,267`, faces saved 6,602 = 12.1%, coverage `261/261`, determinism `6/6`;
+- dev8 color-safe/unsafe multi-face `5,266 / 1`;
+- dev8 light-safe/unsafe multi-face `5,267 / 0`;
+- dev8 ordinary-atlas-UV-safe/unsafe multi-face `0 / 5,267`;
+- dev9 repeat-aware UV representable/unrepresentable `5,267 / 0` = **100% representable** in the observed runtime set;
+- dev9 repeat-aware four-vertex safe/unsafe `5,266 / 1`;
+- dev9 safe covered faces 11,867; safe faces saved 6,601;
+- dev9 retained bytes `100,073 = 5,267 * 19`, classification audits `261/261`, determinism `6/6`;
+- the sole repeat-aware four-vertex exclusion is the single color-interpolation failure; UV and light are no longer blockers in the observed set;
+- scene worker submitted/completed/installed `261/261/261`;
+- scene READY transitions 29, rebuilds 28;
 - dropped lifecycle events / unsafe stale installs `0 / 0`;
 - workers/staging/arena/resources clean;
-- staging submitted/reclaimed `23,115,616 / 23,115,616`;
-- arena allocations/retired/reclaimed `454/454/454`, used bytes 0;
-- resources retired/released `227/227`;
+- staging submitted/reclaimed `25,216,272 / 25,216,272`;
+- arena allocations/retired/reclaimed `522/522/522`, used bytes 0;
+- resources retired/released `261/261`;
 - render-thread `Stopping!` and Prism exit code 0.
 
-No separate human visual verdict is claimed from the pasted dev8 log. Dev8 did not change emitted terrain geometry, so its frozen sidecar/runtime gates govern promotion. Any geometry-changing slice still requires renewed explicit human visual validation.
+No geometry changed in dev9, so no new visual verdict was required for dev9 promotion. Any geometry-changing P3.4 slice still requires renewed explicit human visual validation.
 
-### Dev8 architectural conclusion
+## ACTIVE: P3.4 dev10 — repeat-aware transport/sampling correctness proof
 
-The current ordinary atlas UV0 representation cannot directly exploit **any** observed multi-face dev7 candidate. Light interpolation was safe for every multi-face candidate and color interpolation for all but 31, but UV repetition failed for all 6,383.
+A-0132 activates dev10. P3.5 is not active.
 
-This is a representation limitation, not a failure of render-key grouping. Full-atlas sampler repeat is not an acceptable fix because it would wrap across the atlas rather than within the source sprite. A future exact path needs sprite-local repeat coordinates followed by deterministic remapping into that sprite's atlas rectangle/orientation.
-
-## ACTIVE: P3.4 dev9 — repeat-aware UV descriptor / representability
-
-A-0127 activates dev9. P3.5 is not active.
-
-Dev9 is **sidecar-only**. It must freeze and prove a compact deterministic descriptor for exact per-cell sprite repetition on a dev7 candidate without changing GPU geometry.
+Dev10 is **proof-first and no-emission**. It must freeze and validate the actual representation that a later geometry-changing slice could use, without yet replacing `BakedSectionMesh`.
 
 Required correctness direction:
 
-1. consume immutable dev7 candidates, dev6 render keys, dev8 safety evidence and exact `SectionBakedQuadSnapshot` truth;
-2. use the representative canonical baked quad mapped to geometric corners;
-3. prove its four raw atlas UV corners form exactly two U values × two V values — an axis-aligned source sprite rectangle;
-4. preserve the exact geometric-corner-to-UV-corner permutation, including flip/rotation rather than silently normalizing orientation;
-5. define repeat in candidate-local cell coordinates, then remap the repeated local coordinate into the proven source atlas rectangle; never rely on wrapping the full atlas;
-6. measure repeat-aware UV representability for all multi-face candidates;
-7. combine repeat-aware UV representability with dev8 color/light interpolation safety to measure `repeatAwareFourVertexSafe` candidates;
-8. keep color-unsafe or UV-unrepresentable candidates on split/passthrough evidence;
-9. retain bounded primitive metadata with exact source fingerprints, accounting and determinism audits;
-10. preserve all previous worker/lifecycle/lifetime gates.
+1. define the exact candidate-local repeat-coordinate transport representation;
+2. preserve the dev9 raw source-atlas rectangle and orientation without normalization loss;
+3. deterministically map candidate-local repeated coordinates into that source sprite rectangle;
+4. define integer repeat-boundary and candidate-edge semantics;
+5. inspect/prove atlas filtering, padding/inset, mip and edge assumptions needed to avoid bleeding/seams;
+6. preserve render-layer/material/sprite/tint/shade/emission/animation identity and keep unsupported/generalized geometry on passthrough;
+7. identify the raster/T-junction obligations relevant to the eventual large-quad path under D-0024, preferring stable positions and selective mitigation/splitting rather than global conforming subdivision;
+8. keep primitive metadata bounded and deterministic;
+9. preserve render-thread capture/GPU ownership, bounded workers/staging/arena/resource lifetime and zero worker live-world reads.
 
-Dev9 must keep:
+Dev10 must keep:
 
 - `greedyRectangleGpuEmission=false`;
 - `renderCorrectMergeKeyComplete=false`;
 - `BakedSectionMesh` authoritative.
 
-A later slice may implement a custom vertex/shader representation only after dev9 proves its descriptor. That geometry-changing slice must separately address raster/T-junction obligations relevant to its emission path and requires renewed explicit human visual validation before promotion.
+A later geometry-changing P3.4 slice may consume dev10 proof only after its own frozen emission contract is established. That later slice requires renewed explicit human visual validation before promotion.
 
 ## Promotion authorization
 
@@ -139,4 +138,4 @@ Source/runtime evidence overrides stale planning text. Attempts are immutable.
 
 ## Relevant durable decisions
 
-D-0014 through D-0027 remain active, especially D-0016 completion-gated reclamation, D-0017 bounded/backpressured staging, D-0020 generation-safe arena identity, D-0023 public Blaze3D graphics first, D-0024 permanent independent reference oracle + worker-local binary/bitmask greedy meshing with complete output-affecting merge truth, D-0025 narrow native seam, and D-0027 public fixed-count indirect baseline.
+D-0014 through D-0027 remain active, especially D-0016 completion-gated reclamation, D-0017 bounded/backpressured staging, D-0020 generation-safe arena identity, D-0023 public Blaze3D graphics first, D-0024 permanent independent reference oracle + worker-local binary/bitmask greedy meshing with complete output-affecting merge truth and targeted T-junction mitigation, D-0025 narrow native seam, and D-0027 public fixed-count indirect baseline.
