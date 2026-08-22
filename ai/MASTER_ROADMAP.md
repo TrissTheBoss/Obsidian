@@ -1,6 +1,6 @@
 # Obsidian Master Roadmap and Product Plan
 
-Last materially revised: 2026-08-21  
+Last materially revised: 2026-08-22  
 Roadmap schema: v1  
 Canonical repository: `TrissTheBoss/Obsidian`
 
@@ -353,7 +353,7 @@ Phase 1 is the proven infrastructure foundation for real terrain, not the final 
 
 ---
 
-### Phase 2 — Real-section correctness and renderer semantics — ACTIVE
+### Phase 2 — Real-section correctness and renderer semantics — COMPLETE
 
 Purpose: define what a **correct Minecraft section** means before optimizing it.
 
@@ -429,9 +429,9 @@ Completed contract:
 
 Reference RX 6800 XT validation completed all six textured comparison passes. Human validation reported no visible texture, UV orientation/stretch, alignment/drift, or obvious tint issues for the supported subset. Machine evidence also confirmed deterministic reference/material/drawable builds, explicit accepted/rejected face accounting, `worldReadsAfterMaterialCapture=0`, `pipelineValid=true`, `nativeGraphicsSeam=false`, `textured=true`, stable resource epoch checks, zero profiler-only submissions, bounded staging, and full completion-gated reclamation.
 
-The validation overlay briefly retained a stale block after a block break until the next bounded pass recapture; the log proved the following pass incorporated the edit. This is acceptable for the temporary probe but is not a production latency target. Event-driven block/neighbor invalidation and rebuild scheduling remain P2.6 scope.
+The validation overlay briefly retained a stale block after a block break until the next bounded pass recapture; the log proved the following pass incorporated the edit. This is acceptable for the temporary probe but is not a production latency target. Event-driven block/neighbor invalidation and rebuild scheduling were completed in P2.6.
 
-P2.3 deliberately does not claim P2.4 light/AO correctness, P2.5 broad cutout/non-full/custom-model support, or P2.6 production section-update lifecycle.
+P2.3 deliberately did not claim P2.4 light/AO correctness or P2.5 broad cutout/non-full/custom-model support at that milestone.
 
 #### P2.4 — Lighting and ambient occlusion correctness — COMPLETE
 
@@ -456,8 +456,6 @@ Completed contract:
 
 Reference RX 6800 XT validation completed all six passes with deterministic reference/material/lighting/drawable duplicates, `worldReadsAfterLightingCapture=0`, `oneBlockHaloSufficient=true`, `pipelineValid=true`, `nativeGraphicsSeam=false`, zero profiler-only submissions, full resource reclamation and process exit 0. Human validation accepted the final comparison; exact presentation fine tuning may happen later.
 
-P2.4 deliberately does not claim P2.5 broad opaque/cutout/non-full model semantics or P2.6 event-driven section lifecycle.
-
 #### P2.5 — Broader opaque/cutout block semantics — COMPLETE
 
 Validated milestone: `0.2.0-phase2-dev5`.
@@ -478,50 +476,65 @@ Completed contract:
 - pure `BakedSectionMesh` construction performs zero post-capture live world/model/light/resource reads and deterministically groups quads into contiguous SOLID then CUTOUT ranges;
 - exact `DefaultVertexFormat.BLOCK` is retained with public blocks-atlas + level-lightmap bindings;
 - public `SOLID_BLOCK` and `CUTOUT_BLOCK` indexed-indirect comparison paths are used, with exact `ALPHA_CUTOUT=0.5` for CUTOUT;
-- bounded 4 MiB staging and 4 MiB device geometry arena remain sufficient for the validation proof;
+- bounded staging and device geometry arena remain sufficient for the validation proof;
 - completion-gated geometry/indirect lifetime fully reclaims before reuse;
 - `nativeGraphicsSeam=false` and zero profiler-only submissions remain true.
 
-Reference RX 6800 XT validation completed all six passes with stable deterministic generalized capture/mesh fingerprints. The sampled section produced 626 generalized quads = 321 SOLID + 305 CUTOUT, 2504 vertices and 3756 indices, with `worldReadsAfterGeneralizedCapture=0`, `cubeOraclePreserved=true`, one-block-halo sufficiency, `pipelineValid=true`, bound blocks atlas/lightmap, full completion-gated staging/arena/resource reclamation and process exit 0. Human validation reported that everything looked fine, including the broader SOLID/CUTOUT comparison.
+Reference RX 6800 XT validation completed all six passes with stable deterministic generalized capture/mesh fingerprints. Human validation reported that everything looked fine, including the broader SOLID/CUTOUT comparison.
 
-P2.5 deliberately does not claim leaves force-opaque support, translucent/fluid terrain, P2.6 event-driven lifecycle, P2.7 persistent multi-section ownership or Phase 3 production greedy meshing.
+#### P2.6 — Section lifecycle and rebuild correctness — COMPLETE
 
-#### P2.6 — Section lifecycle and rebuild correctness — PLANNED
+Validated milestone: `0.2.0-phase2-dev6`, with final fixed-target event-class closure supplied by downstream A-0101 evidence.
 
-Goals:
+Closing integration merge: `794483f955c861cbf9e24ade2463ba51ab9ab284` (PR #25, together with validated P2.7).
 
-- section load;
-- section unload;
-- block update invalidation;
-- neighbor-border invalidation;
-- resource reload invalidation;
-- stale async result rejection;
-- safe replacement of live GPU allocations;
-- multiple rebuilds of the same section;
-- generation/version identity carried end to end.
+Evidence: A-0080 through A-0084 plus A-0101.
 
-P2.3 runtime validation observed that the bounded one-shot comparison mesh could remain visible briefly after a block break until the next pass recaptured the section. P2.6 must replace that validation-only behavior with event-driven dirtying/invalidation and rebuild scheduling appropriate for production responsiveness.
+Completed contract:
 
-#### P2.7 — Multi-section integration — PLANNED
+- exact section/block/player dirty observation through the grounded Minecraft lifecycle seam;
+- world replacement and resource reload invalidation;
+- exact chunk load/unload observation;
+- target-scoped sticky/coalesced lifecycle counters without an unbounded event ring;
+- generation/version identity carried through rebuild/install;
+- stale install rejection;
+- repeated rebuilds of the same target;
+- completion-gated replacement and full staging/arena/deferred-resource reclamation;
+- zero dropped lifecycle events under validated workloads.
 
-Goals:
+The corrected standalone A-0084 run proved edit/reload/reclamation behavior but did not travel far enough to exercise the fixed target (`chunkLoadEvents=0`, `chunkUnloadEvents=0`). A-0101 later used a diagnostic-only fixed first-scene anchor on the same exact `ClientLevel.onChunkLoaded` / `ClientLevel.unload` hooks and produced fixed-anchor load/unload `9/9`, `fixedAnchorReturnSceneReady=true`, zero dropped/unsafe-stale events, clean shutdown and exit 0. That stronger downstream observation closes the missing P2.6 event class without changing the historical attempt.
 
-- several neighboring real sections simultaneously;
-- scene database records rather than one-shot probe ownership;
-- stable camera movement;
-- no visible duplicate/missing borders;
-- bounded upload behavior under rebuild bursts;
-- begin retiring synthetic probe-only assumptions.
+#### P2.7 — Multi-section integration — COMPLETE
+
+Validated milestone: `0.2.0-phase2-dev7`.
+
+Closing integration merge: `794483f955c861cbf9e24ade2463ba51ab9ab284` (PR #25); original validated P2.7 PR #27 had already been stacked into that branch.
+
+Evidence: A-0085 through A-0089.
+
+Completed contract:
+
+- persistent renderer-side 3x3 section table rather than one-shot ownership;
+- shared scene generation/validity domain;
+- several neighboring real sections live simultaneously;
+- exact dirty-event relevance across the rendered scene and union halo;
+- correctness-first whole-window invalidation/rebuild;
+- bounded upload/install behavior;
+- camera recentering and world/resource lifecycle handling;
+- zero unsafe stale scene/probe installs;
+- full completion-gated resource reclamation.
+
+Reference runtime reached `sceneGateReady=true`, 16 READY transitions, 15 rebuilds, 144 record installs, max 9 live records and 12 adjacent pairs with zero dropped/stale installs and exit 0. Human visual validation reported no persistent duplicate/missing borders or stale old-window geometry.
 
 #### Phase 2 exit criteria
 
-Phase 2 is complete when:
+Phase 2 is complete because:
 
 - real section snapshots are immutable and lifecycle-safe;
 - a permanent reference oracle exists;
-- supported terrain can be rendered with correct position/material/UV/light/AO semantics;
+- supported terrain is rendered with validated position/material/UV/light/AO semantics;
 - section updates/unloads/rebuilds are safe;
-- multiple sections can be managed through persistent scene ownership;
+- multiple sections are managed through persistent scene ownership;
 - unsupported cases are explicit and measurable;
 - the renderer has enough semantic truth that an optimized mesher can be judged against it.
 
@@ -529,32 +542,55 @@ Global vanilla terrain replacement is **not required** merely to declare the cor
 
 ---
 
-### Phase 3 — Production asynchronous CPU mesher / greedy meshing — PLANNED
+### Phase 3 — Production asynchronous CPU mesher / greedy meshing — ACTIVE
 
 Purpose: make section mesh production fast enough for large-distance streaming without sacrificing the Phase 2 correctness contract.
 
-#### P3.1 — Worker/job architecture
+#### P3.1 — Worker/job architecture — COMPLETE
 
-- dedicated meshing worker pool;
+Validated milestones: `0.3.0-phase3-dev1`, `0.3.0-phase3-dev2`, and `0.3.0-phase3-dev3`.
+
+Closing merges:
+
+- dev1 / PR #29: `c39cf17b4864e7f7081007238117aea5be3c26e3`;
+- dev2 / PR #32: `58b2b8b8b1962f2809029e32d147a4a96a93b486`;
+- dev3 / PR #34: `1b6615eac2494a197cea86d314cf5b099d2418e8`.
+
+Evidence: A-0090 through A-0102.
+
+Completed P3.1 foundation:
+
+- dedicated bounded meshing worker pool;
+- global HIGH -> NORMAL -> LOW relevance selection;
 - work stealing;
 - bounded priority queues;
-- immutable snapshot jobs;
-- generation/version checks;
-- cancellation of stale work;
-- worker-local reusable scratch;
-- no per-face Java object allocation;
-- metrics for queue wait, execution time, cancellation, and output size.
+- immutable snapshot/model/material/light inputs only;
+- generation/event/resource-epoch checks;
+- cancellation/stale-result discard before unsafe install;
+- render-thread-only live capture and GPU ownership;
+- production asynchronous scene mesh construction and installation;
+- worker-local reusable primitive scratch;
+- warm-up/periodic determinism audits instead of unconditional duplicate production builds;
+- bounded two-record-per-frame production admission;
+- metrics for queue wait, execution time, priority mix, cancellation, stealing, output size, scratch high-water and audit matches;
+- clean bounded worker shutdown integrated with completion-gated staging/arena/resource cleanup.
 
-#### P3.2 — Binary/bitmask visibility masks
+A-0101 final runtime reported `phase3GateReady=true`, `schedulerEvidenceReady=true`, 208/208 completed worker jobs, 159 steals, zero queue-full rejection/failure/shutdown-join failure, HIGH/NORMAL/LOW completions `29/89/90`, 151,898 output quads, 212 scratch uses, determinism audits/matches `4/4`, `maxAdmissionBurst=2`, zero synchronous scene mesh builds and clean shutdown. P3.1 is therefore complete and merged.
+
+#### P3.2 — Binary/bitmask visibility masks — ACTIVE
 
 Production target:
 
 - represent occupancy/face visibility using machine-word bitsets where practical;
 - build directional face masks efficiently;
 - keep the reference implementation independent for differential tests;
-- use compact primitive structures and reuse scratch storage.
+- use compact primitive structures and reuse scratch storage;
+- preserve all material/light/AO truth needed by the downstream render-correct merge key;
+- prove deterministic mask coverage against the independent reference semantics before greedy rectangle extraction becomes production.
 
-#### P3.3 — Greedy rectangle extraction
+P3.2 being ACTIVE does **not** mean greedy quads exist yet. It is the next implementation milestone now that P3.1 is complete.
+
+#### P3.3 — Greedy rectangle extraction — PLANNED
 
 For each compatible face plane:
 
@@ -564,7 +600,7 @@ For each compatible face plane:
 - maintain deterministic output where useful for debugging;
 - measure rectangle/quad reduction ratio.
 
-#### P3.4 — Render-correct merge key
+#### P3.4 — Render-correct merge key — PLANNED
 
 Faces may merge only when every property that affects output agrees. The production key must account for all relevant supported semantics, including:
 
@@ -581,7 +617,7 @@ Faces may merge only when every property that affects output agrees. The product
 
 Never merge merely because block IDs match.
 
-#### P3.5 — Border/halo correctness
+#### P3.5 — Border/halo correctness — PLANNED
 
 - face visibility across section boundaries;
 - AO/light across boundaries;
@@ -589,7 +625,7 @@ Never merge merely because block IDs match.
 - rebuild invalidation when border data changes;
 - no worker-thread live-world reads.
 
-#### P3.6 — T-junction policy
+#### P3.6 — T-junction policy — PLANNED
 
 Default:
 
@@ -598,7 +634,7 @@ Default:
 - validate on multiple GPUs;
 - if needed, prefer targeted expansion/splitting/raster-safe mitigation over globally abandoning greedy meshing.
 
-#### P3.7 — Differential correctness framework
+#### P3.7 — Differential correctness framework — PLANNED
 
 For representative snapshots:
 
@@ -609,7 +645,7 @@ For representative snapshots:
 - preserve failing snapshot fixtures where legally/practically possible;
 - never let the optimized mesher become its own oracle.
 
-#### P3.8 — Meshing benchmarks
+#### P3.8 — Meshing benchmarks — PLANNED
 
 Track at minimum:
 
@@ -929,16 +965,17 @@ This section is a product-level checklist. Phase sections above describe sequenc
 - [COMPLETE foundation] Real immutable section snapshots.
 - [COMPLETE foundation] Neighbor halo/padding.
 - [COMPLETE foundation] Permanent reference face/mesh oracle.
-- [PLANNED] Production binary/bitmask greedy mesher.
-- [PLANNED] Opaque terrain.
-- [PLANNED] Cutout terrain.
+- [ACTIVE] Production binary/bitmask visibility-mask foundation for the future greedy mesher.
+- [PLANNED] Greedy rectangle extraction / production greedy mesher.
+- [PLANNED] Full production opaque terrain replacement.
+- [PLANNED] Full production cutout terrain replacement.
 - [COMPLETE foundation] Lighting for the conservative supported SOLID subset.
 - [COMPLETE foundation] Ambient occlusion for the conservative supported SOLID subset.
 - [COMPLETE foundation] Tint/biome color identity for the conservative supported SOLID subset.
 - [COMPLETE foundation] Resource/material/sprite/UV identity for the conservative supported SOLID subset.
 - [PLANNED] Fluids/translucent terrain.
-- [PLANNED] Section rebuild/update/unload lifecycle.
-- [PLANNED] Multi-section persistent scene ownership.
+- [COMPLETE foundation] Section rebuild/update/unload lifecycle.
+- [COMPLETE foundation] Multi-section persistent scene ownership.
 - [PLANNED] Large-distance streaming.
 - [EXPERIMENTAL] Partial remeshing.
 - [EXPERIMENTAL] Optional LOD after full-detail terrain is stable.
@@ -952,7 +989,8 @@ This section is a product-level checklist. Phase sections above describe sequenc
 - [COMPLETE foundation] Indexed indirect rendering.
 - [COMPLETE foundation] Compute-generated commands.
 - [COMPLETE foundation] GPU visibility/compaction primitive.
-- [PLANNED] Persistent real-section scene database.
+- [COMPLETE foundation] Persistent multi-section real-scene ownership for the current 3x3 production validation path.
+- [PLANNED] Large-scale persistent real-section scene database.
 - [PLANNED] Large-scale frustum culling.
 - [PLANNED] Hierarchical region/column culling.
 - [PLANNED] Temporal visibility.
@@ -961,9 +999,10 @@ This section is a product-level checklist. Phase sections above describe sequenc
 
 ### Scheduling / streaming
 
-- [PLANNED] Work-stealing meshing workers.
-- [PLANNED] Priority mesh queue.
-- [PLANNED] Stale-job cancellation.
+- [COMPLETE foundation] Work-stealing meshing workers.
+- [COMPLETE foundation] Bounded relevance-priority mesh queues.
+- [COMPLETE foundation] Stale-job cancellation / safe stale-result discard.
+- [COMPLETE foundation] Production queue wait/execution/output/scratch metrics.
 - [PLANNED] Adaptive frame-budget controller.
 - [PLANNED] Upload budgeting.
 - [PLANNED] Memory-pressure handling.
@@ -985,13 +1024,13 @@ This section is a product-level checklist. Phase sections above describe sequenc
 - [FOUNDATION COMPLETE] Integrated GPU timestamp ranges.
 - [PLANNED] P50/P95/P99/P99.9/max reporting.
 - [PLANNED] CPU/GPU per-stage timing.
-- [PLANNED] Mesh queue depth/latency.
+- [FOUNDATION COMPLETE] Mesh queue wait/execution/output metrics.
 - [PLANNED] Upload queue depth/latency.
 - [PLANNED] RAM/VRAM telemetry.
 - [PLANNED] allocation/GC telemetry.
 - [PLANNED] visible/culled section counts.
-- [PLANNED] draws/triangles/quads.
-- [PLANNED] arena fragmentation/high-water.
+- [FOUNDATION COMPLETE] Draw/quad/byte accounting for the current production validation scene.
+- [FOUNDATION COMPLETE] Arena fragmentation/high-water accounting.
 - [PLANNED] benchmark JSON/CSV export.
 - [PLANNED] `/render benchmark start` / stop workflow or equivalent final command surface.
 
@@ -1059,7 +1098,7 @@ Eventually capture:
 
 ## 9. Memory strategy
 
-No fixed production arena size is declared yet; validation capacities used during Phase 1/2 are not assumed to be final budgets.
+No fixed production arena size is declared yet; validation capacities used during Phase 1/2/P3.1 are not assumed to be final budgets.
 
 Production policy:
 
@@ -1208,7 +1247,7 @@ Some ordering is intentional and should not be casually bypassed.
 
 ### Correctness before greedy optimization
 
-Phase 2 reference semantics must exist before Phase 3 greedy meshing becomes production. Greedy output must have an independent oracle.
+Phase 2 reference semantics exist and are complete. Phase 3 greedy output must continue to use the independent oracle; P3.2/P3.3 may not make the optimized mesher its own correctness authority.
 
 ### Real terrain before large-scale visibility tuning
 
@@ -1399,6 +1438,16 @@ Before handoff, verify:
 
 This is a concise index, **not** the evidence log. Detailed reasoning belongs in attempts/decisions.
 
+### 2026-08-22 — Phase 2 + P3.1 Class-A synchronization
+
+- synchronized Phase 2 to COMPLETE after P2.6/P2.7 validation and PR #25 merge `794483f955c861cbf9e24ade2463ba51ab9ab284`;
+- recorded A-0101's diagnostic-only fixed-anchor load/unload `9/9` + post-return LIVE proof as the stronger downstream evidence that closes A-0084's missing P2.6 event-class observation;
+- synchronized P3.1 to COMPLETE after dev1/dev2/dev3 runtime validation and merges `c39cf17b4864e7f7081007238117aea5be3c26e3`, `58b2b8b8b1962f2809029e32d147a4a96a93b486`, and `1b6615eac2494a197cea86d314cf5b099d2418e8`;
+- recorded fresh retargeted exact CI runs `32582746431`, `32582829896`, and `32582906074` before the Phase 3 merges;
+- activated P3.2 binary/bitmask visibility masks as the next milestone while leaving P3.3 greedy rectangle extraction and later Phase 3 work planned;
+- preserved D-0024's independent reference-oracle requirement, phase ordering, Vulkan/native-scope decisions and public release policy;
+- all internal promotion merges used `[no-release]`; public release remains `v0.0.2-phase0`.
+
 ### 2026-08-21 — P2.5 Class-A status synchronization
 
 - synchronized P2.5 to COMPLETE after exact Minecraft 26.2 model/cutout API grounding, generalized SOLID/CUTOUT implementation/package CI, reference RX 6800 XT runtime validation, human visual validation, and merge `c17f7c6146678e18cacabc44d85c67413a040f73`;
@@ -1444,14 +1493,18 @@ Current position at the time of this revision:
 
 - Phase 0: COMPLETE.
 - Phase 1: COMPLETE through GPU visibility/indirect compaction.
-- Phase 2: ACTIVE.
+- Phase 2: COMPLETE through P2.7.
 - P2.1: COMPLETE / `0.2.0-phase2-dev1`.
 - P2.2: COMPLETE / `0.2.0-phase2-dev2`, first drawable real section with human-validated world/camera alignment.
 - P2.3: COMPLETE / `0.2.0-phase2-dev3`, correct texture/material/UV/tint identity for the conservative supported SOLID subset with human-validated textured alignment.
 - P2.4: COMPLETE / `0.2.0-phase2-dev4`, exact block/sky light, directional shade and AO semantics for the conservative supported SOLID subset with human-validated lightmapped comparison.
 - P2.5: COMPLETE / `0.2.0-phase2-dev5`, exact vanilla-emitted generalized MODEL semantics for accepted SOLID/CUTOUT blocks with human-validated layered comparison.
-- Next planned milestone: P2.6, section lifecycle and rebuild correctness.
-- P2.6 owns event-driven section/block/neighbor/light/resource invalidation, versioned rebuild scheduling, stale-result rejection and safe live GPU replacement; bounded validation-overlay recapture delay is not a production target.
-- Phase 3 production binary/bitmask greedy meshing remains planned after Phase 2 establishes correct render semantics.
+- P2.6: COMPLETE / `0.2.0-phase2-dev6`, event-driven lifecycle/rebuild correctness with final fixed-target event-class closure in A-0101.
+- P2.7: COMPLETE / `0.2.0-phase2-dev7`, persistent neighboring multi-section scene validation with human-validated borders/camera movement.
+- Phase 3: ACTIVE.
+- P3.1: COMPLETE through `0.3.0-phase3-dev3`, including bounded worker/job architecture, production async scene integration, global relevance scheduling, reusable worker scratch, production metrics and clean lifecycle handling.
+- P3.2: ACTIVE — binary/bitmask visibility masks are the next implementation milestone.
+- P3.3 greedy rectangle extraction and later Phase 3 work remain PLANNED.
+- Public release remains `v0.0.2-phase0`; internal milestone merges were `[no-release]`.
 
 Always verify the live details in `ai/CURRENT_STATE.md` before acting on this final section because active milestone state changes more frequently than the long-range plan.
