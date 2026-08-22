@@ -4,6 +4,7 @@ import dev.obsidian.render.terrain.BakedSectionMesh;
 import dev.obsidian.render.terrain.BinarySectionVisibility;
 import dev.obsidian.render.terrain.CanonicalFaceRenderKeys;
 import dev.obsidian.render.terrain.GreedySectionRectangles;
+import dev.obsidian.render.terrain.OrdinaryQuadEmissionSafety;
 import dev.obsidian.render.terrain.ReferenceFaceMesh;
 import dev.obsidian.render.terrain.RenderMergeCandidates;
 import dev.obsidian.render.terrain.SectionBakedQuadSnapshot;
@@ -22,10 +23,12 @@ import java.util.concurrent.atomic.AtomicLongArray;
  * Dev3 chooses work by priority across the whole pool before falling through to
  * lower relevance. P3.2 builds compact binary directional-face visibility,
  * P3.3 partitions that proven topology into deterministic greedy rectangles,
- * P3.4 dev6 maps conservative canonical faces to exact baked render keys, and
+ * P3.4 dev6 maps conservative canonical faces to exact baked render keys,
  * dev7 partitions only those eligible faces into render-key-aware merge
- * candidates. The existing baked mesh remains the production drawable. No
- * worker touches Minecraft world/chunk/model state or GPU objects.</p>
+ * candidates, and dev8 classifies whether those candidates preserve captured
+ * color/light/UV fields as one ordinary four-vertex rectangle. The existing
+ * baked mesh remains the production drawable. No worker touches Minecraft
+ * world/chunk/model state or GPU objects.</p>
  */
 public final class SectionMeshWorkerPool implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/SectionMeshWorkers");
@@ -59,6 +62,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private volatile GreedySectionRectangles rectangles;
         private volatile CanonicalFaceRenderKeys renderKeys;
         private volatile RenderMergeCandidates mergeCandidates;
+        private volatile OrdinaryQuadEmissionSafety emissionSafety;
         private volatile BakedSectionMesh mesh;
         private volatile Throwable failure;
         private volatile long startNs;
@@ -97,6 +101,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         public GreedySectionRectangles rectangles() { return rectangles; }
         public CanonicalFaceRenderKeys renderKeys() { return renderKeys; }
         public RenderMergeCandidates mergeCandidates() { return mergeCandidates; }
+        public OrdinaryQuadEmissionSafety emissionSafety() { return emissionSafety; }
         public BakedSectionMesh mesh() { return mesh; }
         public Throwable failure() { return failure; }
         public long queueWaitNs() { return startNs == 0L ? 0L : Math.max(0L, startNs - enqueueNs); }
@@ -165,6 +170,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private final GreedySectionRectangles.BuildScratch rectangleScratch = new GreedySectionRectangles.BuildScratch();
         private final CanonicalFaceRenderKeys.BuildScratch renderKeyScratch = new CanonicalFaceRenderKeys.BuildScratch();
         private final RenderMergeCandidates.BuildScratch mergeCandidateScratch = new RenderMergeCandidates.BuildScratch();
+        private final OrdinaryQuadEmissionSafety.BuildScratch emissionSafetyScratch = new OrdinaryQuadEmissionSafety.BuildScratch();
         private long completedLocalBuilds;
         private long lastFingerprint;
 
@@ -308,6 +314,40 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     return;
                 }
 
+                OrdinaryQuadEmissionSafety firstEmissionSafety = OrdinaryQuadEmissionSafety.build(
+                        firstMergeCandidates, firstRenderKeys, ticket.bakedSnapshot, emissionSafetyScratch);
+                recordEmissionSafetyScratchUse(emissionSafetyScratch);
+                emissionSafetyBuilds.incrementAndGet();
+                totalEmissionSafetyCandidates.addAndGet(firstEmissionSafety.candidateCount());
+                totalEmissionSafetySingletons.addAndGet(firstEmissionSafety.singletonCandidates());
+                totalEmissionSafetyMultiFace.addAndGet(firstEmissionSafety.multiFaceCandidates());
+                totalEmissionSafetyColorSafe.addAndGet(firstEmissionSafety.multiFaceColorSafe());
+                totalEmissionSafetyColorUnsafe.addAndGet(firstEmissionSafety.multiFaceColorUnsafe());
+                totalEmissionSafetyLightSafe.addAndGet(firstEmissionSafety.multiFaceLightSafe());
+                totalEmissionSafetyLightUnsafe.addAndGet(firstEmissionSafety.multiFaceLightUnsafe());
+                totalEmissionSafetyUvSafe.addAndGet(firstEmissionSafety.multiFaceUvSafe());
+                totalEmissionSafetyUvUnsafe.addAndGet(firstEmissionSafety.multiFaceUvUnsafe());
+                totalEmissionSafetyOrdinarySafe.addAndGet(firstEmissionSafety.multiFaceOrdinarySafe());
+                totalEmissionSafetyOrdinaryUnsafe.addAndGet(firstEmissionSafety.multiFaceOrdinaryUnsafe());
+                totalEmissionSafetyOrdinarySafeCoveredFaces.addAndGet(firstEmissionSafety.ordinarySafeCoveredFaces());
+                totalEmissionSafetyOrdinarySafeFacesSaved.addAndGet(firstEmissionSafety.ordinarySafeFacesSaved());
+                totalEmissionSafetyRetainedBytes.addAndGet(firstEmissionSafety.retainedBytes());
+                totalEmissionSafetyBuildNs.addAndGet(firstEmissionSafety.buildTimeNs());
+                updateMax(maxEmissionSafetyCandidates, firstEmissionSafety.candidateCount());
+                updateMax(maxEmissionSafetyBuildNs, firstEmissionSafety.buildTimeNs());
+                emissionSafetyClassificationAudits.incrementAndGet();
+                emissionSafetyClassificationAuditMatches.incrementAndGet();
+                for (int direction = 0; direction < BinarySectionVisibility.DIRECTION_COUNT; direction++) {
+                    emissionSafetyOrdinarySafeByDirection.addAndGet(
+                            direction, firstEmissionSafety.directionOrdinarySafeCount(direction));
+                    emissionSafetyOrdinarySafeCoveredFacesByDirection.addAndGet(
+                            direction, firstEmissionSafety.directionOrdinarySafeCoveredFaces(direction));
+                }
+                if (ticket.cancellationRequested || closed) {
+                    cancelTicket(ticket);
+                    return;
+                }
+
                 BakedSectionMesh first = BakedSectionMesh.build(
                         ticket.snapshot, ticket.bakedSnapshot, buildScratch);
                 recordScratchUse(buildScratch);
@@ -366,6 +406,16 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     }
                     mergeCandidateDeterminismAuditMatches.incrementAndGet();
 
+                    emissionSafetyDeterminismAudits.incrementAndGet();
+                    OrdinaryQuadEmissionSafety secondEmissionSafety = OrdinaryQuadEmissionSafety.build(
+                            secondMergeCandidates, secondRenderKeys,
+                            ticket.bakedSnapshot, emissionSafetyScratch);
+                    recordEmissionSafetyScratchUse(emissionSafetyScratch);
+                    if (!firstEmissionSafety.contentEquals(secondEmissionSafety)) {
+                        throw new IllegalStateException("Worker-produced ordinary-quad emission-safety sidecar was nondeterministic");
+                    }
+                    emissionSafetyDeterminismAuditMatches.incrementAndGet();
+
                     determinismAudits.incrementAndGet();
                     BakedSectionMesh second = BakedSectionMesh.build(
                             ticket.snapshot, ticket.bakedSnapshot, buildScratch);
@@ -384,6 +434,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 ticket.rectangles = firstRectangles;
                 ticket.renderKeys = firstRenderKeys;
                 ticket.mergeCandidates = firstMergeCandidates;
+                ticket.emissionSafety = firstEmissionSafety;
                 ticket.mesh = first;
                 ticket.endNs = System.nanoTime();
                 ticket.state = TicketState.COMPLETED;
@@ -505,6 +556,31 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLong mergeCandidateDeterminismAudits = new AtomicLong();
     private final AtomicLong mergeCandidateDeterminismAuditMatches = new AtomicLong();
 
+    private final AtomicLong emissionSafetyBuilds = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyCandidates = new AtomicLong();
+    private final AtomicLong totalEmissionSafetySingletons = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyMultiFace = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyColorSafe = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyColorUnsafe = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyLightSafe = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyLightUnsafe = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyUvSafe = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyUvUnsafe = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyOrdinarySafe = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyOrdinaryUnsafe = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyOrdinarySafeCoveredFaces = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyOrdinarySafeFacesSaved = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyRetainedBytes = new AtomicLong();
+    private final AtomicLong totalEmissionSafetyBuildNs = new AtomicLong();
+    private final AtomicLong maxEmissionSafetyBuildNs = new AtomicLong();
+    private final AtomicLong maxEmissionSafetyCandidates = new AtomicLong();
+    private final AtomicLong emissionSafetyScratchBuildUses = new AtomicLong();
+    private final AtomicLong maxEmissionSafetyScratchCandidates = new AtomicLong();
+    private final AtomicLong emissionSafetyClassificationAudits = new AtomicLong();
+    private final AtomicLong emissionSafetyClassificationAuditMatches = new AtomicLong();
+    private final AtomicLong emissionSafetyDeterminismAudits = new AtomicLong();
+    private final AtomicLong emissionSafetyDeterminismAuditMatches = new AtomicLong();
+
     private final AtomicLong shutdownJoinFailures = new AtomicLong();
 
     private final AtomicLongArray submittedByPriority = new AtomicLongArray(PRIORITY_COUNT);
@@ -525,6 +601,10 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLongArray mergeCandidateCountsByDirection =
             new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
     private final AtomicLongArray mergeCandidateCoveredFacesByDirection =
+            new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
+    private final AtomicLongArray emissionSafetyOrdinarySafeByDirection =
+            new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
+    private final AtomicLongArray emissionSafetyOrdinarySafeCoveredFacesByDirection =
             new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
 
     private volatile boolean closed;
@@ -676,6 +756,11 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private void recordMergeCandidateScratchUse(RenderMergeCandidates.BuildScratch scratch) {
         mergeCandidateScratchBuildUses.incrementAndGet();
         updateMax(maxMergeCandidateScratchCandidates, scratch.highWaterCandidates());
+    }
+
+    private void recordEmissionSafetyScratchUse(OrdinaryQuadEmissionSafety.BuildScratch scratch) {
+        emissionSafetyScratchBuildUses.incrementAndGet();
+        updateMax(maxEmissionSafetyScratchCandidates, scratch.highWaterCandidates());
     }
 
     private static void validateJob(
@@ -851,6 +936,43 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
             throw new IllegalArgumentException("Invalid merge-candidate direction");
         }
         return mergeCandidateCoveredFacesByDirection.get(direction);
+    }
+
+    public long emissionSafetyBuilds() { return emissionSafetyBuilds.get(); }
+    public long totalEmissionSafetyCandidates() { return totalEmissionSafetyCandidates.get(); }
+    public long totalEmissionSafetySingletons() { return totalEmissionSafetySingletons.get(); }
+    public long totalEmissionSafetyMultiFace() { return totalEmissionSafetyMultiFace.get(); }
+    public long totalEmissionSafetyColorSafe() { return totalEmissionSafetyColorSafe.get(); }
+    public long totalEmissionSafetyColorUnsafe() { return totalEmissionSafetyColorUnsafe.get(); }
+    public long totalEmissionSafetyLightSafe() { return totalEmissionSafetyLightSafe.get(); }
+    public long totalEmissionSafetyLightUnsafe() { return totalEmissionSafetyLightUnsafe.get(); }
+    public long totalEmissionSafetyUvSafe() { return totalEmissionSafetyUvSafe.get(); }
+    public long totalEmissionSafetyUvUnsafe() { return totalEmissionSafetyUvUnsafe.get(); }
+    public long totalEmissionSafetyOrdinarySafe() { return totalEmissionSafetyOrdinarySafe.get(); }
+    public long totalEmissionSafetyOrdinaryUnsafe() { return totalEmissionSafetyOrdinaryUnsafe.get(); }
+    public long totalEmissionSafetyOrdinarySafeCoveredFaces() { return totalEmissionSafetyOrdinarySafeCoveredFaces.get(); }
+    public long totalEmissionSafetyOrdinarySafeFacesSaved() { return totalEmissionSafetyOrdinarySafeFacesSaved.get(); }
+    public long totalEmissionSafetyRetainedBytes() { return totalEmissionSafetyRetainedBytes.get(); }
+    public long totalEmissionSafetyBuildNs() { return totalEmissionSafetyBuildNs.get(); }
+    public long maxEmissionSafetyBuildNs() { return maxEmissionSafetyBuildNs.get(); }
+    public long maxEmissionSafetyCandidates() { return maxEmissionSafetyCandidates.get(); }
+    public long emissionSafetyScratchBuildUses() { return emissionSafetyScratchBuildUses.get(); }
+    public long maxEmissionSafetyScratchCandidates() { return maxEmissionSafetyScratchCandidates.get(); }
+    public long emissionSafetyClassificationAudits() { return emissionSafetyClassificationAudits.get(); }
+    public long emissionSafetyClassificationAuditMatches() { return emissionSafetyClassificationAuditMatches.get(); }
+    public long emissionSafetyDeterminismAudits() { return emissionSafetyDeterminismAudits.get(); }
+    public long emissionSafetyDeterminismAuditMatches() { return emissionSafetyDeterminismAuditMatches.get(); }
+    public long emissionSafetyOrdinarySafe(int direction) {
+        if (direction < 0 || direction >= BinarySectionVisibility.DIRECTION_COUNT) {
+            throw new IllegalArgumentException("Invalid emission-safety direction");
+        }
+        return emissionSafetyOrdinarySafeByDirection.get(direction);
+    }
+    public long emissionSafetyOrdinarySafeCoveredFaces(int direction) {
+        if (direction < 0 || direction >= BinarySectionVisibility.DIRECTION_COUNT) {
+            throw new IllegalArgumentException("Invalid emission-safety direction");
+        }
+        return emissionSafetyOrdinarySafeCoveredFacesByDirection.get(direction);
     }
 
     public long shutdownJoinFailures() { return shutdownJoinFailures.get(); }
