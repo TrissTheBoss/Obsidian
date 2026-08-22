@@ -2,6 +2,7 @@ package dev.obsidian.render.mesh;
 
 import dev.obsidian.render.terrain.BakedSectionMesh;
 import dev.obsidian.render.terrain.BinarySectionVisibility;
+import dev.obsidian.render.terrain.GreedySectionRectangles;
 import dev.obsidian.render.terrain.ReferenceFaceMesh;
 import dev.obsidian.render.terrain.SectionBakedQuadSnapshot;
 import dev.obsidian.render.terrain.SectionSnapshot;
@@ -17,9 +18,11 @@ import java.util.concurrent.atomic.AtomicLongArray;
  * <p>Jobs contain only immutable renderer-owned Phase 2 snapshots. There are
  * three bounded priority lanes per worker and idle workers steal from peers.
  * Dev3 chooses work by priority across the whole pool before falling through to
- * lower relevance. P3.2 additionally builds a compact binary directional-face
- * visibility sidecar for every production job. No worker touches Minecraft
- * world/chunk/model state or GPU objects.</p>
+ * lower relevance. P3.2 builds a compact binary directional-face visibility
+ * sidecar for every production job. P3.3 dev5 additionally partitions that
+ * proven visibility topology into deterministic greedy rectangle records while
+ * the existing baked mesh remains the production drawable. No worker touches
+ * Minecraft world/chunk/model state or GPU objects.</p>
  */
 public final class SectionMeshWorkerPool implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/SectionMeshWorkers");
@@ -50,6 +53,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private volatile TicketState state = TicketState.QUEUED;
         private volatile boolean cancellationRequested;
         private volatile BinarySectionVisibility visibility;
+        private volatile GreedySectionRectangles rectangles;
         private volatile BakedSectionMesh mesh;
         private volatile Throwable failure;
         private volatile long startNs;
@@ -85,6 +89,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         }
         public boolean cancellationRequested() { return cancellationRequested; }
         public BinarySectionVisibility visibility() { return visibility; }
+        public GreedySectionRectangles rectangles() { return rectangles; }
         public BakedSectionMesh mesh() { return mesh; }
         public Throwable failure() { return failure; }
         public long queueWaitNs() { return startNs == 0L ? 0L : Math.max(0L, startNs - enqueueNs); }
@@ -150,6 +155,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private final Thread thread;
         private final BakedSectionMesh.BuildScratch buildScratch = new BakedSectionMesh.BuildScratch();
         private final BinarySectionVisibility.BuildScratch visibilityScratch = new BinarySectionVisibility.BuildScratch();
+        private final GreedySectionRectangles.BuildScratch rectangleScratch = new GreedySectionRectangles.BuildScratch();
         private long completedLocalBuilds;
         private long lastFingerprint;
 
@@ -221,6 +227,29 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     return;
                 }
 
+                GreedySectionRectangles firstRectangles = GreedySectionRectangles.build(
+                        firstVisibility, rectangleScratch);
+                recordRectangleScratchUse(rectangleScratch);
+                rectangleBuilds.incrementAndGet();
+                totalRectangleCount.addAndGet(firstRectangles.rectangleCount());
+                totalRectangleCoveredFaces.addAndGet(firstRectangles.coveredFaceCount());
+                totalRectangleRetainedBytes.addAndGet(firstRectangles.retainedBytes());
+                totalRectangleBuildNs.addAndGet(firstRectangles.buildTimeNs());
+                updateMax(maxRectangleCount, firstRectangles.rectangleCount());
+                updateMax(maxRectangleBuildNs, firstRectangles.buildTimeNs());
+                rectangleMaskCoverageAudits.incrementAndGet();
+                rectangleMaskCoverageAuditMatches.incrementAndGet();
+                for (int direction = 0; direction < BinarySectionVisibility.DIRECTION_COUNT; direction++) {
+                    rectangleCountsByDirection.addAndGet(
+                            direction, firstRectangles.directionRectangleCount(direction));
+                    rectangleCoveredFacesByDirection.addAndGet(
+                            direction, firstRectangles.directionCoveredFaceCount(direction));
+                }
+                if (ticket.cancellationRequested || closed) {
+                    cancelTicket(ticket);
+                    return;
+                }
+
                 BakedSectionMesh first = BakedSectionMesh.build(
                         ticket.snapshot, ticket.bakedSnapshot, buildScratch);
                 recordScratchUse(buildScratch);
@@ -247,6 +276,19 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     firstVisibility.validateAgainst(reference);
                     visibilityReferenceAuditMatches.incrementAndGet();
 
+                    rectangleDeterminismAudits.incrementAndGet();
+                    GreedySectionRectangles secondRectangles = GreedySectionRectangles.build(
+                            secondVisibility, rectangleScratch);
+                    recordRectangleScratchUse(rectangleScratch);
+                    if (!firstRectangles.contentEquals(secondRectangles)) {
+                        throw new IllegalStateException("Worker-produced greedy rectangle sidecar was nondeterministic");
+                    }
+                    rectangleDeterminismAuditMatches.incrementAndGet();
+
+                    rectangleReferenceAudits.incrementAndGet();
+                    firstRectangles.validateAgainst(reference, rectangleScratch);
+                    rectangleReferenceAuditMatches.incrementAndGet();
+
                     determinismAudits.incrementAndGet();
                     BakedSectionMesh second = BakedSectionMesh.build(
                             ticket.snapshot, ticket.bakedSnapshot, buildScratch);
@@ -262,6 +304,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 }
 
                 ticket.visibility = firstVisibility;
+                ticket.rectangles = firstRectangles;
                 ticket.mesh = first;
                 ticket.endNs = System.nanoTime();
                 ticket.state = TicketState.COMPLETED;
@@ -329,6 +372,21 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLong visibilityDeterminismAuditMatches = new AtomicLong();
     private final AtomicLong visibilityReferenceAudits = new AtomicLong();
     private final AtomicLong visibilityReferenceAuditMatches = new AtomicLong();
+    private final AtomicLong rectangleBuilds = new AtomicLong();
+    private final AtomicLong totalRectangleCount = new AtomicLong();
+    private final AtomicLong totalRectangleCoveredFaces = new AtomicLong();
+    private final AtomicLong totalRectangleRetainedBytes = new AtomicLong();
+    private final AtomicLong totalRectangleBuildNs = new AtomicLong();
+    private final AtomicLong maxRectangleBuildNs = new AtomicLong();
+    private final AtomicLong maxRectangleCount = new AtomicLong();
+    private final AtomicLong rectangleScratchBuildUses = new AtomicLong();
+    private final AtomicLong maxRectangleScratchRectangles = new AtomicLong();
+    private final AtomicLong rectangleMaskCoverageAudits = new AtomicLong();
+    private final AtomicLong rectangleMaskCoverageAuditMatches = new AtomicLong();
+    private final AtomicLong rectangleDeterminismAudits = new AtomicLong();
+    private final AtomicLong rectangleDeterminismAuditMatches = new AtomicLong();
+    private final AtomicLong rectangleReferenceAudits = new AtomicLong();
+    private final AtomicLong rectangleReferenceAuditMatches = new AtomicLong();
     private final AtomicLong shutdownJoinFailures = new AtomicLong();
 
     private final AtomicLongArray submittedByPriority = new AtomicLongArray(PRIORITY_COUNT);
@@ -341,6 +399,10 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLongArray totalQueueWaitByPriority = new AtomicLongArray(PRIORITY_COUNT);
     private final AtomicLongArray maxQueueWaitByPriority = new AtomicLongArray(PRIORITY_COUNT);
     private final AtomicLongArray visibilityFacesByDirection =
+            new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
+    private final AtomicLongArray rectangleCountsByDirection =
+            new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
+    private final AtomicLongArray rectangleCoveredFacesByDirection =
             new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
 
     private volatile boolean closed;
@@ -480,6 +542,11 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         updateMax(maxVisibilityScratchRows, scratch.highWaterSupportedRows());
     }
 
+    private void recordRectangleScratchUse(GreedySectionRectangles.BuildScratch scratch) {
+        rectangleScratchBuildUses.incrementAndGet();
+        updateMax(maxRectangleScratchRectangles, scratch.highWaterRectangles());
+    }
+
     private static void validateJob(
             int priority,
             SectionSnapshot snapshot,
@@ -576,6 +643,33 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
             throw new IllegalArgumentException("Invalid visibility direction");
         }
         return visibilityFacesByDirection.get(direction);
+    }
+    public long rectangleBuilds() { return rectangleBuilds.get(); }
+    public long totalRectangleCount() { return totalRectangleCount.get(); }
+    public long totalRectangleCoveredFaces() { return totalRectangleCoveredFaces.get(); }
+    public long totalRectangleRetainedBytes() { return totalRectangleRetainedBytes.get(); }
+    public long totalRectangleBuildNs() { return totalRectangleBuildNs.get(); }
+    public long maxRectangleBuildNs() { return maxRectangleBuildNs.get(); }
+    public long maxRectangleCount() { return maxRectangleCount.get(); }
+    public long rectangleScratchBuildUses() { return rectangleScratchBuildUses.get(); }
+    public long maxRectangleScratchRectangles() { return maxRectangleScratchRectangles.get(); }
+    public long rectangleMaskCoverageAudits() { return rectangleMaskCoverageAudits.get(); }
+    public long rectangleMaskCoverageAuditMatches() { return rectangleMaskCoverageAuditMatches.get(); }
+    public long rectangleDeterminismAudits() { return rectangleDeterminismAudits.get(); }
+    public long rectangleDeterminismAuditMatches() { return rectangleDeterminismAuditMatches.get(); }
+    public long rectangleReferenceAudits() { return rectangleReferenceAudits.get(); }
+    public long rectangleReferenceAuditMatches() { return rectangleReferenceAuditMatches.get(); }
+    public long rectangles(int direction) {
+        if (direction < 0 || direction >= BinarySectionVisibility.DIRECTION_COUNT) {
+            throw new IllegalArgumentException("Invalid rectangle direction");
+        }
+        return rectangleCountsByDirection.get(direction);
+    }
+    public long rectangleCoveredFaces(int direction) {
+        if (direction < 0 || direction >= BinarySectionVisibility.DIRECTION_COUNT) {
+            throw new IllegalArgumentException("Invalid rectangle direction");
+        }
+        return rectangleCoveredFacesByDirection.get(direction);
     }
     public long shutdownJoinFailures() { return shutdownJoinFailures.get(); }
 

@@ -11,7 +11,7 @@ import dev.obsidian.render.terrain.SectionLifecycleEvents;
 import dev.obsidian.render.upload.StagingUploadArena;
 import net.minecraft.client.renderer.GameRenderer;
 
-/** Render-thread lifecycle root for the active Phase 3 P3.2 binary visibility milestone. */
+/** Render-thread lifecycle root for the active Phase 3 P3.3 dev5 rectangle-sidecar milestone. */
 public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
     private static final int VALIDATION_STAGING_BYTES = 4 * 1024 * 1024;
@@ -43,10 +43,10 @@ public final class FrameCoordinator implements AutoCloseable {
         try {
             workers = new SectionMeshWorkerPool(SectionMeshWorkerPool.defaultWorkerCount());
             staging = new StagingUploadArena(
-                    device, () -> "Obsidian Phase 3 dev4 bounded scene staging ring",
+                    device, () -> "Obsidian Phase 3 dev5 bounded scene staging ring",
                     VALIDATION_STAGING_BYTES);
             arena = new DeviceGeometryArena(
-                    device, () -> "Obsidian Phase 3 dev4 scene device geometry arena",
+                    device, () -> "Obsidian Phase 3 dev5 scene device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
             sceneProbe = new AsyncMultiSectionSceneProbe(device, staging, arena, deferredReleases, workers);
         } catch (RuntimeException e) {
@@ -56,7 +56,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (arena != null) try { arena.close(); } catch (RuntimeException ignored) { }
             try { deferredReleases.close(); } catch (RuntimeException ignored) { }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev4 P3.2 initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 3 dev5 P3.3 initialization failed; Minecraft will continue for diagnosis.", e);
             hardFailure = true;
         }
         meshWorkers = workers;
@@ -76,13 +76,13 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev4 P3.2 frame coordinator active. contextSlots=" + frameContexts.size()
+                    "Phase 3 dev5 P3.3 frame coordinator active. contextSlots=" + frameContexts.size()
                             + ", cpuTimingCapacity=" + cpuFrameTimings.capacity()
                             + ", meshWorkers=" + (meshWorkers == null ? 0 : meshWorkers.workerCount())
                             + ", meshQueueCapacity=" + (meshWorkers == null ? 0 : meshWorkers.queueCapacity())
                             + ", stagingCapacity=" + (stagingUploads == null ? 0 : stagingUploads.capacityBytes())
                             + ", deviceArenaCapacity=" + (deviceArena == null ? 0L : deviceArena.capacityBytes())
-                            + "; binary visibility sidecars, reusable mask scratch, determinism audits and independent reference audits are armed. Greedy rectangle emission is still disabled.");
+                            + "; binary visibility plus correctness-first greedy topology rectangle sidecars, reusable scratch, exact mask coverage, deterministic audits and independent reference audits are armed. GPU greedy rectangle emission remains disabled.");
         }
     }
 
@@ -95,7 +95,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (!visualDelayLogged) {
                 visualDelayLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev4 P3.2 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
+                        "Phase 3 dev5 P3.3 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
             }
             return;
         }
@@ -109,7 +109,7 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!runtimeInstructionsLogged && sceneProbe != null && sceneProbe.productionWorkerIntegrationReady()) {
             runtimeInstructionsLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev4 P3.2 runtime gate is active. Let the 3x3 async scene reach READY and visually inspect it; break/place blocks and allow a READY rebuild; perform F3+T and allow another READY rebuild; move enough to exercise normal scene scheduling/recentering if convenient; then exit normally. The new required flag is binaryVisibilityEvidenceReady=true together with the existing phase3GateReady=true and schedulerEvidenceReady=true. The old fixed-anchor unload/return proof is already closed and is not required again for P3.2.");
+                    "Phase 3 dev5 P3.3 runtime gate is active. Let the 3x3 async scene reach READY; visually check for regressions; break/place blocks and allow a READY rebuild; perform F3+T and allow another READY rebuild; move enough to exercise normal scene recentering if convenient; then exit normally. Required flags are phase3GateReady=true, schedulerEvidenceReady=true, binaryVisibilityEvidenceReady=true and greedyRectangleEvidenceReady=true. Dev5 keeps greedyRectangleGpuEmission=false, so the existing generalized BakedSectionMesh remains the drawable. The old fixed-anchor unload/return proof is already closed and is not required again.");
         }
     }
 
@@ -311,6 +311,55 @@ public final class FrameCoordinator implements AutoCloseable {
                 && visibilityReferenceMatches == visibilityReferenceAudits
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
+        long rectangleBuilds = meshWorkers == null ? 0L : meshWorkers.rectangleBuilds();
+        long rectangleCount = meshWorkers == null ? 0L : meshWorkers.totalRectangleCount();
+        long rectangleCoveredFaces = meshWorkers == null ? 0L : meshWorkers.totalRectangleCoveredFaces();
+        long rectangleRetainedBytes = meshWorkers == null ? 0L : meshWorkers.totalRectangleRetainedBytes();
+        long rectangleScratchUses = meshWorkers == null ? 0L : meshWorkers.rectangleScratchBuildUses();
+        long rectangleMaskAudits = meshWorkers == null ? 0L : meshWorkers.rectangleMaskCoverageAudits();
+        long rectangleMaskMatches = meshWorkers == null ? 0L : meshWorkers.rectangleMaskCoverageAuditMatches();
+        long rectangleDeterminismAudits = meshWorkers == null ? 0L : meshWorkers.rectangleDeterminismAudits();
+        long rectangleDeterminismMatches = meshWorkers == null ? 0L : meshWorkers.rectangleDeterminismAuditMatches();
+        long rectangleReferenceAudits = meshWorkers == null ? 0L : meshWorkers.rectangleReferenceAudits();
+        long rectangleReferenceMatches = meshWorkers == null ? 0L : meshWorkers.rectangleReferenceAuditMatches();
+        long rectangleWest = meshWorkers == null ? 0L : meshWorkers.rectangles(BinarySectionVisibility.WEST);
+        long rectangleEast = meshWorkers == null ? 0L : meshWorkers.rectangles(BinarySectionVisibility.EAST);
+        long rectangleDown = meshWorkers == null ? 0L : meshWorkers.rectangles(BinarySectionVisibility.DOWN);
+        long rectangleUp = meshWorkers == null ? 0L : meshWorkers.rectangles(BinarySectionVisibility.UP);
+        long rectangleNorth = meshWorkers == null ? 0L : meshWorkers.rectangles(BinarySectionVisibility.NORTH);
+        long rectangleSouth = meshWorkers == null ? 0L : meshWorkers.rectangles(BinarySectionVisibility.SOUTH);
+        long rectangleDirectionSum = rectangleWest + rectangleEast + rectangleDown + rectangleUp + rectangleNorth + rectangleSouth;
+        long rectangleWestFaces = meshWorkers == null ? 0L : meshWorkers.rectangleCoveredFaces(BinarySectionVisibility.WEST);
+        long rectangleEastFaces = meshWorkers == null ? 0L : meshWorkers.rectangleCoveredFaces(BinarySectionVisibility.EAST);
+        long rectangleDownFaces = meshWorkers == null ? 0L : meshWorkers.rectangleCoveredFaces(BinarySectionVisibility.DOWN);
+        long rectangleUpFaces = meshWorkers == null ? 0L : meshWorkers.rectangleCoveredFaces(BinarySectionVisibility.UP);
+        long rectangleNorthFaces = meshWorkers == null ? 0L : meshWorkers.rectangleCoveredFaces(BinarySectionVisibility.NORTH);
+        long rectangleSouthFaces = meshWorkers == null ? 0L : meshWorkers.rectangleCoveredFaces(BinarySectionVisibility.SOUTH);
+        long rectangleCoveredDirectionSum = rectangleWestFaces + rectangleEastFaces + rectangleDownFaces
+                + rectangleUpFaces + rectangleNorthFaces + rectangleSouthFaces;
+        long rectangleFacesSaved = rectangleCoveredFaces - rectangleCount;
+        long rectangleReductionPermille = rectangleCoveredFaces == 0L ? 0L
+                : rectangleFacesSaved * 1000L / rectangleCoveredFaces;
+
+        boolean greedyRectangleEvidenceReady = binaryVisibilityEvidenceReady
+                && rectangleBuilds > 0L
+                && rectangleBuilds >= workerCompletedJobs
+                && rectangleCount > 0L
+                && rectangleCoveredFaces == visibilityFaces
+                && rectangleCoveredDirectionSum == rectangleCoveredFaces
+                && rectangleDirectionSum == rectangleCount
+                && rectangleCount <= rectangleCoveredFaces
+                && rectangleCount < rectangleCoveredFaces
+                && rectangleRetainedBytes == rectangleCount * Integer.BYTES
+                && rectangleScratchUses >= rectangleBuilds
+                && rectangleMaskAudits == rectangleBuilds
+                && rectangleMaskMatches == rectangleMaskAudits
+                && rectangleDeterminismAudits > 0L
+                && rectangleDeterminismMatches == rectangleDeterminismAudits
+                && rectangleReferenceAudits > 0L
+                && rectangleReferenceMatches == rectangleReferenceAudits
+                && workersClean && stagingClean && arenaClean && resourcesClean;
+
         boolean phase2ChunkLifecycleEvidenceReady = phase3GateReady
                 && fixedAnchorChunkUnloadEvents > 0L
                 && fixedAnchorChunkLoadEvents > 0L
@@ -319,18 +368,20 @@ public final class FrameCoordinator implements AutoCloseable {
                 && unsafeStaleSceneInstalls == 0L
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
-        StringBuilder out = new StringBuilder(6144);
-        out.append("Phase 3 dev4 P3.2 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
+        StringBuilder out = new StringBuilder(8192);
+        out.append("Phase 3 dev5 P3.3 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
                 .append("phase3GateReady=").append(phase3GateReady)
                 .append(", schedulerEvidenceReady=").append(schedulerEvidenceReady)
                 .append(", binaryVisibilityEvidenceReady=").append(binaryVisibilityEvidenceReady)
+                .append(", greedyRectangleEvidenceReady=").append(greedyRectangleEvidenceReady)
                 .append(", phase2ChunkLifecycleEvidenceReady=").append(phase2ChunkLifecycleEvidenceReady)
                 .append(", fixedAnchorReturnSceneReady=").append(fixedAnchorReturnSceneReady)
                 .append(", productionWorkerIntegrationReady=").append(productionWorkerIntegrationReady)
                 .append(", hardFailure=").append(hardFailure)
                 .append(", productionSceneInstallStillSynchronous=false, productionWorkerSceneIntegration=true")
                 .append(", renderThreadCaptureOwnership=true, renderThreadGpuOwnership=true, workerWorldReadsAfterCapture=0")
-                .append(", binaryVisibilitySidecarIntegrated=true, greedyRectangleEmission=false")
+                .append(", binaryVisibilitySidecarIntegrated=true, greedyRectangleSidecarIntegrated=true")
+                .append(", greedyRectangleGpuEmission=false, renderCorrectMergeKeyComplete=false")
                 .append(", synchronousSceneMeshBuilds=").append(synchronousSceneMeshBuilds)
                 .append(", workerCount=").append(meshWorkers == null ? 0 : meshWorkers.workerCount())
                 .append(", workerQueueCapacity=").append(meshWorkers == null ? 0 : meshWorkers.queueCapacity())
@@ -384,6 +435,36 @@ public final class FrameCoordinator implements AutoCloseable {
                 .append(", visibilityDeterminismAuditMatches=").append(visibilityDeterminismMatches)
                 .append(", visibilityReferenceAudits=").append(visibilityReferenceAudits)
                 .append(", visibilityReferenceAuditMatches=").append(visibilityReferenceMatches)
+                .append(", rectangleBuilds=").append(rectangleBuilds)
+                .append(", rectangleCount=").append(rectangleCount)
+                .append(", rectangleCoveredFaces=").append(rectangleCoveredFaces)
+                .append(", rectangleFacesSaved=").append(rectangleFacesSaved)
+                .append(", rectangleReductionPermille=").append(rectangleReductionPermille)
+                .append(", rectangleWest=").append(rectangleWest)
+                .append(", rectangleEast=").append(rectangleEast)
+                .append(", rectangleDown=").append(rectangleDown)
+                .append(", rectangleUp=").append(rectangleUp)
+                .append(", rectangleNorth=").append(rectangleNorth)
+                .append(", rectangleSouth=").append(rectangleSouth)
+                .append(", rectangleWestFaces=").append(rectangleWestFaces)
+                .append(", rectangleEastFaces=").append(rectangleEastFaces)
+                .append(", rectangleDownFaces=").append(rectangleDownFaces)
+                .append(", rectangleUpFaces=").append(rectangleUpFaces)
+                .append(", rectangleNorthFaces=").append(rectangleNorthFaces)
+                .append(", rectangleSouthFaces=").append(rectangleSouthFaces)
+                .append(", rectangleRetainedBytes=").append(rectangleRetainedBytes)
+                .append(", rectangleBytesPerRecord=").append(Integer.BYTES)
+                .append(", rectangleTotalBuildNs=").append(meshWorkers == null ? 0L : meshWorkers.totalRectangleBuildNs())
+                .append(", rectangleMaxBuildNs=").append(meshWorkers == null ? 0L : meshWorkers.maxRectangleBuildNs())
+                .append(", rectangleMaxCount=").append(meshWorkers == null ? 0L : meshWorkers.maxRectangleCount())
+                .append(", rectangleScratchBuildUses=").append(rectangleScratchUses)
+                .append(", rectangleMaxScratchRectangles=").append(meshWorkers == null ? 0L : meshWorkers.maxRectangleScratchRectangles())
+                .append(", rectangleMaskCoverageAudits=").append(rectangleMaskAudits)
+                .append(", rectangleMaskCoverageAuditMatches=").append(rectangleMaskMatches)
+                .append(", rectangleDeterminismAudits=").append(rectangleDeterminismAudits)
+                .append(", rectangleDeterminismAuditMatches=").append(rectangleDeterminismMatches)
+                .append(", rectangleReferenceAudits=").append(rectangleReferenceAudits)
+                .append(", rectangleReferenceAuditMatches=").append(rectangleReferenceMatches)
                 .append(", sceneWorkerSubmitted=").append(sceneWorkerSubmitted)
                 .append(", sceneWorkerCompleted=").append(sceneWorkerCompleted)
                 .append(", sceneWorkerCancelled=").append(sceneWorkerCancelled)
