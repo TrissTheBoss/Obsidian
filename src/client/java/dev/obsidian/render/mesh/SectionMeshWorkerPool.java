@@ -2,6 +2,7 @@ package dev.obsidian.render.mesh;
 
 import dev.obsidian.render.terrain.BakedSectionMesh;
 import dev.obsidian.render.terrain.BinarySectionVisibility;
+import dev.obsidian.render.terrain.CanonicalFaceRenderKeys;
 import dev.obsidian.render.terrain.GreedySectionRectangles;
 import dev.obsidian.render.terrain.ReferenceFaceMesh;
 import dev.obsidian.render.terrain.SectionBakedQuadSnapshot;
@@ -18,10 +19,10 @@ import java.util.concurrent.atomic.AtomicLongArray;
  * <p>Jobs contain only immutable renderer-owned Phase 2 snapshots. There are
  * three bounded priority lanes per worker and idle workers steal from peers.
  * Dev3 chooses work by priority across the whole pool before falling through to
- * lower relevance. P3.2 builds a compact binary directional-face visibility
- * sidecar for every production job. P3.3 dev5 additionally partitions that
- * proven visibility topology into deterministic greedy rectangle records while
- * the existing baked mesh remains the production drawable. No worker touches
+ * lower relevance. P3.2 builds compact binary directional-face visibility,
+ * P3.3 partitions that proven topology into deterministic greedy rectangles,
+ * and P3.4 dev6 maps conservative canonical faces to exact baked render keys.
+ * The existing baked mesh remains the production drawable. No worker touches
  * Minecraft world/chunk/model state or GPU objects.</p>
  */
 public final class SectionMeshWorkerPool implements AutoCloseable {
@@ -54,6 +55,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private volatile boolean cancellationRequested;
         private volatile BinarySectionVisibility visibility;
         private volatile GreedySectionRectangles rectangles;
+        private volatile CanonicalFaceRenderKeys renderKeys;
         private volatile BakedSectionMesh mesh;
         private volatile Throwable failure;
         private volatile long startNs;
@@ -90,6 +92,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         public boolean cancellationRequested() { return cancellationRequested; }
         public BinarySectionVisibility visibility() { return visibility; }
         public GreedySectionRectangles rectangles() { return rectangles; }
+        public CanonicalFaceRenderKeys renderKeys() { return renderKeys; }
         public BakedSectionMesh mesh() { return mesh; }
         public Throwable failure() { return failure; }
         public long queueWaitNs() { return startNs == 0L ? 0L : Math.max(0L, startNs - enqueueNs); }
@@ -156,6 +159,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private final BakedSectionMesh.BuildScratch buildScratch = new BakedSectionMesh.BuildScratch();
         private final BinarySectionVisibility.BuildScratch visibilityScratch = new BinarySectionVisibility.BuildScratch();
         private final GreedySectionRectangles.BuildScratch rectangleScratch = new GreedySectionRectangles.BuildScratch();
+        private final CanonicalFaceRenderKeys.BuildScratch renderKeyScratch = new CanonicalFaceRenderKeys.BuildScratch();
         private long completedLocalBuilds;
         private long lastFingerprint;
 
@@ -250,6 +254,28 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     return;
                 }
 
+                CanonicalFaceRenderKeys firstRenderKeys = CanonicalFaceRenderKeys.build(
+                        ticket.snapshot, firstVisibility, ticket.bakedSnapshot, renderKeyScratch);
+                recordRenderKeyScratchUse(renderKeyScratch);
+                renderKeyBuilds.incrementAndGet();
+                totalRenderKeyVisibleFaces.addAndGet(firstRenderKeys.visibleFaces());
+                totalRenderKeyEligibleFaces.addAndGet(firstRenderKeys.eligibleFaces());
+                totalRenderKeyUnmappedFaces.addAndGet(firstRenderKeys.unmappedFaces());
+                totalRenderKeyAmbiguousFaces.addAndGet(firstRenderKeys.ambiguousFaces());
+                totalRenderKeyRecognizedCanonicalQuads.addAndGet(firstRenderKeys.recognizedCanonicalBakedQuads());
+                totalRenderKeyIgnoredNoncanonicalQuads.addAndGet(firstRenderKeys.ignoredNoncanonicalBakedQuads());
+                totalRenderKeySameAdjacencies.addAndGet(firstRenderKeys.sameKeyAdjacentPairs());
+                totalRenderKeyDifferentAdjacencies.addAndGet(firstRenderKeys.differentKeyAdjacentPairs());
+                totalRenderKeyIneligibleAdjacencies.addAndGet(firstRenderKeys.ineligibleAdjacentPairs());
+                totalRenderKeyRetainedBytes.addAndGet(firstRenderKeys.retainedBytes());
+                totalRenderKeyBuildNs.addAndGet(firstRenderKeys.buildTimeNs());
+                updateMax(maxRenderKeyEligibleFaces, firstRenderKeys.eligibleFaces());
+                updateMax(maxRenderKeyBuildNs, firstRenderKeys.buildTimeNs());
+                if (ticket.cancellationRequested || closed) {
+                    cancelTicket(ticket);
+                    return;
+                }
+
                 BakedSectionMesh first = BakedSectionMesh.build(
                         ticket.snapshot, ticket.bakedSnapshot, buildScratch);
                 recordScratchUse(buildScratch);
@@ -289,6 +315,15 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     firstRectangles.validateAgainst(reference, rectangleScratch);
                     rectangleReferenceAuditMatches.incrementAndGet();
 
+                    renderKeyDeterminismAudits.incrementAndGet();
+                    CanonicalFaceRenderKeys secondRenderKeys = CanonicalFaceRenderKeys.build(
+                            ticket.snapshot, secondVisibility, ticket.bakedSnapshot, renderKeyScratch);
+                    recordRenderKeyScratchUse(renderKeyScratch);
+                    if (!firstRenderKeys.contentEquals(secondRenderKeys)) {
+                        throw new IllegalStateException("Worker-produced canonical render-key sidecar was nondeterministic");
+                    }
+                    renderKeyDeterminismAuditMatches.incrementAndGet();
+
                     determinismAudits.incrementAndGet();
                     BakedSectionMesh second = BakedSectionMesh.build(
                             ticket.snapshot, ticket.bakedSnapshot, buildScratch);
@@ -305,6 +340,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
 
                 ticket.visibility = firstVisibility;
                 ticket.rectangles = firstRectangles;
+                ticket.renderKeys = firstRenderKeys;
                 ticket.mesh = first;
                 ticket.endNs = System.nanoTime();
                 ticket.state = TicketState.COMPLETED;
@@ -360,6 +396,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLong maxScratchQuads = new AtomicLong();
     private final AtomicLong determinismAudits = new AtomicLong();
     private final AtomicLong determinismAuditMatches = new AtomicLong();
+
     private final AtomicLong visibilityBuilds = new AtomicLong();
     private final AtomicLong totalVisibilityFaces = new AtomicLong();
     private final AtomicLong maxVisibilityFaces = new AtomicLong();
@@ -372,6 +409,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLong visibilityDeterminismAuditMatches = new AtomicLong();
     private final AtomicLong visibilityReferenceAudits = new AtomicLong();
     private final AtomicLong visibilityReferenceAuditMatches = new AtomicLong();
+
     private final AtomicLong rectangleBuilds = new AtomicLong();
     private final AtomicLong totalRectangleCount = new AtomicLong();
     private final AtomicLong totalRectangleCoveredFaces = new AtomicLong();
@@ -387,6 +425,26 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLong rectangleDeterminismAuditMatches = new AtomicLong();
     private final AtomicLong rectangleReferenceAudits = new AtomicLong();
     private final AtomicLong rectangleReferenceAuditMatches = new AtomicLong();
+
+    private final AtomicLong renderKeyBuilds = new AtomicLong();
+    private final AtomicLong totalRenderKeyVisibleFaces = new AtomicLong();
+    private final AtomicLong totalRenderKeyEligibleFaces = new AtomicLong();
+    private final AtomicLong totalRenderKeyUnmappedFaces = new AtomicLong();
+    private final AtomicLong totalRenderKeyAmbiguousFaces = new AtomicLong();
+    private final AtomicLong totalRenderKeyRecognizedCanonicalQuads = new AtomicLong();
+    private final AtomicLong totalRenderKeyIgnoredNoncanonicalQuads = new AtomicLong();
+    private final AtomicLong totalRenderKeySameAdjacencies = new AtomicLong();
+    private final AtomicLong totalRenderKeyDifferentAdjacencies = new AtomicLong();
+    private final AtomicLong totalRenderKeyIneligibleAdjacencies = new AtomicLong();
+    private final AtomicLong totalRenderKeyRetainedBytes = new AtomicLong();
+    private final AtomicLong totalRenderKeyBuildNs = new AtomicLong();
+    private final AtomicLong maxRenderKeyBuildNs = new AtomicLong();
+    private final AtomicLong maxRenderKeyEligibleFaces = new AtomicLong();
+    private final AtomicLong renderKeyScratchBuildUses = new AtomicLong();
+    private final AtomicLong maxRenderKeyScratchEligibleFaces = new AtomicLong();
+    private final AtomicLong renderKeyDeterminismAudits = new AtomicLong();
+    private final AtomicLong renderKeyDeterminismAuditMatches = new AtomicLong();
+
     private final AtomicLong shutdownJoinFailures = new AtomicLong();
 
     private final AtomicLongArray submittedByPriority = new AtomicLongArray(PRIORITY_COUNT);
@@ -444,7 +502,6 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         return enqueue(chosen, generation, eventSequence, priority, snapshot, bakedSnapshot);
     }
 
-    /** Validation-only pinned submit retained for the historical dev1 proof. */
     Ticket submitPinnedForValidation(
             int workerIndex,
             long generation,
@@ -547,6 +604,11 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         updateMax(maxRectangleScratchRectangles, scratch.highWaterRectangles());
     }
 
+    private void recordRenderKeyScratchUse(CanonicalFaceRenderKeys.BuildScratch scratch) {
+        renderKeyScratchBuildUses.incrementAndGet();
+        updateMax(maxRenderKeyScratchEligibleFaces, scratch.highWaterEligibleFaces());
+    }
+
     private static void validateJob(
             int priority,
             SectionSnapshot snapshot,
@@ -626,6 +688,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     public long maxScratchQuads() { return maxScratchQuads.get(); }
     public long determinismAudits() { return determinismAudits.get(); }
     public long determinismAuditMatches() { return determinismAuditMatches.get(); }
+
     public long visibilityBuilds() { return visibilityBuilds.get(); }
     public long totalVisibilityFaces() { return totalVisibilityFaces.get(); }
     public long maxVisibilityFaces() { return maxVisibilityFaces.get(); }
@@ -644,6 +707,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         }
         return visibilityFacesByDirection.get(direction);
     }
+
     public long rectangleBuilds() { return rectangleBuilds.get(); }
     public long totalRectangleCount() { return totalRectangleCount.get(); }
     public long totalRectangleCoveredFaces() { return totalRectangleCoveredFaces.get(); }
@@ -671,6 +735,26 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         }
         return rectangleCoveredFacesByDirection.get(direction);
     }
+
+    public long renderKeyBuilds() { return renderKeyBuilds.get(); }
+    public long totalRenderKeyVisibleFaces() { return totalRenderKeyVisibleFaces.get(); }
+    public long totalRenderKeyEligibleFaces() { return totalRenderKeyEligibleFaces.get(); }
+    public long totalRenderKeyUnmappedFaces() { return totalRenderKeyUnmappedFaces.get(); }
+    public long totalRenderKeyAmbiguousFaces() { return totalRenderKeyAmbiguousFaces.get(); }
+    public long totalRenderKeyRecognizedCanonicalQuads() { return totalRenderKeyRecognizedCanonicalQuads.get(); }
+    public long totalRenderKeyIgnoredNoncanonicalQuads() { return totalRenderKeyIgnoredNoncanonicalQuads.get(); }
+    public long totalRenderKeySameAdjacencies() { return totalRenderKeySameAdjacencies.get(); }
+    public long totalRenderKeyDifferentAdjacencies() { return totalRenderKeyDifferentAdjacencies.get(); }
+    public long totalRenderKeyIneligibleAdjacencies() { return totalRenderKeyIneligibleAdjacencies.get(); }
+    public long totalRenderKeyRetainedBytes() { return totalRenderKeyRetainedBytes.get(); }
+    public long totalRenderKeyBuildNs() { return totalRenderKeyBuildNs.get(); }
+    public long maxRenderKeyBuildNs() { return maxRenderKeyBuildNs.get(); }
+    public long maxRenderKeyEligibleFaces() { return maxRenderKeyEligibleFaces.get(); }
+    public long renderKeyScratchBuildUses() { return renderKeyScratchBuildUses.get(); }
+    public long maxRenderKeyScratchEligibleFaces() { return maxRenderKeyScratchEligibleFaces.get(); }
+    public long renderKeyDeterminismAudits() { return renderKeyDeterminismAudits.get(); }
+    public long renderKeyDeterminismAuditMatches() { return renderKeyDeterminismAuditMatches.get(); }
+
     public long shutdownJoinFailures() { return shutdownJoinFailures.get(); }
 
     public long submittedJobs(int priority) { validatePriority(priority); return submittedByPriority.get(priority); }

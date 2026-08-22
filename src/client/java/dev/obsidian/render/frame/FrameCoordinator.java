@@ -7,11 +7,12 @@ import dev.obsidian.render.mesh.SectionMeshWorkerPool;
 import dev.obsidian.render.resource.DeferredReleaseQueue;
 import dev.obsidian.render.terrain.AsyncMultiSectionSceneProbe;
 import dev.obsidian.render.terrain.BinarySectionVisibility;
+import dev.obsidian.render.terrain.CanonicalFaceRenderKeys;
 import dev.obsidian.render.terrain.SectionLifecycleEvents;
 import dev.obsidian.render.upload.StagingUploadArena;
 import net.minecraft.client.renderer.GameRenderer;
 
-/** Render-thread lifecycle root for the active Phase 3 P3.3 dev5 rectangle-sidecar milestone. */
+/** Render-thread lifecycle root for active Phase 3 P3.4 dev6 render-key validation. */
 public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
     private static final int VALIDATION_STAGING_BYTES = 4 * 1024 * 1024;
@@ -43,10 +44,10 @@ public final class FrameCoordinator implements AutoCloseable {
         try {
             workers = new SectionMeshWorkerPool(SectionMeshWorkerPool.defaultWorkerCount());
             staging = new StagingUploadArena(
-                    device, () -> "Obsidian Phase 3 dev5 bounded scene staging ring",
+                    device, () -> "Obsidian Phase 3 dev6 bounded scene staging ring",
                     VALIDATION_STAGING_BYTES);
             arena = new DeviceGeometryArena(
-                    device, () -> "Obsidian Phase 3 dev5 scene device geometry arena",
+                    device, () -> "Obsidian Phase 3 dev6 scene device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
             sceneProbe = new AsyncMultiSectionSceneProbe(device, staging, arena, deferredReleases, workers);
         } catch (RuntimeException e) {
@@ -56,7 +57,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (arena != null) try { arena.close(); } catch (RuntimeException ignored) { }
             try { deferredReleases.close(); } catch (RuntimeException ignored) { }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev5 P3.3 initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 3 dev6 P3.4 initialization failed; Minecraft will continue for diagnosis.", e);
             hardFailure = true;
         }
         meshWorkers = workers;
@@ -76,13 +77,13 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev5 P3.3 frame coordinator active. contextSlots=" + frameContexts.size()
+                    "Phase 3 dev6 P3.4 frame coordinator active. contextSlots=" + frameContexts.size()
                             + ", cpuTimingCapacity=" + cpuFrameTimings.capacity()
                             + ", meshWorkers=" + (meshWorkers == null ? 0 : meshWorkers.workerCount())
                             + ", meshQueueCapacity=" + (meshWorkers == null ? 0 : meshWorkers.queueCapacity())
                             + ", stagingCapacity=" + (stagingUploads == null ? 0 : stagingUploads.capacityBytes())
                             + ", deviceArenaCapacity=" + (deviceArena == null ? 0L : deviceArena.capacityBytes())
-                            + "; binary visibility plus correctness-first greedy topology rectangle sidecars, reusable scratch, exact mask coverage, deterministic audits and independent reference audits are armed. GPU greedy rectangle emission remains disabled.");
+                            + "; P3.2 visibility, P3.3 topology rectangles and correctness-first P3.4 canonical render-key sidecars are armed. Render-key mapping requires exact full-cube baked geometry and exact material/UV/color/light equality. GPU greedy rectangle emission remains disabled.");
         }
     }
 
@@ -95,7 +96,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (!visualDelayLogged) {
                 visualDelayLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev5 P3.3 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
+                        "Phase 3 dev6 P3.4 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
             }
             return;
         }
@@ -109,7 +110,7 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!runtimeInstructionsLogged && sceneProbe != null && sceneProbe.productionWorkerIntegrationReady()) {
             runtimeInstructionsLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev5 P3.3 runtime gate is active. Let the 3x3 async scene reach READY; visually check for regressions; break/place blocks and allow a READY rebuild; perform F3+T and allow another READY rebuild; move enough to exercise normal scene recentering if convenient; then exit normally. Required flags are phase3GateReady=true, schedulerEvidenceReady=true, binaryVisibilityEvidenceReady=true and greedyRectangleEvidenceReady=true. Dev5 keeps greedyRectangleGpuEmission=false, so the existing generalized BakedSectionMesh remains the drawable. The old fixed-anchor unload/return proof is already closed and is not required again.");
+                    "Phase 3 dev6 P3.4 runtime gate is active. Let the 3x3 async scene reach READY; visually check for regressions; break/place blocks and allow a READY rebuild; perform F3+T and allow another READY rebuild; move enough to exercise ordinary scene recentering if convenient; then exit normally. Required flags are phase3GateReady=true, schedulerEvidenceReady=true, binaryVisibilityEvidenceReady=true, greedyRectangleEvidenceReady=true and renderMergeKeyEvidenceReady=true. Dev6 keeps greedyRectangleGpuEmission=false and renderCorrectMergeKeyComplete=false; the existing generalized BakedSectionMesh remains the drawable. The old fixed-anchor unload/return proof is already closed and is not required again.");
         }
     }
 
@@ -348,8 +349,7 @@ public final class FrameCoordinator implements AutoCloseable {
                 && rectangleCoveredFaces == visibilityFaces
                 && rectangleCoveredDirectionSum == rectangleCoveredFaces
                 && rectangleDirectionSum == rectangleCount
-                && rectangleCount <= rectangleCoveredFaces
-                && rectangleCount < rectangleCoveredFaces
+                && rectangleCount > 0L && rectangleCount < rectangleCoveredFaces
                 && rectangleRetainedBytes == rectangleCount * Integer.BYTES
                 && rectangleScratchUses >= rectangleBuilds
                 && rectangleMaskAudits == rectangleBuilds
@@ -360,6 +360,38 @@ public final class FrameCoordinator implements AutoCloseable {
                 && rectangleReferenceMatches == rectangleReferenceAudits
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
+        long renderKeyBuilds = meshWorkers == null ? 0L : meshWorkers.renderKeyBuilds();
+        long renderKeyVisibleFaces = meshWorkers == null ? 0L : meshWorkers.totalRenderKeyVisibleFaces();
+        long renderKeyEligibleFaces = meshWorkers == null ? 0L : meshWorkers.totalRenderKeyEligibleFaces();
+        long renderKeyUnmappedFaces = meshWorkers == null ? 0L : meshWorkers.totalRenderKeyUnmappedFaces();
+        long renderKeyAmbiguousFaces = meshWorkers == null ? 0L : meshWorkers.totalRenderKeyAmbiguousFaces();
+        long renderKeyRecognizedCanonicalQuads = meshWorkers == null ? 0L : meshWorkers.totalRenderKeyRecognizedCanonicalQuads();
+        long renderKeyIgnoredNoncanonicalQuads = meshWorkers == null ? 0L : meshWorkers.totalRenderKeyIgnoredNoncanonicalQuads();
+        long renderKeySameAdjacencies = meshWorkers == null ? 0L : meshWorkers.totalRenderKeySameAdjacencies();
+        long renderKeyDifferentAdjacencies = meshWorkers == null ? 0L : meshWorkers.totalRenderKeyDifferentAdjacencies();
+        long renderKeyIneligibleAdjacencies = meshWorkers == null ? 0L : meshWorkers.totalRenderKeyIneligibleAdjacencies();
+        long renderKeyRetainedBytes = meshWorkers == null ? 0L : meshWorkers.totalRenderKeyRetainedBytes();
+        long renderKeyScratchUses = meshWorkers == null ? 0L : meshWorkers.renderKeyScratchBuildUses();
+        long renderKeyDeterminismAudits = meshWorkers == null ? 0L : meshWorkers.renderKeyDeterminismAudits();
+        long renderKeyDeterminismMatches = meshWorkers == null ? 0L : meshWorkers.renderKeyDeterminismAuditMatches();
+        long renderKeyEligiblePermille = renderKeyVisibleFaces == 0L ? 0L
+                : renderKeyEligibleFaces * 1000L / renderKeyVisibleFaces;
+
+        boolean renderMergeKeyEvidenceReady = greedyRectangleEvidenceReady
+                && renderKeyBuilds > 0L
+                && renderKeyBuilds >= workerCompletedJobs
+                && renderKeyVisibleFaces == visibilityFaces
+                && renderKeyEligibleFaces + renderKeyUnmappedFaces + renderKeyAmbiguousFaces == renderKeyVisibleFaces
+                && renderKeyEligibleFaces > 0L
+                && renderKeyRecognizedCanonicalQuads > 0L
+                && renderKeySameAdjacencies > 0L
+                && renderKeyDifferentAdjacencies > 0L
+                && renderKeyRetainedBytes == renderKeyBuilds * CanonicalFaceRenderKeys.RETAINED_BYTES
+                && renderKeyScratchUses >= renderKeyBuilds
+                && renderKeyDeterminismAudits > 0L
+                && renderKeyDeterminismMatches == renderKeyDeterminismAudits
+                && workersClean && stagingClean && arenaClean && resourcesClean;
+
         boolean phase2ChunkLifecycleEvidenceReady = phase3GateReady
                 && fixedAnchorChunkUnloadEvents > 0L
                 && fixedAnchorChunkLoadEvents > 0L
@@ -368,19 +400,20 @@ public final class FrameCoordinator implements AutoCloseable {
                 && unsafeStaleSceneInstalls == 0L
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
-        StringBuilder out = new StringBuilder(8192);
-        out.append("Phase 3 dev5 P3.3 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
+        StringBuilder out = new StringBuilder(10240);
+        out.append("Phase 3 dev6 P3.4 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
                 .append("phase3GateReady=").append(phase3GateReady)
                 .append(", schedulerEvidenceReady=").append(schedulerEvidenceReady)
                 .append(", binaryVisibilityEvidenceReady=").append(binaryVisibilityEvidenceReady)
                 .append(", greedyRectangleEvidenceReady=").append(greedyRectangleEvidenceReady)
+                .append(", renderMergeKeyEvidenceReady=").append(renderMergeKeyEvidenceReady)
                 .append(", phase2ChunkLifecycleEvidenceReady=").append(phase2ChunkLifecycleEvidenceReady)
                 .append(", fixedAnchorReturnSceneReady=").append(fixedAnchorReturnSceneReady)
                 .append(", productionWorkerIntegrationReady=").append(productionWorkerIntegrationReady)
                 .append(", hardFailure=").append(hardFailure)
                 .append(", productionSceneInstallStillSynchronous=false, productionWorkerSceneIntegration=true")
                 .append(", renderThreadCaptureOwnership=true, renderThreadGpuOwnership=true, workerWorldReadsAfterCapture=0")
-                .append(", binaryVisibilitySidecarIntegrated=true, greedyRectangleSidecarIntegrated=true")
+                .append(", binaryVisibilitySidecarIntegrated=true, greedyRectangleSidecarIntegrated=true, renderMergeKeySidecarIntegrated=true")
                 .append(", greedyRectangleGpuEmission=false, renderCorrectMergeKeyComplete=false")
                 .append(", synchronousSceneMeshBuilds=").append(synchronousSceneMeshBuilds)
                 .append(", workerCount=").append(meshWorkers == null ? 0 : meshWorkers.workerCount())
@@ -465,6 +498,26 @@ public final class FrameCoordinator implements AutoCloseable {
                 .append(", rectangleDeterminismAuditMatches=").append(rectangleDeterminismMatches)
                 .append(", rectangleReferenceAudits=").append(rectangleReferenceAudits)
                 .append(", rectangleReferenceAuditMatches=").append(rectangleReferenceMatches)
+                .append(", renderKeyBuilds=").append(renderKeyBuilds)
+                .append(", renderKeyVisibleFaces=").append(renderKeyVisibleFaces)
+                .append(", renderKeyEligibleFaces=").append(renderKeyEligibleFaces)
+                .append(", renderKeyUnmappedFaces=").append(renderKeyUnmappedFaces)
+                .append(", renderKeyAmbiguousFaces=").append(renderKeyAmbiguousFaces)
+                .append(", renderKeyEligiblePermille=").append(renderKeyEligiblePermille)
+                .append(", renderKeyRecognizedCanonicalQuads=").append(renderKeyRecognizedCanonicalQuads)
+                .append(", renderKeyIgnoredNoncanonicalQuads=").append(renderKeyIgnoredNoncanonicalQuads)
+                .append(", renderKeySameAdjacencies=").append(renderKeySameAdjacencies)
+                .append(", renderKeyDifferentAdjacencies=").append(renderKeyDifferentAdjacencies)
+                .append(", renderKeyIneligibleAdjacencies=").append(renderKeyIneligibleAdjacencies)
+                .append(", renderKeyRetainedBytes=").append(renderKeyRetainedBytes)
+                .append(", renderKeyRetainedBytesPerBuild=").append(CanonicalFaceRenderKeys.RETAINED_BYTES)
+                .append(", renderKeyTotalBuildNs=").append(meshWorkers == null ? 0L : meshWorkers.totalRenderKeyBuildNs())
+                .append(", renderKeyMaxBuildNs=").append(meshWorkers == null ? 0L : meshWorkers.maxRenderKeyBuildNs())
+                .append(", renderKeyMaxEligibleFaces=").append(meshWorkers == null ? 0L : meshWorkers.maxRenderKeyEligibleFaces())
+                .append(", renderKeyScratchBuildUses=").append(renderKeyScratchUses)
+                .append(", renderKeyMaxScratchEligibleFaces=").append(meshWorkers == null ? 0L : meshWorkers.maxRenderKeyScratchEligibleFaces())
+                .append(", renderKeyDeterminismAudits=").append(renderKeyDeterminismAudits)
+                .append(", renderKeyDeterminismAuditMatches=").append(renderKeyDeterminismMatches)
                 .append(", sceneWorkerSubmitted=").append(sceneWorkerSubmitted)
                 .append(", sceneWorkerCompleted=").append(sceneWorkerCompleted)
                 .append(", sceneWorkerCancelled=").append(sceneWorkerCancelled)
