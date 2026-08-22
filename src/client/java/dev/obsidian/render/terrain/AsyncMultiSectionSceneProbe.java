@@ -11,19 +11,22 @@ import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.SectionPos;
 
 /**
- * Phase 3 dev2 persistent 3x3 scene whose drawable meshes are produced by the
+ * Phase 3 dev3 persistent 3x3 scene whose drawable meshes are produced by the
  * bounded {@link SectionMeshWorkerPool} and installed only on the render thread.
  *
  * <p>The already-validated P2.7 whole-window validity model is deliberately
- * retained for this integration milestone. Live world/model/material/light
- * capture remains render-thread owned; only pure {@link BakedSectionMesh}
- * construction crosses the worker boundary.</p>
+ * retained. Live world/model/material/light capture remains render-thread owned;
+ * only pure {@link BakedSectionMesh} construction crosses the worker boundary.
+ * Dev3 adds relevance-aware HIGH/NORMAL/LOW admission plus conservative bounded
+ * multi-admission so the production scheduler is exercised without unbounded
+ * render-thread capture or queue growth.</p>
  */
 public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/AsyncMultiSectionSceneProbe");
     private static final int RECORD_CAPACITY = SectionLifecycleEvents.SCENE_RECORD_CAPACITY;
     private static final int MIN_LIVE_RECORDS = 3;
     private static final int MIN_ADJACENT_PAIRS = 2;
+    private static final int MAX_ADMISSIONS_PER_FRAME = 2;
     private static final long ELIGIBILITY_RETRY_NS = 500_000_000L;
 
     public enum State { WAITING_WORLD, SCANNING, BUILDING, LIVE, RETIRING, FAILED, CLOSED }
@@ -78,6 +81,11 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     private long sceneReadyTransitions;
     private long sceneRebuilds;
     private long unsafeStaleSceneInstalls;
+    private long schedulerAdmissionDeferrals;
+    private long admittedHighPriority;
+    private long admittedNormalPriority;
+    private long admittedLowPriority;
+    private int maxAdmissionBurst;
     private int observedReasonMask;
     private int maxLiveRecords;
     private int maxAdjacentPairs;
@@ -139,7 +147,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         invalidateScene(reasons, frameSerial, false);
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev2 scene invalidation on frame {0}: reasons={1}, relevantEvents={2}, generation={3}, center={4}.",
+                "Phase 3 dev3 scene invalidation on frame {0}: reasons={1}, relevantEvents={2}, generation={3}, center={4}.",
                 frameSerial, SectionLifecycleEvents.describeReasons(reasons), relevantEvents,
                 sceneGeneration, centerKnown ? centerString() : "unbound");
     }
@@ -165,7 +173,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
             updateMaxSimultaneousJobs();
             if (hardFailure || state == State.RETIRING) return;
             if (state == State.BUILDING) {
-                admitOneRecord(renderer, frameSerial);
+                admitReadyRecords(renderer, frameSerial);
                 updateMaxSimultaneousJobs();
                 observeSceneReadiness(frameSerial);
             }
@@ -190,7 +198,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 state = State.FAILED;
                 disposeRecordProbe(record);
                 LOG.log(System.Logger.Level.ERROR,
-                        "Phase 3 dev2 worker-backed section record failed; async scene validation failed.");
+                        "Phase 3 dev3 worker-backed section record failed; async scene validation failed.");
             }
         }
         updateMaxSimultaneousJobs();
@@ -220,7 +228,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         configureRecordsForCenter();
         state = State.SCANNING;
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev2 bound async 3x3 scene center {0}; immutable capture stays on render thread and pure mesh construction uses {1} bounded worker(s).",
+                "Phase 3 dev3 bound async 3x3 scene center {0}; capture stays render-thread-only and pure mesh construction uses {1} bounded worker(s) with HIGH/NORMAL/LOW relevance scheduling.",
                 centerString(), workers.workerCount());
         return true;
     }
@@ -279,14 +287,14 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
             if (eligible >= MIN_LIVE_RECORDS && adjacent >= MIN_ADJACENT_PAIRS) {
                 state = State.BUILDING;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev2 eligibility scan complete on frame {0}: eligibleRecords={1}/{2}, adjacentPairs={3}; worker job admission begins.",
+                        "Phase 3 dev3 eligibility scan complete on frame {0}: eligibleRecords={1}/{2}, adjacentPairs={3}; bounded relevance-aware worker admission begins.",
                         frameSerial, eligible, records.length, adjacent);
                 return;
             }
             if (!insufficientSceneLogged) {
                 insufficientSceneLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev2 needs at least {0} eligible records and {1} adjacent pairs. Current eligible={2}, adjacent={3}.",
+                        "Phase 3 dev3 needs at least {0} eligible records and {1} adjacent pairs. Current eligible={2}, adjacent={3}.",
                         MIN_LIVE_RECORDS, MIN_ADJACENT_PAIRS, eligible, adjacent);
             }
             if (now >= nextEligibilityRetryNs) {
@@ -338,7 +346,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
             hardFailure = true;
             state = State.FAILED;
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev2 eligibility capture failed for section (" + record.sectionX + ","
+                    "Phase 3 dev3 eligibility capture failed for section (" + record.sectionX + ","
                             + record.sectionY + "," + record.sectionZ + ").", e);
         }
     }
@@ -359,21 +367,61 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         }
     }
 
-    private void admitOneRecord(GameRenderer renderer, long frameSerial) {
+    private void admitReadyRecords(GameRenderer renderer, long frameSerial) {
         if (SectionLifecycleEvents.latestSequence() != buildEventSequence) return;
-        for (SceneRecord record : records) {
-            if (record.eligibility != Eligibility.ELIGIBLE || record.probe != null) continue;
-            int priority = record.sectionX == centerSectionX && record.sectionZ == centerSectionZ
-                    ? SectionMeshWorkerPool.PRIORITY_HIGH
-                    : SectionMeshWorkerPool.PRIORITY_NORMAL;
+        int admissions = 0;
+        int outstandingTarget = Math.max(2, workers.workerCount() * 2);
+        while (admissions < MAX_ADMISSIONS_PER_FRAME) {
+            if (workers.outstandingJobs() >= outstandingTarget) {
+                if (hasUnadmittedEligibleRecord()) schedulerAdmissionDeferrals++;
+                break;
+            }
+            SceneRecord record = nextUnadmittedRecordByPriority();
+            if (record == null) break;
+            int priority = priorityFor(record);
             record.probe = new WorkerBackedSectionLifecycleProbe(
                     device, staging, arena, deferredReleases, workers, priority,
                     sceneGeneration, buildEventSequence,
                     record.sectionX, record.sectionY, record.sectionZ);
             record.probe.afterWorldRender(renderer, frameSerial);
             observeRecordState(record, frameSerial);
-            return;
+            admissions++;
+            if (priority == SectionMeshWorkerPool.PRIORITY_HIGH) admittedHighPriority++;
+            else if (priority == SectionMeshWorkerPool.PRIORITY_NORMAL) admittedNormalPriority++;
+            else admittedLowPriority++;
+            updateMaxSimultaneousJobs();
+            if (hardFailure || state == State.RETIRING) break;
         }
+        maxAdmissionBurst = Math.max(maxAdmissionBurst, admissions);
+    }
+
+    private SceneRecord nextUnadmittedRecordByPriority() {
+        for (int priority = SectionMeshWorkerPool.PRIORITY_HIGH;
+             priority <= SectionMeshWorkerPool.PRIORITY_LOW; priority++) {
+            for (SceneRecord record : records) {
+                if (record.eligibility == Eligibility.ELIGIBLE
+                        && record.probe == null
+                        && priorityFor(record) == priority) {
+                    return record;
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean hasUnadmittedEligibleRecord() {
+        for (SceneRecord record : records) {
+            if (record.eligibility == Eligibility.ELIGIBLE && record.probe == null) return true;
+        }
+        return false;
+    }
+
+    private int priorityFor(SceneRecord record) {
+        int dx = Math.abs(record.sectionX - centerSectionX);
+        int dz = Math.abs(record.sectionZ - centerSectionZ);
+        if (dx == 0 && dz == 0) return SectionMeshWorkerPool.PRIORITY_HIGH;
+        if (dx + dz == 1) return SectionMeshWorkerPool.PRIORITY_NORMAL;
+        return SectionMeshWorkerPool.PRIORITY_LOW;
     }
 
     private void observeRecordState(SceneRecord record, long frameSerial) {
@@ -391,9 +439,9 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
             record.installObserved = true;
             recordInstallCount++;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev2 worker-backed scene record installed: generation={0}, section=({1},{2},{3}), installs={4}, liveRecords={5}.",
+                    "Phase 3 dev3 worker-backed scene record installed: generation={0}, section=({1},{2},{3}), priority={4}, installs={5}, liveRecords={6}.",
                     sceneGeneration, record.sectionX, record.sectionY, record.sectionZ,
-                    recordInstallCount, liveRecordCount());
+                    SectionMeshWorkerPool.priorityName(probe.workerPriority()), recordInstallCount, liveRecordCount());
         } else if (probeState == WorkerBackedSectionLifecycleProbe.State.FAILED) {
             hardFailure = true;
             state = State.FAILED;
@@ -439,16 +487,16 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         state = State.LIVE;
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev2 async scene READY on frame {0}: generation={1}, center={2}, liveRecords={3}, adjacentPairs={4}, recordInstalls={5}, workerResultInstalls={6}, synchronousSceneMeshBuilds={7}, maxSceneJobs={8}.",
+                "Phase 3 dev3 async scene READY on frame {0}: generation={1}, center={2}, liveRecords={3}, adjacentPairs={4}, recordInstalls={5}, workerResultInstalls={6}, synchronousSceneMeshBuilds={7}, maxSceneJobs={8}, maxAdmissionBurst={9}.",
                 frameSerial, sceneGeneration, centerString(), live, adjacent, recordInstallCount,
-                workerResultInstalls(), synchronousSceneMeshBuilds(), maxSimultaneousSceneJobs);
+                workerResultInstalls(), synchronousSceneMeshBuilds(), maxSimultaneousSceneJobs, maxAdmissionBurst);
     }
 
     private void invalidateScene(int reasons, long frameSerial, boolean recenter) {
         if (sceneGeneration == Long.MAX_VALUE) {
             hardFailure = true;
             state = State.FAILED;
-            throw new IllegalStateException("Phase 3 dev2 scene generation exhausted");
+            throw new IllegalStateException("Phase 3 dev3 scene generation exhausted");
         }
         sceneGeneration++;
         buildEventSequence = SectionLifecycleEvents.latestSequence();
@@ -579,6 +627,11 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     public long sceneReadyTransitions() { return sceneReadyTransitions; }
     public long sceneRebuilds() { return sceneRebuilds; }
     public long unsafeStaleSceneInstalls() { return unsafeStaleSceneInstalls; }
+    public long schedulerAdmissionDeferrals() { return schedulerAdmissionDeferrals; }
+    public long admittedHighPriority() { return admittedHighPriority; }
+    public long admittedNormalPriority() { return admittedNormalPriority; }
+    public long admittedLowPriority() { return admittedLowPriority; }
+    public int maxAdmissionBurst() { return maxAdmissionBurst; }
     public int observedReasonMask() { return observedReasonMask; }
     public int maxLiveRecords() { return maxLiveRecords; }
     public int maxAdjacentPairs() { return maxAdjacentPairs; }

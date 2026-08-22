@@ -2,14 +2,21 @@ package dev.obsidian.render.terrain;
 
 /**
  * Allocation-free coalescing bridge from exact Minecraft lifecycle mixins into
- * the render-thread P2.7 multi-section scene proof.
+ * the render-thread multi-section scene.
  *
- * <p>The tracked scene is a 3x3 horizontal section window at one section Y.
- * Exact dirty events inside that window advance renderer validity. Chunk
+ * <p>The active tracked scene is a 3x3 horizontal section window at one section
+ * Y. Exact dirty events inside that window advance renderer validity. Chunk
  * load/unload events use radius two in X/Z because the union of every record's
  * one-block halo spans a 5x5 chunk footprint. World and resource changes are
  * always relevant. Counters are sticky and drained by delta, so unrelated world
  * streaming cannot overflow a queue or stale a valid scene generation.</p>
+ *
+ * <p>Dev3 additionally freezes the first tracked scene center as a diagnostic-only
+ * lifecycle anchor. Chunk load/unload events in that anchor's 3x3 chunk halo are
+ * counted even after the render scene recenters. Anchor events do not advance the
+ * active scene validity sequence unless they are also relevant to the current
+ * scene. This permits a later production run to prove the old P2.6 fixed-target
+ * unload/return event class without coupling current rendering to stale coordinates.</p>
  */
 public final class SectionLifecycleEvents {
     public static final int REASON_SECTION_DIRTY = 1;
@@ -25,11 +32,16 @@ public final class SectionLifecycleEvents {
     public static final int SCENE_SECTION_RADIUS = 1;
     public static final int SCENE_RECORD_CAPACITY = 9;
     public static final int SCENE_HALO_CHUNK_RADIUS = SCENE_SECTION_RADIUS + 1;
+    public static final int FIXED_LIFECYCLE_HALO_CHUNK_RADIUS = 1;
 
     private static boolean targetKnown;
     private static int targetSectionX;
     private static int targetSectionY;
     private static int targetSectionZ;
+
+    private static boolean fixedAnchorKnown;
+    private static int fixedAnchorChunkX;
+    private static int fixedAnchorChunkZ;
 
     /** Monotonic sequence of events relevant to the currently tracked scene validity domain. */
     private static long relevantSequence;
@@ -39,6 +51,8 @@ public final class SectionLifecycleEvents {
     private static long chunkUnloadEvents;
     private static long worldChangeEvents;
     private static long resourceReloadEvents;
+    private static long fixedAnchorChunkLoadEvents;
+    private static long fixedAnchorChunkUnloadEvents;
 
     private SectionLifecycleEvents() {}
 
@@ -51,6 +65,8 @@ public final class SectionLifecycleEvents {
         private long chunkUnloadEvents;
         private long worldChangeEvents;
         private long resourceReloadEvents;
+        private long fixedAnchorChunkLoadEvents;
+        private long fixedAnchorChunkUnloadEvents;
         private int lastRelevantEventCount;
 
         public long sequence() { return sequence; }
@@ -61,6 +77,8 @@ public final class SectionLifecycleEvents {
         public long chunkUnloadEvents() { return chunkUnloadEvents; }
         public long worldChangeEvents() { return worldChangeEvents; }
         public long resourceReloadEvents() { return resourceReloadEvents; }
+        public long fixedAnchorChunkLoadEvents() { return fixedAnchorChunkLoadEvents; }
+        public long fixedAnchorChunkUnloadEvents() { return fixedAnchorChunkUnloadEvents; }
         public int lastRelevantEventCount() { return lastRelevantEventCount; }
     }
 
@@ -79,6 +97,11 @@ public final class SectionLifecycleEvents {
             targetSectionX = sectionX;
             targetSectionY = sectionY;
             targetSectionZ = sectionZ;
+            if (!fixedAnchorKnown) {
+                fixedAnchorKnown = true;
+                fixedAnchorChunkX = sectionX;
+                fixedAnchorChunkZ = sectionZ;
+            }
         }
     }
 
@@ -95,22 +118,29 @@ public final class SectionLifecycleEvents {
     }
 
     public static synchronized void chunkLoaded(int chunkX, int chunkZ) {
-        if (!isSceneHaloChunk(chunkX, chunkZ)) return;
+        boolean sceneRelevant = isSceneHaloChunk(chunkX, chunkZ);
+        boolean anchorRelevant = isFixedAnchorHaloChunk(chunkX, chunkZ);
+        if (anchorRelevant) fixedAnchorChunkLoadEvents++;
+        if (!sceneRelevant) return;
         relevantSequence++;
         chunkLoadEvents++;
     }
 
     public static synchronized void chunkUnloaded(int chunkX, int chunkZ) {
-        if (!isSceneHaloChunk(chunkX, chunkZ)) return;
+        boolean sceneRelevant = isSceneHaloChunk(chunkX, chunkZ);
+        boolean anchorRelevant = isFixedAnchorHaloChunk(chunkX, chunkZ);
+        if (anchorRelevant) fixedAnchorChunkUnloadEvents++;
+        if (!sceneRelevant) return;
         relevantSequence++;
         chunkUnloadEvents++;
     }
 
-    /** World replacement/teardown invalidates any previous scene immediately. */
+    /** World replacement/teardown invalidates any previous scene and fixed anchor immediately. */
     public static synchronized void worldChanged() {
         relevantSequence++;
         worldChangeEvents++;
         targetKnown = false;
+        fixedAnchorKnown = false;
     }
 
     public static synchronized void resourceReloaded() {
@@ -129,6 +159,12 @@ public final class SectionLifecycleEvents {
         return targetKnown
                 && Math.abs(chunkX - targetSectionX) <= SCENE_HALO_CHUNK_RADIUS
                 && Math.abs(chunkZ - targetSectionZ) <= SCENE_HALO_CHUNK_RADIUS;
+    }
+
+    private static boolean isFixedAnchorHaloChunk(int chunkX, int chunkZ) {
+        return fixedAnchorKnown
+                && Math.abs(chunkX - fixedAnchorChunkX) <= FIXED_LIFECYCLE_HALO_CHUNK_RADIUS
+                && Math.abs(chunkZ - fixedAnchorChunkZ) <= FIXED_LIFECYCLE_HALO_CHUNK_RADIUS;
     }
 
     /**
@@ -163,9 +199,7 @@ public final class SectionLifecycleEvents {
         }
 
         long playerDelta = playerDirtyEvents - cursor.playerDirtyEvents;
-        if (playerDelta > 0L) {
-            cursor.playerDirtyEvents = playerDirtyEvents;
-        }
+        if (playerDelta > 0L) cursor.playerDirtyEvents = playerDirtyEvents;
 
         long loadDelta = chunkLoadEvents - cursor.chunkLoadEvents;
         if (loadDelta > 0L) {
@@ -195,6 +229,8 @@ public final class SectionLifecycleEvents {
             cursor.lastRelevantEventCount = addRelevantCount(cursor.lastRelevantEventCount, resourceDelta);
         }
 
+        cursor.fixedAnchorChunkLoadEvents = fixedAnchorChunkLoadEvents;
+        cursor.fixedAnchorChunkUnloadEvents = fixedAnchorChunkUnloadEvents;
         cursor.sequence = relevantSequence;
         return reasons;
     }
