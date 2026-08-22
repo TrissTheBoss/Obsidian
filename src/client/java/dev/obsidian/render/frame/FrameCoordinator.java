@@ -13,7 +13,7 @@ import dev.obsidian.render.terrain.SectionLifecycleEvents;
 import dev.obsidian.render.upload.StagingUploadArena;
 import net.minecraft.client.renderer.GameRenderer;
 
-/** Render-thread lifecycle root for active Phase 3 P3.4 dev7 merge-candidate validation. */
+/** Render-thread lifecycle root for active Phase 3 P3.4 dev8 emission-safety validation. */
 public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
     private static final int VALIDATION_STAGING_BYTES = 4 * 1024 * 1024;
@@ -45,10 +45,10 @@ public final class FrameCoordinator implements AutoCloseable {
         try {
             workers = new SectionMeshWorkerPool(SectionMeshWorkerPool.defaultWorkerCount());
             staging = new StagingUploadArena(
-                    device, () -> "Obsidian Phase 3 dev7 bounded scene staging ring",
+                    device, () -> "Obsidian Phase 3 dev8 bounded scene staging ring",
                     VALIDATION_STAGING_BYTES);
             arena = new DeviceGeometryArena(
-                    device, () -> "Obsidian Phase 3 dev7 scene device geometry arena",
+                    device, () -> "Obsidian Phase 3 dev8 scene device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
             sceneProbe = new AsyncMultiSectionSceneProbe(device, staging, arena, deferredReleases, workers);
         } catch (RuntimeException e) {
@@ -58,7 +58,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (arena != null) try { arena.close(); } catch (RuntimeException ignored) { }
             try { deferredReleases.close(); } catch (RuntimeException ignored) { }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev7 P3.4 initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 3 dev8 P3.4 initialization failed; Minecraft will continue for diagnosis.", e);
             hardFailure = true;
         }
         meshWorkers = workers;
@@ -78,13 +78,13 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev7 P3.4 frame coordinator active. contextSlots=" + frameContexts.size()
+                    "Phase 3 dev8 P3.4 frame coordinator active. contextSlots=" + frameContexts.size()
                             + ", cpuTimingCapacity=" + cpuFrameTimings.capacity()
                             + ", meshWorkers=" + (meshWorkers == null ? 0 : meshWorkers.workerCount())
                             + ", meshQueueCapacity=" + (meshWorkers == null ? 0 : meshWorkers.queueCapacity())
                             + ", stagingCapacity=" + (stagingUploads == null ? 0 : stagingUploads.capacityBytes())
                             + ", deviceArenaCapacity=" + (deviceArena == null ? 0L : deviceArena.capacityBytes())
-                            + "; P3.2 visibility, P3.3 topology rectangles, dev6 canonical render keys and dev7 render-key-aware merge candidates are armed. Candidate rectangles cover only uniquely mapped exactly render-equivalent canonical faces. GPU greedy rectangle emission remains disabled.");
+                            + "; P3.2 visibility, P3.3 topology rectangles, dev6 canonical render keys, dev7 merge candidates and dev8 ordinary-quad emission-safety classification are armed. Dev8 measures exact color/light/UV continuity feasibility only; GPU greedy rectangle emission remains disabled.");
         }
     }
 
@@ -97,7 +97,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (!visualDelayLogged) {
                 visualDelayLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev7 P3.4 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
+                        "Phase 3 dev8 P3.4 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
             }
             return;
         }
@@ -111,7 +111,7 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!runtimeInstructionsLogged && sceneProbe != null && sceneProbe.productionWorkerIntegrationReady()) {
             runtimeInstructionsLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev7 P3.4 runtime gate is active. Let the 3x3 async scene reach READY; visually check for regressions; break/place blocks and allow a READY rebuild; perform F3+T and allow another READY rebuild; move enough to exercise ordinary scene recentering if convenient; then exit normally. Required flags are phase3GateReady=true, schedulerEvidenceReady=true, binaryVisibilityEvidenceReady=true, greedyRectangleEvidenceReady=true, renderMergeKeyEvidenceReady=true and renderMergeCandidateEvidenceReady=true. Dev7 keeps greedyRectangleGpuEmission=false and renderCorrectMergeKeyComplete=false; the existing generalized BakedSectionMesh remains the drawable. The old fixed-anchor unload/return proof is already closed and is not required again.");
+                    "Phase 3 dev8 P3.4 runtime gate is active. Let the 3x3 async scene reach READY; perform a normal block break/place rebuild and F3+T rebuild; ordinary movement/recentering is useful if convenient; then exit normally. Required flags are phase3GateReady=true, schedulerEvidenceReady=true, binaryVisibilityEvidenceReady=true, greedyRectangleEvidenceReady=true, renderMergeKeyEvidenceReady=true, renderMergeCandidateEvidenceReady=true and ordinaryQuadEmissionSafetyEvidenceReady=true. A measured ordinary-safe multi-face count of zero is valid evidence. Dev8 keeps greedyRectangleGpuEmission=false and renderCorrectMergeKeyComplete=false; the existing generalized BakedSectionMesh remains the drawable. The old fixed-anchor unload/return proof is already closed and is not required again.");
         }
     }
 
@@ -445,6 +445,21 @@ public final class FrameCoordinator implements AutoCloseable {
                 && mergeCandidateDeterminismMatches == mergeCandidateDeterminismAudits
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
+        OrdinaryQuadEmissionSafetyEvidence.Snapshot emissionSafety =
+                OrdinaryQuadEmissionSafetyEvidence.capture(
+                        meshWorkers,
+                        renderMergeCandidateEvidenceReady,
+                        workerCompletedJobs,
+                        mergeCandidateCount,
+                        mergeCandidateSingletons,
+                        mergeCandidateMultiFace,
+                        renderKeyEligibleFaces,
+                        workersClean,
+                        stagingClean,
+                        arenaClean,
+                        resourcesClean);
+        boolean ordinaryQuadEmissionSafetyEvidenceReady = emissionSafety.ready();
+
         boolean phase2ChunkLifecycleEvidenceReady = phase3GateReady
                 && fixedAnchorChunkUnloadEvents > 0L
                 && fixedAnchorChunkLoadEvents > 0L
@@ -453,21 +468,22 @@ public final class FrameCoordinator implements AutoCloseable {
                 && unsafeStaleSceneInstalls == 0L
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
-        StringBuilder out = new StringBuilder(12288);
-        out.append("Phase 3 dev7 P3.4 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
+        StringBuilder out = new StringBuilder(14336);
+        out.append("Phase 3 dev8 P3.4 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
                 .append("phase3GateReady=").append(phase3GateReady)
                 .append(", schedulerEvidenceReady=").append(schedulerEvidenceReady)
                 .append(", binaryVisibilityEvidenceReady=").append(binaryVisibilityEvidenceReady)
                 .append(", greedyRectangleEvidenceReady=").append(greedyRectangleEvidenceReady)
                 .append(", renderMergeKeyEvidenceReady=").append(renderMergeKeyEvidenceReady)
                 .append(", renderMergeCandidateEvidenceReady=").append(renderMergeCandidateEvidenceReady)
+                .append(", ordinaryQuadEmissionSafetyEvidenceReady=").append(ordinaryQuadEmissionSafetyEvidenceReady)
                 .append(", phase2ChunkLifecycleEvidenceReady=").append(phase2ChunkLifecycleEvidenceReady)
                 .append(", fixedAnchorReturnSceneReady=").append(fixedAnchorReturnSceneReady)
                 .append(", productionWorkerIntegrationReady=").append(productionWorkerIntegrationReady)
                 .append(", hardFailure=").append(hardFailure)
                 .append(", productionSceneInstallStillSynchronous=false, productionWorkerSceneIntegration=true")
                 .append(", renderThreadCaptureOwnership=true, renderThreadGpuOwnership=true, workerWorldReadsAfterCapture=0")
-                .append(", binaryVisibilitySidecarIntegrated=true, greedyRectangleSidecarIntegrated=true, renderMergeKeySidecarIntegrated=true, renderMergeCandidateSidecarIntegrated=true")
+                .append(", binaryVisibilitySidecarIntegrated=true, greedyRectangleSidecarIntegrated=true, renderMergeKeySidecarIntegrated=true, renderMergeCandidateSidecarIntegrated=true, ordinaryQuadEmissionSafetySidecarIntegrated=true")
                 .append(", greedyRectangleGpuEmission=false, renderCorrectMergeKeyComplete=false")
                 .append(", synchronousSceneMeshBuilds=").append(synchronousSceneMeshBuilds)
                 .append(", workerCount=").append(meshWorkers == null ? 0 : meshWorkers.workerCount())
@@ -602,8 +618,9 @@ public final class FrameCoordinator implements AutoCloseable {
                 .append(", mergeCandidateCoverageAudits=").append(mergeCandidateCoverageAudits)
                 .append(", mergeCandidateCoverageAuditMatches=").append(mergeCandidateCoverageMatches)
                 .append(", mergeCandidateDeterminismAudits=").append(mergeCandidateDeterminismAudits)
-                .append(", mergeCandidateDeterminismAuditMatches=").append(mergeCandidateDeterminismMatches)
-                .append(", sceneWorkerSubmitted=").append(sceneWorkerSubmitted)
+                .append(", mergeCandidateDeterminismAuditMatches=").append(mergeCandidateDeterminismMatches);
+        emissionSafety.appendTo(out);
+        out.append(", sceneWorkerSubmitted=").append(sceneWorkerSubmitted)
                 .append(", sceneWorkerCompleted=").append(sceneWorkerCompleted)
                 .append(", sceneWorkerCancelled=").append(sceneWorkerCancelled)
                 .append(", sceneWorkerCancellationRequests=").append(sceneWorkerCancellationRequests)
