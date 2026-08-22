@@ -4,17 +4,17 @@ Last materially revised: 2026-08-22
 Roadmap schema: v1  
 Canonical repository: `TrissTheBoss/Obsidian`
 
-This file is the canonical description of **where Obsidian is intended to go**: product goals, planned renderer architecture, phase structure, feature inventory, validation gates, performance strategy, compatibility scope, experiments, release path, and the rules for changing that plan.
+This file is the canonical description of **where Obsidian is intended to go**: product goals, architecture direction, phase order, validation gates, feature scope, performance strategy, compatibility scope, experiments, and release path.
 
-It is deliberately different from the other continuity files:
+Repository roles:
 
-- `ai/CURRENT_STATE.md` answers **what is true right now**.
-- `ai/MASTER_ROADMAP.md` answers **what we intend to build and in what order**.
-- `ai/DECISIONS.md` answers **why durable choices were made**.
-- `ai/attempts/` and `ai/ATTEMPT_LOG.md` answer **what was tried, what happened, and what evidence exists**.
-- Source code and CI artifacts remain the authority for **what is actually implemented**.
+- `ai/CURRENT_STATE.md` — what is true now and the immediate next milestone;
+- `ai/MASTER_ROADMAP.md` — intended architecture and build order;
+- `ai/DECISIONS.md` — durable engineering/product choices and their rationale;
+- `ai/ATTEMPT_LOG.md` + `ai/attempts/` — immutable experiment/evidence history;
+- source + exact CI + runtime evidence — authority for what is actually implemented.
 
-A roadmap item is not evidence that a feature exists. Any item described below remains planned until `CURRENT_STATE.md`, code, CI, and required runtime evidence say otherwise.
+A roadmap item is not evidence that it exists. Status must be synchronized from implementation/CI/runtime truth.
 
 ---
 
@@ -22,116 +22,72 @@ A roadmap item is not evidence that a feature exists. Any item described below r
 
 Obsidian is a client-side Minecraft Java Fabric renderer intended to become a clean, Vulkan-only, vendor-neutral replacement for the vanilla terrain/world rendering path and the usual stack of separate renderer/culling/immediate-mode optimization mods.
 
-The renderer is being designed around a single central objective:
-
-> **Make Minecraft feel consistently smooth under workloads that normally produce bad frame-time spikes, especially chunk streaming, camera rotation, world traversal, and large render distances.**
-
-Average FPS matters, but it is not allowed to come at the expense of 1%/0.1% lows, uncontrolled memory growth, hidden quality reductions, or unstable synchronization.
-
-### Primary priorities, in order
+Primary priorities, in order:
 
 1. Exceptional 1% and 0.1% lows.
-2. Smooth chunk loading, world traversal, and camera movement.
-3. Treat 32 chunks as a normal baseline workload rather than an extreme case.
-4. Scale cleanly toward 64/96/128+ render distances where hardware and world complexity permit.
-5. High average FPS after tail latency is under control.
-6. Reasonable, observable, bounded RAM and VRAM behavior.
+2. Smooth chunk loading, traversal, and camera movement.
+3. Treat 32 chunks as a normal baseline workload.
+4. Scale toward 64/96/128+ render distances where hardware permits.
+5. High average FPS after tail latency is controlled.
+6. Bounded, observable RAM/VRAM behavior.
 7. Minimal visual differences from intended vanilla rendering.
-8. Fix obvious rendering defects instead of reproducing them solely for pixel identity.
-9. Vulkan-only renderer architecture.
-10. Vendor-neutral baseline chosen by capabilities, not GPU brand.
+8. Fix obvious rendering defects rather than reproduce them for pixel identity.
+9. Vulkan-only architecture.
+10. Vendor-neutral baseline selected by capabilities, not GPU brand.
 11. Vanilla/Fabric-first compatibility.
-12. Architecture suitable for eventual public release, debugging, profiling, and long-term maintenance.
+12. Architecture fit for long-term debugging, profiling, and public release.
 
-### Explicit non-goals for the current roadmap
-
-- OpenGL renderer fallback.
-- Iris/shader-pack compatibility as an early blocker.
-- Support for old/weak hardware at the expense of the modern renderer design.
-- Separate NVIDIA/AMD/Intel renderer implementations.
-- Giant-modpack compatibility before the renderer core is stable.
-- Pixel-identical reproduction of inefficient vanilla behavior.
-- Mandatory mesh shaders, work graphs, vendor extensions, or other bleeding-edge features.
-- Mandatory LOD in the initial terrain renderer.
+Current non-goals include OpenGL fallback, early shader-pack compatibility, vendor-specific renderer forks, giant-modpack compatibility before the core is stable, mandatory mesh shaders/work graphs, and mandatory LOD.
 
 ---
 
 ## 2. Reference workload and hardware
 
-The primary development/runtime reference system is currently:
+Primary development/runtime reference system:
 
-- Windows 11
-- AMD Radeon RX 6800 XT, 16 GB VRAM
-- Ryzen 5 5600X
-- 16 GB DDR4-2666
-- Minecraft 26.2
-- Fabric Loader 0.19.3
-- Java 25
-- Vulkan backend
+- Windows 11;
+- AMD Radeon RX 6800 XT, 16 GB VRAM;
+- Ryzen 5 5600X;
+- 16 GB DDR4-2666;
+- Minecraft 26.2;
+- Fabric Loader 0.19.3;
+- Java 25;
+- Vulkan backend.
 
-This machine is a **reference**, not a vendor-specific design target. Public-readiness validation must eventually include materially different GPU vendors and memory architectures.
+The reference machine does not define a vendor-specific design. Public readiness eventually requires materially different GPU vendors and memory architectures.
 
-### Reference scenarios to optimize for
-
-The eventual benchmark suite should include at least:
-
-- standing still in a loaded area;
-- slow forward traversal;
-- fast traversal through newly loaded chunks;
-- rapid 180-degree camera turns;
-- repeated camera sweeps at high render distance;
-- teleport / abrupt scene replacement;
-- dense terrain with caves and overdraw;
-- forests / alpha-tested vegetation;
-- villages / block entities;
-- water-heavy scenes;
-- particle-heavy/weather scenes;
-- memory-pressure / long-session soak tests;
-- chunk unload/reload churn;
-- 32, 64, 96, and 128+ render-distance scaling where practical.
-
-No single scene is allowed to become the only performance oracle.
+Important benchmark scenarios include standing steady state, slow/fast traversal, chunk streaming, rapid camera turns, teleport/scene replacement, dense caves/overdraw, forests/cutout vegetation, villages/block entities, water/translucency, particles/weather, memory-pressure soak, unload/reload churn, and 32/64/96/128+ render-distance scaling.
 
 ---
 
-## 3. Roadmap status vocabulary
+## 3. Status vocabulary
 
-Every major roadmap item should use one of these meanings consistently:
-
-- **COMPLETE** — implementation, CI, and required runtime validation are complete and merged.
-- **ACTIVE** — current milestone or actively being implemented.
-- **PLANNED** — intended work, not yet started.
-- **EXPERIMENTAL** — optional path that must prove stability/performance before becoming default.
-- **DEFERRED** — still potentially wanted but intentionally moved later.
-- **BLOCKED** — cannot proceed until a named dependency/evidence gap is resolved.
-- **REJECTED** — considered and deliberately not planned; reason must exist in `DECISIONS.md` or an attempt record.
-- **SUPERSEDED** — replaced by a newer roadmap item or strategy; historical wording should not simply disappear without a trace.
+- **COMPLETE** — implementation, required CI/runtime validation, and merge are complete.
+- **ACTIVE** — current milestone / actively being implemented.
+- **PLANNED** — intended but not started.
+- **EXPERIMENTAL** — optional path requiring measured proof before default use.
+- **DEFERRED** — intentionally moved later.
+- **BLOCKED** — waiting on a named dependency/evidence gap.
+- **REJECTED** — deliberately not planned; reason must be durable.
+- **SUPERSEDED** — replaced by a newer strategy.
 
 ---
 
 ## 4. Architecture north star
 
-Long-term data flow:
+Long-term flow:
 
-`Minecraft/Fabric -> game-to-render extraction -> immutable render snapshots -> world scene database -> asynchronous CPU mesh system + GPU scene system -> bounded uploads -> GPU visibility/compaction -> indirect rendering -> Vulkan render graph -> screen`
+`Minecraft/Fabric -> game-to-render extraction -> immutable render snapshots -> renderer scene database -> asynchronous CPU mesh system + GPU scene system -> bounded uploads -> GPU visibility/compaction -> indirect rendering -> Vulkan render graph -> screen`
 
 ### 4.1 Game-to-render extraction
 
-Responsibilities:
-
-- observe Minecraft world/chunk/section changes;
-- convert mutable game state into immutable renderer-owned snapshots;
-- capture all neighbor data needed for meshing without worker-thread world reads;
-- capture or derive material/model/light/tint information needed for supported render classes;
-- provide stable generation/version identity so stale async results can be discarded;
-- avoid retaining mutable world objects in long-lived worker jobs;
-- keep extraction cost bounded on the render/client thread.
-
-Desired end state:
-
-- renderer jobs consume immutable compact data only;
-- no random world traversal inside worker meshing;
-- updates are versioned and can be cancelled/superseded safely.
+- observe world/chunk/section changes;
+- convert mutable game state to immutable renderer-owned snapshots;
+- capture neighbor/halo data required for meshing;
+- capture/derive material/model/light/tint truth for supported render classes;
+- carry stable generation/version identity;
+- avoid mutable world objects in long-lived worker jobs;
+- keep extraction bounded on the render/client thread.
 
 ### 4.2 World scene database
 
@@ -139,18 +95,7 @@ Intended hierarchy:
 
 `World -> Regions -> Chunk Columns -> Sections -> render batches/material classes`
 
-Responsibilities:
-
-- authoritative renderer-side ownership of section state;
-- section generation/version IDs;
-- CPU mesh job state;
-- GPU arena allocation handles;
-- bounding boxes / visibility metadata;
-- material/layer ranges;
-- dirty/rebuild state;
-- last-visible / temporal-visibility information;
-- memory accounting;
-- safe unload and replacement lifecycle.
+Responsibilities include section generations, job state, GPU allocation handles, bounds/visibility metadata, material ranges, dirty/rebuild state, visibility history, memory accounting, and safe replacement/unload.
 
 The render thread must not rebuild a huge Java visible-section list every frame.
 
@@ -158,821 +103,312 @@ The render thread must not rebuild a huge Java visible-section list every frame.
 
 Target design:
 
-- work-stealing worker pool;
-- compact immutable input snapshots;
-- worker-local reusable scratch memory;
-- no allocation-heavy per-block/per-face object graph;
-- bounded job queues;
-- priority based on player/camera relevance and staleness;
+- work-stealing workers;
+- compact immutable inputs;
+- worker-local primitive scratch;
+- bounded relevance-priority queues;
 - cancellation/version checks;
-- frame-time-aware admission so meshing does not steal all CPU headroom;
-- output suitable for large GPU arenas and indirect rendering.
+- frame-time-aware admission;
+- no allocation-heavy per-face object graph;
+- output suited to large GPU arenas and indirect rendering.
 
-The production mesher is planned to be **binary/bitmask greedy meshing**; the simple reference mesher remains permanently available as a correctness oracle.
+The production strategy is **binary/bitmask greedy meshing**. The simple independent reference oracle remains permanently available.
 
 ### 4.4 GPU geometry and metadata storage
 
 Baseline:
 
-- large non-mapped device-preferred buffers;
+- non-mapped device-preferred buffers;
 - generation-safe allocation handles;
-- custom suballocation;
-- bounded persistent staging ring;
-- batched transfer work;
+- explicit suballocation;
+- bounded persistent staging;
 - completion-gated reuse/destruction;
-- no frame-count-based lifetime guesses;
-- background fragmentation/compaction metrics;
-- optional future defragmentation only when it can be made latency-safe.
-
-Planned arena classes eventually include:
-
-- opaque/cutout vertex data;
-- index data;
-- translucent geometry or sortable primitives;
-- per-section metadata;
-- GPU scene records;
-- indirect command buffers;
-- visibility/count/compaction buffers;
-- optional material tables.
+- measurable capacity/high-water/fragmentation;
+- no frame-count lifetime guesses;
+- no unbounded fallback allocation.
 
 ### 4.5 GPU visibility and draw generation
 
 Target pipeline:
 
-`scene records -> frustum/visibility compute -> optional temporal/Hi-Z tests -> compact surviving draws -> indirect command buffer -> indirect graphics`
+`scene records -> frustum/visibility compute -> optional temporal/Hi-Z tests -> compact surviving draws -> indirect command buffer -> graphics`
 
-Baseline goals:
-
-- camera rotation updates constants, not giant CPU lists;
-- section culling is GPU/hierarchical where practical;
-- visible draw generation is GPU-owned;
-- indirect commands are compacted;
-- CPU submission count remains one/few deliberate submissions, not thousands of draws;
-- explicit synchronization exists for compute-written graphics inputs.
+Camera rotation should update constants rather than rebuild giant CPU lists. Compute-written indirect data must have explicit synchronization.
 
 ### 4.6 Vulkan render graph
 
-Long-term conceptual graph:
+Long-term conceptual order:
 
-1. upload completion / transfer dependencies;
+1. upload/transfer dependencies;
 2. visibility compute;
-3. depth prepass where beneficial;
-4. Hi-Z construction when enabled;
-5. optional occlusion pass;
-6. opaque terrain;
-7. cutout terrain;
-8. entities;
-9. block entities;
-10. translucent terrain/entities;
-11. particles;
-12. weather;
-13. UI/text;
-14. presentation.
+3. optional depth prepass;
+4. optional Hi-Z build/occlusion;
+5. opaque terrain;
+6. cutout terrain;
+7. entities;
+8. block entities;
+9. translucent terrain/entities;
+10. particles/weather;
+11. UI/text;
+12. presentation.
 
-The graph is a scheduling/resource-lifetime layer, not an excuse to create excessive command submissions.
+The graph is a scheduling/lifetime layer, not permission to create excessive submissions.
 
 ### 4.7 Adaptive scheduler
 
-Planned inputs:
+Future inputs include CPU/GPU time, mesh/extraction/upload queues, staging/arena pressure, server pressure where observable, GC/allocation pressure, memory pressure, camera/player motion, and chunk relevance.
 
-- CPU frame time;
-- GPU frame time;
-- mesh queue depth;
-- snapshot/extraction queue depth;
-- upload queue depth;
-- staging pressure;
-- GPU arena pressure;
-- integrated-server/server-thread pressure when observable;
-- Java allocation/GC pressure;
-- memory pressure;
-- camera/player motion;
-- chunk priority/distance.
-
-Planned outputs:
-
-- number of mesh jobs admitted;
-- upload budget;
-- background maintenance/defrag budget;
-- optional prefetch aggressiveness;
-- expensive experimental feature throttling.
-
-Principle: leave deliberate CPU/GPU headroom when doing so improves tail latency.
+Outputs include mesh admission, upload budget, maintenance/defrag budget, and optional prefetch/experiment throttling. The scheduler should deliberately leave headroom when that improves tail latency.
 
 ---
 
 ## 5. Non-negotiable engineering constraints
 
-These constraints apply across all phases unless a later durable decision explicitly supersedes them.
+### Render thread
 
-### Render-thread constraints
+Do not routinely synchronously mesh chunks, walk every loaded section, allocate large hot-path collections, issue thousands of Java draw calls, perform many tiny submissions, wait indefinitely for uploads/completion, or use global device-idle waits.
 
-The render thread may coordinate work but should not routinely:
+### Synchronization
 
-- walk every loaded section;
-- build large visible-section Java collections;
-- allocate hot-path temporary objects;
-- synchronously mesh chunks;
-- issue thousands of draw calls from Java;
-- perform many tiny buffer submissions;
-- wait indefinitely for uploads or GPU completion;
-- execute global device-idle waits.
+CPU frame serials do not prove GPU completion. Reuse/destruction is completion-gated. Normal polling is nonblocking. Shutdown waits are bounded. Producer/consumer hazards are explicit. No routine `vkDeviceWaitIdle`.
 
-### Synchronization constraints
+### Memory
 
-- CPU frame serials do not prove GPU completion.
-- Reuse/destruction is completion-gated.
-- Normal polling is nonblocking.
-- Shutdown waits are bounded.
-- Compute producer/graphics consumer hazards are explicit.
-- No routine `vkDeviceWaitIdle`.
+Staging and queues are bounded/backpressured. Geometry storage is explicit and measurable. Fragmentation is observable. Compaction/defrag must be latency-safe and budgeted.
 
-### Memory constraints
+### Profiling
 
-- Staging is bounded and backpressured.
-- Geometry storage is explicit and measurable.
-- No unbounded fallback allocation when a ring/arena is full.
-- Fragmentation must be observable.
-- Compaction/defrag must never become an uncontrolled frame spike.
-
-### Profiling constraints
-
-- Profiling must not create routine profiler-only submissions.
-- Timestamp-result polling is bounded/sampled until an allocation-free path is justified.
-- Performance claims require measured evidence, not intuition.
+Normal profiling must not create profiler-only submissions. Timestamp collection remains bounded/sampled until deeper allocation-free access is justified by evidence. Performance claims require measurements.
 
 ---
 
 ## 6. Phase roadmap
 
-The phase numbers describe architectural progression, not release numbers. Individual phases may contain multiple `devN` milestones.
-
 ### Phase 0 — Bootstrap and compatibility boundary — COMPLETE
 
-Purpose: establish a loadable Fabric mod and Vulkan activation/compatibility behavior.
+Completed Fabric/Minecraft 26.2 bootstrap, renderer conflict handling, Vulkan-only activation model, nonfatal non-Vulkan session behavior, initial CI/release pipeline, and repository continuity system.
 
-Completed outcomes include:
-
-- Fabric/Minecraft 26.2 bootstrap;
-- conflict detection;
-- Vulkan-only activation model;
-- non-Vulkan session remains nonfatal so the user can switch APIs;
-- initial CI/release pipeline;
-- repository AI continuity system.
-
-Public checkpoint remains `v0.0.2-phase0` until a later release decision.
-
----
+Public checkpoint: `v0.0.2-phase0` unless a later release decision supersedes it.
 
 ### Phase 1 — Vulkan/GPU infrastructure — COMPLETE
 
-Purpose: prove the low-level renderer primitives before touching real terrain.
-
-Runtime-validated capabilities include:
-
-- frame lifecycle and CPU timings;
-- completion-gated frame/resource lifetime;
-- bounded persistent staging;
-- device-preferred geometry arena;
-- generation-safe suballocation;
-- fixed frame graph;
-- GPU timestamp ranges integrated into useful work;
-- first real indexed graphics draw;
-- arena-backed indexed indirect drawing;
-- narrow native Vulkan compute/storage seam only where Blaze3D lacks compute;
-- compute-generated indirect commands;
-- explicit Synchronization2 hazards;
-- GPU visibility selection;
-- atomic indirect-command compaction;
-- GPU visible-count generation;
-- zeroed indirect tail for public fixed-count graphics;
-- deterministic GPU readback validation.
+Proven infrastructure includes frame lifecycle/timings, completion-gated resources, bounded persistent staging, device-preferred geometry arenas, generation-safe suballocation, frame graph, integrated GPU timestamps, indexed graphics, indexed indirect drawing, narrow native compute/storage seam where public Blaze3D is insufficient, compute-generated indirect commands, Synchronization2 barriers, GPU visibility selection/compaction, GPU visible counts, zeroed indirect tail, and deterministic GPU readback validation.
 
 Closing merge: `61df7b8e2abc09ce387e09c9e4d6811a9ef6c40f`.
 
-Phase 1 is the proven infrastructure foundation for real terrain, not the final production submission architecture.
-
----
-
 ### Phase 2 — Real-section correctness and renderer semantics — COMPLETE
 
-Purpose: define what a **correct Minecraft section** means before optimizing it.
+Purpose: establish what a correct real Minecraft section means before optimizing it.
 
-#### P2.1 — Immutable real-section snapshot + reference oracle — COMPLETE
+- **P2.1 COMPLETE** — immutable 16^3 section snapshot + one-block halo + permanent simple reference face oracle. Merge `a714e19ce871bf73136d52f85a1780109aa851dd`.
+- **P2.2 COMPLETE** — first drawable real section, world/camera alignment and boundary occlusion validated. Merge `f9c64267c5becb3bd80897efdb09ed65a6ce8697`.
+- **P2.3 COMPLETE** — material/sprite/UV/tint identity for conservative supported terrain. Merge `667230f51222746083efe89c72265d80ac9d3929`.
+- **P2.4 COMPLETE** — exact supported block/sky light, shade and AO semantics. Merge `fa0d40182cd0bc29a526b28a8b2b3b43fc8fc8ba`.
+- **P2.5 COMPLETE** — generalized accepted SOLID/CUTOUT vanilla-emitted model quads while keeping P2.1 oracle independent. Merge `c17f7c6146678e18cacabc44d85c67413a040f73`.
+- **P2.6 COMPLETE** — dirty/world/resource/chunk lifecycle, generation-safe rebuild/install, completion-gated replacement. Final fixed-target unload/return event-class closure is A-0101. Integration merge `794483f955c861cbf9e24ade2463ba51ab9ab284`.
+- **P2.7 COMPLETE** — persistent 3x3 neighboring section scene, multi-section validity domain, recentering, border/camera validation and full reclamation. Integration merge `794483f955c861cbf9e24ade2463ba51ab9ab284`.
 
-Validated milestone: `0.2.0-phase2-dev1`.
-
-Closing merge: `a714e19ce871bf73136d52f85a1780109aa851dd`.
-
-Runtime evidence: `ai/attempts/A-0058-phase2-dev1-runtime-success.md`.
-
-Implemented contract:
-
-- capture one real loaded 16^3 section;
-- one-block halo in every direction;
-- primitive-only immutable snapshot;
-- no world reads after capture;
-- conservative first supported subset;
-- canonical deterministic reference-face stream;
-- duplicate-build determinism check;
-- GPU upload/readback verification using Phase 1 memory infrastructure;
-- vanilla terrain remains active.
-
-This reference path must remain in the project even after the production greedy mesher exists.
-
-#### P2.2 — First drawable real section — COMPLETE
-
-Goal: render actual geometry derived from a real Minecraft section for a deliberately narrow supported subset.
-
-Validated milestone: `0.2.0-phase2-dev2`.
-
-Closing merge: `f9c64267c5becb3bd80897efdb09ed65a6ce8697`.
-
-Runtime evidence: `ai/attempts/A-0066-phase2-dev2-runtime-success.md`.
-
-Completed work:
-
-- inspect exact 26.2 block/model/material/sprite/light APIs;
-- decide initial terrain vertex format;
-- generate vertex/index geometry from the P2.1 snapshot;
-- upload to generation-safe arenas;
-- create a real section GPU scene record / drawable ownership path sufficient for the correctness probe;
-- render through the proven indexed-indirect graphics infrastructure;
-- compare against vanilla while vanilla remains active;
-- validate world-space positioning and camera transforms;
-- validate section boundaries and neighbor occlusion for the conservative supported subset.
-
-Human visual validation confirmed the orientation-colored Obsidian geometry was visible and perfectly aligned with the corresponding vanilla terrain. Machine validation also confirmed deterministic reference/drawable builds, zero post-snapshot world reads during meshing, public Blaze3D indexed-indirect drawing, zero profiler-only submissions, bounded staging, and completion-gated full reclamation.
-
-P2.2 deliberately does not claim P2.3 material/texture/UV/tint semantics or P2.4 light/AO correctness.
-
-#### P2.3 — Correct textures/material identity — COMPLETE
-
-Validated milestone: `0.2.0-phase2-dev3`.
-
-Closing merge: `667230f51222746083efe89c72265d80ac9d3929`.
-
-Runtime evidence: `ai/attempts/A-0070-phase2-dev3-runtime-success.md`.
-
-Completed contract:
-
-- exact Minecraft 26.2 `BlockStateModelSet -> BlockStateModel -> BlockStateModelPart -> BakedQuad` grounding;
-- vanilla-seeded model-part selection using `BlockState.getSeed(worldPos)`;
-- exact baked UV decoding and canonical face-corner mapping;
-- block-atlas/sprite/material identity capture;
-- world-context tint capture;
-- explicit material/render-layer classification and unsupported-case rejection counts;
-- deterministic renderer-owned material IDs suitable for immutable post-capture mesh work;
-- model-set/blocks-atlas resource epoch validation before draw;
-- pure `MaterializedSectionMesh` construction with zero live world/model/resource reads after material capture;
-- public textured Blaze3D indexed-indirect comparison with the live blocks atlas bound as `Sampler0`;
-- completion-gated vertex/index/indirect retirement with full reclamation.
-
-Reference RX 6800 XT validation completed all six textured comparison passes. Human validation reported no visible texture, UV orientation/stretch, alignment/drift, or obvious tint issues for the supported subset. Machine evidence also confirmed deterministic reference/material/drawable builds, explicit accepted/rejected face accounting, `worldReadsAfterMaterialCapture=0`, `pipelineValid=true`, `nativeGraphicsSeam=false`, `textured=true`, stable resource epoch checks, zero profiler-only submissions, bounded staging, and full completion-gated reclamation.
-
-The validation overlay briefly retained a stale block after a block break until the next bounded pass recapture; the log proved the following pass incorporated the edit. This is acceptable for the temporary probe but is not a production latency target. Event-driven block/neighbor invalidation and rebuild scheduling were completed in P2.6.
-
-P2.3 deliberately did not claim P2.4 light/AO correctness or P2.5 broad cutout/non-full/custom-model support at that milestone.
-
-#### P2.4 — Lighting and ambient occlusion correctness — COMPLETE
-
-Validated milestone: `0.2.0-phase2-dev4`.
-
-Closing merge: `fa0d40182cd0bc29a526b28a8b2b3b43fc8fc8ba`.
-
-Runtime evidence: `ai/attempts/A-0075-phase2-dev4-runtime-success.md`.
-
-Completed contract:
-
-- exact Minecraft 26.2 `BlockModelLighter` / `QuadInstance` grounding;
-- exact block/sky packed-light capture including baked material emission;
-- exact directional shade and ambient-occlusion corner results for the supported full-cube subset;
-- deterministic immutable `SectionLightingSnapshot` with no retained live world/model/light objects;
-- pure `LitSectionMesh` construction in exact `DefaultVertexFormat.BLOCK` layout with zero post-light-capture world reads;
-- public `SOLID_BLOCK` indexed-indirect comparison with live blocks atlas + level lightmap bindings;
-- one-block halo proven sufficient for the supported canonical full-cube AO neighborhood, including a runtime section-border transition;
-- exact 26.2 inspection found no AO-dependent alternate triangle diagonal for this supported path, so the canonical fixed split remains correct;
-- completion-gated staging/arena/indirect lifetime with full reclamation;
-- validation-only `1/512` outward face offset to prevent coplanar depth fighting with vanilla; not a production geometry rule.
-
-Reference RX 6800 XT validation completed all six passes with deterministic reference/material/lighting/drawable duplicates, `worldReadsAfterLightingCapture=0`, `oneBlockHaloSufficient=true`, `pipelineValid=true`, `nativeGraphicsSeam=false`, zero profiler-only submissions, full resource reclamation and process exit 0. Human validation accepted the final comparison; exact presentation fine tuning may happen later.
-
-#### P2.5 — Broader opaque/cutout block semantics — COMPLETE
-
-Validated milestone: `0.2.0-phase2-dev5`.
-
-Closing merge: `c17f7c6146678e18cacabc44d85c67413a040f73`.
-
-Runtime evidence: `ai/attempts/A-0079-phase2-dev5-runtime-success.md`.
-
-Completed contract:
-
-- exact Minecraft 26.2 `ModelBlockRenderer.tesselateBlock(...) -> BlockQuadOutput` grounding used as the render-thread correctness seam;
-- vanilla-seeded selected model parts, block offsets, directional and `getQuads(null)` general quads, shape-based directional culling, AO/flat lighting and tint are captured after vanilla has resolved them;
-- immutable `SectionBakedQuadSnapshot` stores arbitrary four-vertex geometry, exact UVs, final AO/shade/tint colors, packed block/sky light, baked direction, source block/state and exact SOLID/CUTOUT material identity;
-- entire blocks are rejected atomically if any emitted quad is translucent, wrong-atlas or otherwise unsupported rather than partially rendering an incorrect result;
-- leaves remain explicitly unsupported in this first proof because vanilla's force-opaque leaves mode is a separate compiler policy outside the chosen callback;
-- the permanent P2.1 `ReferenceFaceMesh` cube oracle remains unchanged and independent;
-- exact inspection proved the selected arbitrary-quad culling/light/AO neighborhood still fits the existing one-block halo;
-- pure `BakedSectionMesh` construction performs zero post-capture live world/model/light/resource reads and deterministically groups quads into contiguous SOLID then CUTOUT ranges;
-- exact `DefaultVertexFormat.BLOCK` is retained with public blocks-atlas + level-lightmap bindings;
-- public `SOLID_BLOCK` and `CUTOUT_BLOCK` indexed-indirect comparison paths are used, with exact `ALPHA_CUTOUT=0.5` for CUTOUT;
-- bounded staging and device geometry arena remain sufficient for the validation proof;
-- completion-gated geometry/indirect lifetime fully reclaims before reuse;
-- `nativeGraphicsSeam=false` and zero profiler-only submissions remain true.
-
-Reference RX 6800 XT validation completed all six passes with stable deterministic generalized capture/mesh fingerprints. Human validation reported that everything looked fine, including the broader SOLID/CUTOUT comparison.
-
-#### P2.6 — Section lifecycle and rebuild correctness — COMPLETE
-
-Validated milestone: `0.2.0-phase2-dev6`, with final fixed-target event-class closure supplied by downstream A-0101 evidence.
-
-Closing integration merge: `794483f955c861cbf9e24ade2463ba51ab9ab284` (PR #25, together with validated P2.7).
-
-Evidence: A-0080 through A-0084 plus A-0101.
-
-Completed contract:
-
-- exact section/block/player dirty observation through the grounded Minecraft lifecycle seam;
-- world replacement and resource reload invalidation;
-- exact chunk load/unload observation;
-- target-scoped sticky/coalesced lifecycle counters without an unbounded event ring;
-- generation/version identity carried through rebuild/install;
-- stale install rejection;
-- repeated rebuilds of the same target;
-- completion-gated replacement and full staging/arena/deferred-resource reclamation;
-- zero dropped lifecycle events under validated workloads.
-
-The corrected standalone A-0084 run proved edit/reload/reclamation behavior but did not travel far enough to exercise the fixed target (`chunkLoadEvents=0`, `chunkUnloadEvents=0`). A-0101 later used a diagnostic-only fixed first-scene anchor on the same exact `ClientLevel.onChunkLoaded` / `ClientLevel.unload` hooks and produced fixed-anchor load/unload `9/9`, `fixedAnchorReturnSceneReady=true`, zero dropped/unsafe-stale events, clean shutdown and exit 0. That stronger downstream observation closes the missing P2.6 event class without changing the historical attempt.
-
-#### P2.7 — Multi-section integration — COMPLETE
-
-Validated milestone: `0.2.0-phase2-dev7`.
-
-Closing integration merge: `794483f955c861cbf9e24ade2463ba51ab9ab284` (PR #25); original validated P2.7 PR #27 had already been stacked into that branch.
-
-Evidence: A-0085 through A-0089.
-
-Completed contract:
-
-- persistent renderer-side 3x3 section table rather than one-shot ownership;
-- shared scene generation/validity domain;
-- several neighboring real sections live simultaneously;
-- exact dirty-event relevance across the rendered scene and union halo;
-- correctness-first whole-window invalidation/rebuild;
-- bounded upload/install behavior;
-- camera recentering and world/resource lifecycle handling;
-- zero unsafe stale scene/probe installs;
-- full completion-gated resource reclamation.
-
-Reference runtime reached `sceneGateReady=true`, 16 READY transitions, 15 rebuilds, 144 record installs, max 9 live records and 12 adjacent pairs with zero dropped/stale installs and exit 0. Human visual validation reported no persistent duplicate/missing borders or stale old-window geometry.
-
-#### Phase 2 exit criteria
-
-Phase 2 is complete because:
-
-- real section snapshots are immutable and lifecycle-safe;
-- a permanent reference oracle exists;
-- supported terrain is rendered with validated position/material/UV/light/AO semantics;
-- section updates/unloads/rebuilds are safe;
-- multiple sections are managed through persistent scene ownership;
-- unsupported cases are explicit and measurable;
-- the renderer has enough semantic truth that an optimized mesher can be judged against it.
-
-Global vanilla terrain replacement is **not required** merely to declare the correctness semantics ready for Phase 3.
-
----
+Phase 2 exit criteria are satisfied: immutable real snapshots, permanent oracle, validated render semantics, safe rebuild/unload lifecycle, multiple live neighboring sections, and explicit unsupported cases.
 
 ### Phase 3 — Production asynchronous CPU mesher / greedy meshing — ACTIVE
 
-Purpose: make section mesh production fast enough for large-distance streaming without sacrificing the Phase 2 correctness contract.
+Purpose: make section mesh production fast enough for large-distance streaming without sacrificing Phase 2 correctness.
 
 #### P3.1 — Worker/job architecture — COMPLETE
 
-Validated milestones: `0.3.0-phase3-dev1`, `0.3.0-phase3-dev2`, and `0.3.0-phase3-dev3`.
+Validated `0.3.0-phase3-dev1` through `dev3`.
 
-Closing merges:
+Merges:
 
-- dev1 / PR #29: `c39cf17b4864e7f7081007238117aea5be3c26e3`;
-- dev2 / PR #32: `58b2b8b8b1962f2809029e32d147a4a96a93b486`;
-- dev3 / PR #34: `1b6615eac2494a197cea86d314cf5b099d2418e8`.
+- dev1 PR #29 `c39cf17b4864e7f7081007238117aea5be3c26e3`;
+- dev2 PR #32 `58b2b8b8b1962f2809029e32d147a4a96a93b486`;
+- dev3 PR #34 `1b6615eac2494a197cea86d314cf5b099d2418e8`.
 
-Evidence: A-0090 through A-0102.
+Proven foundation:
 
-Completed P3.1 foundation:
-
-- dedicated bounded meshing worker pool;
-- global HIGH -> NORMAL -> LOW relevance selection;
-- work stealing;
-- bounded priority queues;
-- immutable snapshot/model/material/light inputs only;
-- generation/event/resource-epoch checks;
-- cancellation/stale-result discard before unsafe install;
+- dedicated bounded workers and HIGH/NORMAL/LOW queues;
+- global priority selection and work stealing;
+- immutable inputs only;
 - render-thread-only live capture and GPU ownership;
-- production asynchronous scene mesh construction and installation;
-- worker-local reusable primitive scratch;
-- warm-up/periodic determinism audits instead of unconditional duplicate production builds;
-- bounded two-record-per-frame production admission;
-- metrics for queue wait, execution time, priority mix, cancellation, stealing, output size, scratch high-water and audit matches;
-- clean bounded worker shutdown integrated with completion-gated staging/arena/resource cleanup.
+- cancellation/stale-result rejection;
+- production async 3x3 scene install;
+- reusable worker scratch;
+- periodic determinism audits;
+- bounded two-record-per-frame admission;
+- queue/execution/output/scratch metrics;
+- clean bounded shutdown integrated with completion-gated staging/arena/resources.
 
-A-0101 final runtime reported `phase3GateReady=true`, `schedulerEvidenceReady=true`, 208/208 completed worker jobs, 159 steals, zero queue-full rejection/failure/shutdown-join failure, HIGH/NORMAL/LOW completions `29/89/90`, 151,898 output quads, 212 scratch uses, determinism audits/matches `4/4`, `maxAdmissionBurst=2`, zero synchronous scene mesh builds and clean shutdown. P3.1 is therefore complete and merged.
+A-0101 final P3.1 runtime passed `phase3GateReady=true` and `schedulerEvidenceReady=true` with 208/208 jobs completed, 159 steals, all relevance tiers exercised, zero queue-full/failure/join failure and clean shutdown.
 
-#### P3.2 — Binary/bitmask visibility masks — ACTIVE
+#### P3.2 — Binary/bitmask visibility masks — COMPLETE
 
-Production target:
+Validated milestone: `0.3.0-phase3-dev4`.
 
-- represent occupancy/face visibility using machine-word bitsets where practical;
-- build directional face masks efficiently;
-- keep the reference implementation independent for differential tests;
-- use compact primitive structures and reuse scratch storage;
-- preserve all material/light/AO truth needed by the downstream render-correct merge key;
-- prove deterministic mask coverage against the independent reference semantics before greedy rectangle extraction becomes production.
+Closing merge: PR #36 `54ca3cb2d64eda958579407728e757eb0c98b948`.
 
-P3.2 being ACTIVE does **not** mean greedy quads exist yet. It is the next implementation milestone now that P3.1 is complete.
+Evidence: A-0103 through A-0106.
 
-#### P3.3 — Greedy rectangle extraction — PLANNED
+Completed contract:
 
-For each compatible face plane:
+- pure `BinarySectionVisibility` built only from immutable `SectionSnapshot`;
+- six directional masks in permanent oracle order WEST/EAST/DOWN/UP/NORTH/SOUTH;
+- 4,096 bits / 64 machine words per direction;
+- exactly 3,072 retained bytes for all six direction masks per section;
+- reusable 18x18 supported/air halo-row scratch;
+- machine-word directional visibility derivation;
+- exact conservative semantics `SUPPORTED_FULL_CUBE && neighbor == AIR`;
+- unsupported neighbors suppress faces exactly as the independent oracle;
+- scalar snapshot self-validation in the correctness-first dev4 path;
+- periodic duplicate-mask determinism checks;
+- independent `ReferenceFaceMesh` set-equivalence audits;
+- production worker integration as a sidecar while existing `BakedSectionMesh` remains drawable authority;
+- bounded metrics for builds, directional faces, bytes, build time, scratch and audits.
 
-- find maximal mergeable rectangles;
-- emit one quad per rectangle;
+Reference runtime closure:
+
+- `phase3GateReady=true`;
+- `schedulerEvidenceReady=true`;
+- `binaryVisibilityEvidenceReady=true`;
+- `binaryVisibilitySidecarIntegrated=true`;
+- `greedyRectangleEmission=false`;
+- 288/288 production worker jobs completed;
+- zero queue-full rejection/failure/shutdown-join failure;
+- visibility builds `288`;
+- total faces `102,367`;
+- WEST/EAST/DOWN/UP/NORTH/SOUTH `7,159 / 11,145 / 4,424 / 56,663 / 15,272 / 7,704`, exact sum `102,367`;
+- retained bytes `884,736 = 288 * 3,072`;
+- visibility determinism audits/matches `7/7`;
+- independent reference audits/matches `7/7`;
+- zero dropped lifecycle events / unsafe stale installs;
+- workers/staging/arena/resources clean;
+- process exit `0`.
+
+The historical Phase 2 fixed-anchor unload/return proof was intentionally not repeated; A-0101 remains authoritative for that already-closed dependency.
+
+No new human visual verdict is recorded for dev4 because P3.2 did not change GPU-emitted geometry. Existing P2/P3.1 visual validation remains the visual baseline while P3.2 closure is differential/topology/runtime based.
+
+#### P3.3 — Greedy rectangle extraction — ACTIVE
+
+Current milestone. Activation does **not** mean greedy rectangles already exist.
+
+Contract:
+
+- consume the proven P3.2 directional masks;
+- operate only on immutable worker-owned data;
+- use machine-word/primitive worker-local rectangle extraction;
+- find deterministic maximal mergeable rectangles for mask-eligible canonical faces;
 - preserve orientation/winding;
-- maintain deterministic output where useful for debugging;
-- measure rectangle/quad reduction ratio.
+- measure source-face -> rectangle/quad reduction;
+- keep the permanent reference oracle independent;
+- preserve every visual merge attribute required for correctness;
+- keep non-mergeable/arbitrary generalized baked-model geometry on a safe exact passthrough path;
+- prove exact coverage against P3.2/reference semantics before production geometry replacement;
+- keep scratch/output bounded and observable;
+- preserve scheduler, cancellation, generation/event/resource checks and completion-gated lifetime behavior.
+
+A correctness-first P3.3 dev milestone should initially produce rectangle extraction as a sidecar/differential product. Any milestone that changes GPU-emitted geometry requires renewed runtime and human visual validation.
 
 #### P3.4 — Render-correct merge key — PLANNED
 
-Faces may merge only when every property that affects output agrees. The production key must account for all relevant supported semantics, including:
+Faces may merge only when every output-affecting property agrees, including face direction, material/sprite identity, layer, tint/color, sky/block light, four-corner AO pattern, AO diagonal choice when relevant, UV behavior, fluid/special state where supported, and model-specific attributes required by the supported block class. Never merge merely because state/block IDs match.
 
-- face direction;
-- material/sprite/texture identity;
-- render layer;
-- tint/color state;
-- sky/block light;
-- four-corner AO pattern;
-- AO diagonal choice when relevant;
-- UV behavior;
-- fluid/special state where supported;
-- model-specific attributes required by the supported block class.
-
-Never merge merely because block IDs match.
+P3.3 may introduce only the portion of this key necessary for faces it actually proves mergeable; P3.4 remains the roadmap checkpoint for the full production merge-key contract.
 
 #### P3.5 — Border/halo correctness — PLANNED
 
-- face visibility across section boundaries;
-- AO/light across boundaries;
-- neighboring-section versioning;
-- rebuild invalidation when border data changes;
-- no worker-thread live-world reads.
+Validate face visibility, light/AO and rebuild invalidation across section boundaries with no worker-thread live-world reads.
 
 #### P3.6 — T-junction policy — PLANNED
 
-Default:
-
-- accept greedy topology unless real hardware demonstrates visible cracks;
-- use stable local/eye-relative positions;
-- validate on multiple GPUs;
-- if needed, prefer targeted expansion/splitting/raster-safe mitigation over globally abandoning greedy meshing.
+Default to greedy topology unless real Vulkan hardware shows cracks. Prefer stable local/eye-relative positions and targeted mitigation/splitting over globally abandoning greedy meshing.
 
 #### P3.7 — Differential correctness framework — PLANNED
 
-For representative snapshots:
-
-- run reference oracle;
-- run greedy mesher;
-- expand greedy quads conceptually into covered reference faces;
-- compare coverage/material/light/AO semantics;
-- preserve failing snapshot fixtures where legally/practically possible;
-- never let the optimized mesher become its own oracle.
+Run reference and optimized meshers on representative snapshots; expand greedy rectangles conceptually to covered faces; compare coverage/material/light/AO truth; preserve useful failing fixtures. The optimized path never becomes its own oracle.
 
 #### P3.8 — Meshing benchmarks — PLANNED
 
-Track at minimum:
-
-- snapshot-to-job latency;
-- mesh CPU time;
-- P50/P95/P99/max mesh time;
-- input cells;
-- exposed reference faces;
-- greedy quads;
-- reduction ratio;
-- vertex bytes;
-- index bytes;
-- scratch high-water;
-- allocations/GC attributable to meshing;
-- cancelled/stale jobs;
-- worker utilization.
+Track snapshot-to-job latency, P50/P95/P99/max mesh CPU time, input cells, exposed reference faces, greedy rectangles/quads, reduction ratio, vertex/index bytes, scratch high-water, allocations/GC, cancellations/stale jobs, and worker utilization.
 
 #### P3.9 — Partial remeshing — EXPERIMENTAL
 
-Only after full-section greedy meshing is stable and measured.
-
-Possible direction:
-
-- track dirty subregions/face slices;
-- rebuild only affected mesh parts;
-- prove reduced CPU work is worth metadata/fragmentation complexity;
-- auto-disable if instability or memory fragmentation appears.
+Only after full-section greedy meshing is stable and measured. Partial subregion/slice rebuilds must prove enough CPU benefit to justify metadata/fragmentation complexity.
 
 Phase 3 exit criteria:
 
 - greedy mesher is default for supported terrain;
 - reference differential tests pass;
-- worker system is bounded and cancellation-safe;
+- worker system remains bounded/cancellation-safe;
 - hot paths avoid routine allocation;
-- throughput supports subsequent large-scale scene testing.
-
----
+- throughput supports later large-scale scene testing.
 
 ### Phase 4 — GPU-driven visibility at real-world scale — PLANNED
 
-Purpose: scale the proven Phase 1 synthetic visibility pipeline to thousands of real section records.
+Scale Phase 1 visibility primitives to thousands of real section records:
 
-#### P4.1 — Persistent scene hierarchy
+- persistent region/chunk-column/section hierarchy;
+- GPU frustum culling;
+- conservative temporal visibility;
+- Hi-Z occlusion EXPERIMENTAL initially;
+- real command compaction;
+- native indirect-count consumption only if profiling justifies it;
+- region-level hierarchy for very large render distances.
 
-- regions;
-- chunk columns;
-- sections;
-- section bounding data;
-- geometry allocation identity;
-- per-layer draw metadata;
-- visibility history;
-- compact GPU layout suitable for bulk compute.
-
-#### P4.2 — GPU frustum culling
-
-- camera constants uploaded once per frame/update;
-- compute tests section bounds;
-- no giant Java visible list;
-- compact surviving draw records;
-- measure candidates vs visible vs culled.
-
-#### P4.3 — Temporal visibility
-
-Planned conservative strategy:
-
-- remember recently visible sections;
-- avoid pathological flicker/overaggressive culling;
-- bias toward visibility when uncertain;
-- keep correctness ahead of tiny overdraw wins.
-
-#### P4.4 — Hi-Z occlusion — EXPERIMENTAL initially
-
-- depth hierarchy generation;
-- conservative section occlusion tests;
-- camera-cut handling;
-- temporal hysteresis;
-- false-positive prevention;
-- performance gate before default enablement.
-
-#### P4.5 — Real command compaction
-
-- compact opaque/cutout section draws;
-- persistent capacity planning;
-- zero-tail fallback remains valid;
-- GPU-visible count remains first-class.
-
-#### P4.6 — Indirect-count consumption — EXPERIMENTAL / evidence-gated
-
-`vkCmdDrawIndexedIndirectCount` may be introduced only if profiling shows fixed-capacity public indirect consumption materially matters.
-
-Requirements before enabling:
-
-- feature/capability gate;
-- exact graphics render-pass ownership design;
-- fallback to public fixed-count path;
-- no accidental broad native graphics takeover;
-- measured CPU/GPU benefit.
-
-#### P4.7 — Region-level hierarchy
-
-At very large distances, avoid flat tests of every possible section when a coarser hierarchy can reject entire regions/columns cheaply.
-
-Phase 4 exit criteria:
-
-- real section scene data is persistent;
-- camera movement does not require massive Java traversal;
-- visibility/compaction costs scale acceptably with high render distance;
-- indirect draw submission remains bounded;
-- 32/64/96/128+ scaling data exists.
-
----
+Exit: persistent real scene data, bounded CPU submission, no giant Java visibility traversal, and measured 32/64/96/128+ scaling.
 
 ### Phase 5 — Frame pacing, streaming, and adaptive scheduling — PLANNED
 
-Purpose: convert high raw throughput into consistently good frame times.
+- frame budget controller;
+- relevance/age/motion-aware mesh priority;
+- upload budgeting from staging/completion pressure;
+- memory-pressure response;
+- frame-budgeted maintenance/defrag.
 
-#### P5.1 — Frame budget controller
-
-Monitor CPU/GPU frame time and reserve headroom before admitting background work.
-
-#### P5.2 — Mesh scheduling priority
-
-Potential inputs:
-
-- distance;
-- view direction;
-- whether currently visible;
-- whether missing geometry vs stale geometry;
-- age of job;
-- camera velocity;
-- player velocity;
-- section importance.
-
-#### P5.3 — Upload budgeting
-
-- bytes per frame/time window;
-- staging availability;
-- pending transfer count;
-- completion latency;
-- coalesce adjacent work where practical;
-- defer instead of blocking.
-
-#### P5.4 — Memory-pressure response
-
-- arena pressure metrics;
-- staged upload pressure;
-- optional eviction/rebuild strategy;
-- no panic allocation spikes;
-- warn/report when desired render distance exceeds practical memory capacity.
-
-#### P5.5 — Background maintenance budgets
-
-Maintenance such as defragmentation, cache cleanup, profiler exports, or resource rebuilds must be frame-budget-aware.
-
-Phase 5 exit criteria:
-
-- chunk streaming stress no longer creates avoidable long spikes from Obsidian work;
-- queue/backpressure behavior is observable;
-- scheduler reacts predictably under CPU/GPU/memory pressure;
-- tail-latency benchmarks drive tuning.
-
----
+Exit: Obsidian background work does not create avoidable streaming spikes and tail-latency data drives tuning.
 
 ### Phase 6 — Transparency and fluids — PLANNED
 
-Purpose: support visually correct translucent terrain without turning sorting into a frame-time disaster.
-
-Planned work:
-
-- translucent material classification;
-- water/fluid geometry semantics;
-- section-local translucent representation;
-- camera-relative sorting strategy;
-- minimize full geometry rebuilds caused only by camera movement;
-- evaluate bucketed/primitive sorting;
-- evaluate GPU sorting only after a stable CPU/reference path exists;
-- preserve deterministic fallback.
-
-#### GPU transparency sorting — EXPERIMENTAL
-
-May be exposed in the experimental menu once implemented. It must prove correctness, stable frame pacing, and acceptable memory cost before becoming default.
-
----
+Add translucent classification, water/fluid geometry semantics, section-local translucent representation, camera-relative sorting with minimal rebuilds, and deterministic fallback. GPU transparency sorting remains EXPERIMENTAL until proven.
 
 ### Phase 7 — Entities — PLANNED
 
-Purpose: make separate entity-culling/per-entity renderer optimization mods unnecessary for the core supported game.
-
-Planned directions:
-
-- conservative entity visibility culling;
-- distance/frustum tests;
-- batching/instancing where model/material compatibility permits;
-- avoid repeated state setup;
-- cache static geometry where legal/useful;
-- animation/update separation from draw submission;
-- profiler counts for entities considered/culled/drawn;
-- preserve gameplay-visible semantics.
-
-Do not apply aggressive occlusion that causes popping unless explicitly experimental.
-
----
+Conservative entity culling, batching/instancing where compatible, reduced state setup, static geometry caching where legal/useful, animation/update separation, and entity profiling.
 
 ### Phase 8 — Block entities — PLANNED
 
-Planned directions:
-
-- classify static-ish vs highly dynamic block entities;
-- conservative culling;
-- cache stable geometry/state where possible;
-- batch compatible renderers;
-- avoid rebuilding static content every frame;
-- retain correctness for animated/special cases;
-- expose counts/timing separately from terrain.
-
----
+Classify static-ish vs dynamic block entities, cull conservatively, cache stable state/geometry, batch compatible renderers, and profile separately from terrain.
 
 ### Phase 9 — Particles and weather — PLANNED
 
-Planned directions:
-
-- batch particle geometry/state;
-- conservative offscreen culling;
-- reduce per-particle submission overhead;
-- bounded particle buffer growth;
-- weather batching;
-- preserve particle simulation semantics separately from rendering optimization;
-- profile fill-rate vs CPU bottlenecks.
-
-Possible GPU particle paths remain experimental until proven worthwhile.
-
----
+Batch particle geometry/state, offscreen culling, bounded particle buffers, weather batching, and separate simulation/render optimization. GPU particle paths remain experimental.
 
 ### Phase 10 — UI, text, and immediate rendering — PLANNED
 
-Goal: remove the remaining reasons to depend on separate immediate-render acceleration mods.
-
-Planned directions:
-
-- batch common UI primitives;
-- cache reusable text/glyph geometry;
-- reduce redundant state changes;
-- atlas/glyph lifetime management;
-- keep latency/input responsiveness high;
-- profile debug-screen and chat-heavy cases;
-- maintain compatibility with Fabric/vanilla UI expectations where practical.
-
----
+Batch common UI primitives, cache reusable glyph/text geometry, reduce state changes, manage atlas/glyph lifetime and preserve input/UI responsiveness.
 
 ### Phase 11 — Experimental renderer features — PLANNED / OPTIONAL
 
-Experimental features should live behind explicit settings and stability tracking. Failure must not silently corrupt normal rendering.
+Candidate experiments include Hi-Z, async compute culling, GPU transparency sorting, mesh shaders, aggressive compression, partial remeshing, render-graph aliasing, device-address geometry, async arena defrag, native indirect-count graphics, alternate visibility hierarchies, and optional LOD.
 
-Planned experiment candidates:
+Experiments require capability checks, explicit settings, conservative defaults, diagnostics, and safe auto-disable/fallback where feasible.
 
-- Hi-Z occlusion;
-- asynchronous compute culling;
-- GPU transparency sorting;
-- mesh shaders;
-- aggressive mesh compression;
-- partial section remeshing;
-- render-graph resource aliasing;
-- device-address geometry access;
-- asynchronous GPU arena defragmentation;
-- native indirect-count graphics;
-- alternative visibility hierarchies;
-- optional experimental LOD.
+### Phase 12 — Stabilization, compatibility expansion, public-release readiness — PLANNED
 
-### Experimental-feature safety model
-
-Desired behavior:
-
-- clearly labeled experimental menu;
-- capability checks;
-- defaults remain conservative;
-- crash/validation failure can auto-disable the offending experiment on next launch;
-- preserve last known stable configuration;
-- diagnostic reason visible to the user/log;
-- experiments do not silently become baseline without a roadmap + decision update.
-
----
-
-### Phase 12 — Stabilization, compatibility expansion, and public-release readiness — PLANNED
-
-Purpose: turn the renderer from a validated development system into something fit for broad use.
-
-Work includes:
-
-- configuration UI polish;
-- sensible presets;
-- migration/versioned config;
-- crash diagnostics;
-- benchmark export tooling;
-- multiple-vendor hardware testing;
-- clean fallback/disable behavior;
-- broader resource-pack/model compatibility decisions;
-- selected Fabric compatibility work;
-- documentation;
-- issue templates/debug bundles;
-- reproducible public releases;
-- licensing decision before broad public release if still unresolved;
-- performance regression gates;
-- long-session soak tests;
-- world-change/resource-reload stress;
-- upgrade path across Minecraft/Fabric versions.
-
-Public release criteria should be written explicitly when the renderer is close enough that real compatibility scope is known.
+Configuration/UI polish, presets, migration, crash diagnostics, benchmark export, multi-vendor testing, broader resource/model compatibility decisions, selected Fabric compatibility, docs/debug bundles, reproducible releases, licensing decision if unresolved, regression gates, soak/reload/world-change stress and upgrade planning.
 
 ---
 
 ## 7. Feature inventory
 
-This section is a product-level checklist. Phase sections above describe sequencing; this section describes the intended final capability set.
-
 ### Terrain core
 
-- [COMPLETE foundation] Real immutable section snapshots.
-- [COMPLETE foundation] Neighbor halo/padding.
+- [COMPLETE foundation] Immutable section snapshots + neighbor halo.
 - [COMPLETE foundation] Permanent reference face/mesh oracle.
-- [ACTIVE] Production binary/bitmask visibility-mask foundation for the future greedy mesher.
-- [PLANNED] Greedy rectangle extraction / production greedy mesher.
-- [PLANNED] Full production opaque terrain replacement.
-- [PLANNED] Full production cutout terrain replacement.
-- [COMPLETE foundation] Lighting for the conservative supported SOLID subset.
-- [COMPLETE foundation] Ambient occlusion for the conservative supported SOLID subset.
-- [COMPLETE foundation] Tint/biome color identity for the conservative supported SOLID subset.
-- [COMPLETE foundation] Resource/material/sprite/UV identity for the conservative supported SOLID subset.
+- [COMPLETE foundation] Production binary/bitmask visibility masks.
+- [ACTIVE] Greedy rectangle extraction foundation.
+- [PLANNED] Production greedy mesher / generalized merge-key integration.
+- [PLANNED] Full production opaque/cutout terrain replacement.
+- [COMPLETE foundation] Supported lighting/AO/tint/material/UV truth.
 - [PLANNED] Fluids/translucent terrain.
 - [COMPLETE foundation] Section rebuild/update/unload lifecycle.
 - [COMPLETE foundation] Multi-section persistent scene ownership.
@@ -980,29 +416,25 @@ This section is a product-level checklist. Phase sections above describe sequenc
 - [EXPERIMENTAL] Partial remeshing.
 - [EXPERIMENTAL] Optional LOD after full-detail terrain is stable.
 
-### GPU scene / draw system
+### GPU scene/draw system
 
 - [COMPLETE foundation] Device-preferred arena/suballocator.
 - [COMPLETE foundation] Bounded staging ring.
-- [COMPLETE foundation] Integrated frame graph.
-- [COMPLETE foundation] GPU timestamps.
+- [COMPLETE foundation] Integrated frame graph and GPU timestamps.
 - [COMPLETE foundation] Indexed indirect rendering.
-- [COMPLETE foundation] Compute-generated commands.
-- [COMPLETE foundation] GPU visibility/compaction primitive.
-- [COMPLETE foundation] Persistent multi-section real-scene ownership for the current 3x3 production validation path.
-- [PLANNED] Large-scale persistent real-section scene database.
-- [PLANNED] Large-scale frustum culling.
-- [PLANNED] Hierarchical region/column culling.
+- [COMPLETE foundation] Compute-generated commands + visibility/compaction primitive.
+- [COMPLETE foundation] Persistent multi-section real-scene validation path.
+- [PLANNED] Large-scale persistent scene database / culling hierarchy.
 - [PLANNED] Temporal visibility.
 - [EXPERIMENTAL] Hi-Z occlusion.
 - [EXPERIMENTAL] Native indirect-count consumption.
 
-### Scheduling / streaming
+### Scheduling/streaming
 
-- [COMPLETE foundation] Work-stealing meshing workers.
-- [COMPLETE foundation] Bounded relevance-priority mesh queues.
-- [COMPLETE foundation] Stale-job cancellation / safe stale-result discard.
-- [COMPLETE foundation] Production queue wait/execution/output/scratch metrics.
+- [COMPLETE foundation] Work-stealing workers.
+- [COMPLETE foundation] Bounded relevance-priority queues.
+- [COMPLETE foundation] Stale-job cancellation/safe discard.
+- [COMPLETE foundation] Production queue/execution/output/scratch metrics.
 - [PLANNED] Adaptive frame-budget controller.
 - [PLANNED] Upload budgeting.
 - [PLANNED] Memory-pressure handling.
@@ -1010,501 +442,172 @@ This section is a product-level checklist. Phase sections above describe sequenc
 
 ### Other rendering domains
 
-- [PLANNED] Entities.
-- [PLANNED] Entity culling/batching.
-- [PLANNED] Block entities.
-- [PLANNED] Particles.
-- [PLANNED] Weather.
-- [PLANNED] UI batching.
-- [PLANNED] Text/glyph caching.
+Entities, block entities, particles, weather, UI batching and text/glyph caching remain PLANNED in their phase order.
 
-### Profiling / diagnostics
+### Profiling/diagnostics
 
-- [FOUNDATION COMPLETE] CPU frame timing ring.
-- [FOUNDATION COMPLETE] Integrated GPU timestamp ranges.
-- [PLANNED] P50/P95/P99/P99.9/max reporting.
-- [PLANNED] CPU/GPU per-stage timing.
-- [FOUNDATION COMPLETE] Mesh queue wait/execution/output metrics.
-- [PLANNED] Upload queue depth/latency.
-- [PLANNED] RAM/VRAM telemetry.
-- [PLANNED] allocation/GC telemetry.
-- [PLANNED] visible/culled section counts.
-- [FOUNDATION COMPLETE] Draw/quad/byte accounting for the current production validation scene.
-- [FOUNDATION COMPLETE] Arena fragmentation/high-water accounting.
-- [PLANNED] benchmark JSON/CSV export.
-- [PLANNED] `/render benchmark start` / stop workflow or equivalent final command surface.
-
-### Configuration / UX
-
-- [PLANNED] Vulkan requirement messaging.
-- [PLANNED] Performance presets.
-- [PLANNED] Detailed advanced settings.
-- [PLANNED] Experimental settings page.
-- [PLANNED] Auto-disable unstable experiments.
-- [PLANNED] Diagnostic status page / log summary.
-- [PLANNED] Clear renderer conflict reporting.
+CPU timing, integrated GPU timestamps, worker queue/execution/output metrics, current scene draw/quad/byte accounting and arena fragmentation/high-water are foundation-complete. Percentile reporting, per-stage CPU/GPU timing, upload latency, RAM/VRAM, GC/allocation, large-scale visible/culled counts and benchmark export remain planned.
 
 ---
 
 ## 8. Performance measurement plan
 
-Performance work is not accepted solely from subjective feel.
+Required long-term frame metrics: average frame time/FPS, P50/P95/P99/P99.9/max, CPU render-thread time, GPU frame time and GC events/pauses where observable.
 
-### Required frame metrics
+Renderer metrics include sections loaded/dirty, jobs queued/running/completed/cancelled, mesh percentiles, faces before greedy, quads after greedy, reduction ratio, vertex/index bytes, staging high-water/backpressure, arena use/fragmentation, visibility counts, compacted commands, draw counts and stage timings.
 
-Eventually capture:
+Benchmark rules:
 
-- average FPS / average frame time;
-- P50;
-- P95;
-- P99;
-- P99.9;
-- maximum frame time;
-- CPU render-thread time;
-- GPU frame time;
-- GC events/pauses where observable.
-
-### Required renderer metrics
-
-- sections loaded;
-- sections dirty;
-- snapshots pending;
-- mesh jobs queued/running/completed/cancelled;
-- mesh P50/P95/P99/max;
-- faces before greedy;
-- quads after greedy;
-- vertex/index bytes;
-- staging bytes/high-water/backpressure;
-- arena bytes/high-water/free/fragmentation;
-- visible/culled candidates;
-- compacted commands;
-- indirect draw count;
-- triangles/quads submitted;
-- resource retirements pending;
-- CPU/GPU stage timings.
-
-### Benchmark validity rules
-
-- warm-up must be distinguished from steady state;
-- identical world/scenario when comparing revisions;
-- record render distance and major graphics settings;
-- record JVM/memory settings;
-- record hardware/driver;
-- distinguish vanilla comparison, prior Obsidian revision, and experimental settings;
-- never hide visual differences that materially reduce work;
-- investigate regressions in lows even when average FPS rises.
+- distinguish warm-up from steady state;
+- use identical worlds/settings when comparing revisions;
+- record render distance/JVM/hardware/driver;
+- distinguish vanilla, prior Obsidian and experimental configurations;
+- do not hide visual quality reductions;
+- investigate tail-latency regressions even when average FPS improves.
 
 ---
 
 ## 9. Memory strategy
 
-No fixed production arena size is declared yet; validation capacities used during Phase 1/2/P3.1 are not assumed to be final budgets.
+No validation arena size is automatically a production budget.
 
 Production policy:
 
-- capacity is explicit and observable;
-- allocation failure is bounded/recoverable;
+- explicit observable capacity;
+- bounded/recoverable allocation failure;
 - no surprise unbounded growth;
-- memory pressure feeds the scheduler;
-- VRAM/RAM use must be reportable;
-- high render distance may consume more memory, but the relationship should be understandable and tunable;
-- geometry compression is allowed only if visual correctness and decode cost remain acceptable;
-- aggressive compression remains experimental until measured.
+- memory pressure feeds scheduling;
+- reportable RAM/VRAM relationship to render distance;
+- compression only when correctness/decode cost are acceptable;
+- relocation/defrag work must be frame-budgeted.
 
-Potential future strategies:
-
-- multiple size-class arenas;
-- region-oriented locality;
-- background compaction;
-- cold-section eviction/rebuild;
-- compressed vertex formats;
-- metadata compaction;
-- optional LOD memory tradeoff.
-
-Any strategy that can create large relocation bursts must be frame-budgeted.
+Potential later strategies: size-class arenas, region locality, background compaction, cold-section eviction/rebuild, compressed vertex formats and metadata compaction.
 
 ---
 
 ## 10. Compatibility strategy
 
-### Initial compatibility promise
+Initial promise: Minecraft 26.2 + Fabric + vanilla-first semantics + Vulkan, with no simultaneous full renderer replacement.
 
-- Minecraft 26.2;
-- Fabric;
-- vanilla-first rendering semantics;
-- Vulkan backend;
-- no simultaneous complete renderer replacement.
-
-### Renderer conflicts
-
-Obsidian intends to make Sodium-class terrain replacement and separate immediate/culling optimization mods unnecessary. Complete renderer conflicts should be detected and rejected clearly rather than allowed to produce undefined ownership.
-
-### Resource packs / custom models
-
-Compatibility may be incomplete during early terrain phases.
-
-Rules:
-
-- unsupported behavior should be measurable/loggable;
-- do not silently render a complex case as a wrong cube merely for coverage numbers;
-- expand compatibility after core renderer semantics are stable;
-- architectural shortcuts that permanently prevent ordinary resource-pack support require a durable decision.
-
-### Shader packs
-
-Iris/shader-pack compatibility is not an early roadmap requirement. It may be revisited after the base renderer and public architecture are stable.
+Unsupported resource/model behavior must be explicit/measurable; never silently render a complex unsupported case as an incorrect cube merely to increase coverage. Broader ordinary resource-pack compatibility comes after the core renderer is stable. Shader-pack compatibility remains later work.
 
 ---
 
 ## 11. Testing ladder
 
-Every milestone should use the strongest relevant rung, not stop at compilation when runtime behavior is the real risk.
+Use the strongest relevant rung:
 
-1. **Static/code review** — invariants, lifetime, allocation, error paths.
-2. **Exact API inspection** — when Minecraft/LWJGL/Vulkan contracts are uncertain.
-3. **CI compilation** — exact declared dependencies.
-4. **Synthetic GPU validation** — deterministic data/pixel/readback when appropriate.
-5. **Real-world section validation** — actual Minecraft state.
-6. **Reference-hardware runtime** — RX 6800 XT machine.
-7. **Gameplay stress** — movement, world entry/exit, updates.
-8. **Benchmark comparison** — averages and tail latency.
-9. **Soak/stability** — long sessions/reloads/world changes.
-10. **Cross-vendor validation** — required before broad public readiness for GPU-sensitive features.
+1. static/invariant review;
+2. exact API inspection where uncertain;
+3. exact CI compilation;
+4. synthetic GPU validation/readback;
+5. real-section validation;
+6. reference-hardware runtime;
+7. gameplay stress;
+8. benchmark comparison;
+9. soak/stability;
+10. cross-vendor validation before broad GPU-sensitive public readiness.
 
-A feature should not be promoted merely because a lower rung passed when a higher rung is necessary to prove its actual contract.
+Compilation alone is never enough when runtime behavior is part of the contract.
 
 ---
 
 ## 12. Release strategy
 
-### Development milestones
+Development versions may be distributed as CI artifacts/direct test JARs. Internal milestone merges normally use `[no-release]`. Draft PRs remain unmerged until required runtime evidence exists.
 
-- development versions may be distributed as CI artifacts;
-- milestone merges normally use `[no-release]`;
-- PRs remain draft until required runtime evidence exists;
-- a compile-clean JAR is not automatically a runtime-validated JAR.
-
-### Public releases
-
-Public releases should represent coherent validated checkpoints, not every internal dev milestone.
-
-Before a future major public renderer release, define explicit gates for:
-
-- supported Minecraft/Fabric versions;
-- compatible/incompatible renderer mods;
-- supported block/material classes;
-- known visual limitations;
-- minimum Vulkan/device features;
-- tested GPU vendors;
-- config migration;
-- crash recovery;
-- benchmark/regression status;
-- license state.
+Public releases are coherent validated checkpoints, not every dev milestone. Future public gates must explicitly define supported Minecraft/Fabric versions, conflicts, block/material scope, visual limitations, Vulkan requirements, tested vendors, config migration, recovery, benchmark/regression state and licensing.
 
 ---
 
 ## 13. Experimental menu plan
 
-The eventual experimental menu is intended to contain high-risk/high-variance features separately from baseline settings.
-
-Candidate toggles:
-
-- Hi-Z occlusion;
-- async compute culling;
-- GPU transparency sorting;
-- mesh shaders;
-- aggressive mesh compression;
-- partial section remeshing;
-- render-graph aliasing;
-- device-address geometry;
-- async GPU defragmentation;
-- native indirect-count draw;
-- optional LOD.
-
-Each experiment should declare:
-
-- capability requirements;
-- stability level;
-- expected benefit;
-- known failure modes;
-- memory impact;
-- whether restart/reload is required;
-- fallback behavior.
-
-Desired auto-disable behavior:
-
-- detect a validation/crash marker attributable to an experiment where feasible;
-- disable that experiment for the next launch;
-- retain the rest of the user's configuration;
-- log the reason;
-- allow deliberate re-enable.
+Experiments should declare capability requirements, stability, expected benefit, failure modes, memory impact, restart/reload requirements and fallback behavior. Where feasible, validation/crash markers should auto-disable only the offending experiment on next launch while preserving the rest of the configuration.
 
 ---
 
-## 14. Roadmap dependency rules
+## 14. Dependency rules
 
-Some ordering is intentional and should not be casually bypassed.
-
-### Correctness before greedy optimization
-
-Phase 2 reference semantics exist and are complete. Phase 3 greedy output must continue to use the independent oracle; P3.2/P3.3 may not make the optimized mesher its own correctness authority.
-
-### Real terrain before large-scale visibility tuning
-
-Phase 1 proves GPU primitives, but Phase 4 tuning must use real section distributions/geometry rather than synthetic triangles alone.
-
-### Stable opaque path before complex transparency
-
-Transparency sorting should not distort the architecture before ordinary opaque/cutout terrain lifecycle is stable.
-
-### Profiling before deep native expansion
-
-Broader native Vulkan ownership is justified only by a concrete missing public capability or measured bottleneck.
-
-### Full-detail baseline before LOD
-
-LOD remains optional/experimental until the full-detail renderer works well enough to measure what LOD would actually solve.
+- Correctness before greedy optimization: Phase 3 must keep the independent Phase 2 oracle.
+- Real terrain before large-scale visibility tuning: Phase 4 uses real section distributions.
+- Stable opaque/cutout path before complex transparency.
+- Profiling/evidence before broader native Vulkan expansion.
+- Full-detail baseline before optional LOD.
 
 ---
 
-## 15. Roadmap governance: how this file may be changed
+## 15. Roadmap governance
 
-This section is mandatory procedure for AI agents and maintainers.
+This file is editable canonical plan state, unlike immutable attempts.
 
-### 15.1 Treat this file as canonical plan state, not an append-only log
+### Class A — status synchronization
 
-Unlike attempt records, the roadmap **is allowed to change** as the product plan changes. However, meaningful changes must remain explainable through decisions/attempts/PR history.
+Examples: PLANNED -> ACTIVE, ACTIVE -> COMPLETE, merge SHA/status updates. Requires roadmap + `CURRENT_STATE` synchronization and existing evidence for completion claims.
 
-Do not preserve stale wording merely for history; preserve the **reason/history elsewhere**, then keep this file readable as the best current plan.
+### Class B — detail refinement
 
-### 15.2 Classify every roadmap edit
+Examples: validation criteria, smaller milestones, metrics, implementation notes consistent with durable decisions. Add an attempt when substantive research produced the refinement.
 
-Before editing, classify the change:
+### Class C — restructuring
 
-#### Class A — Status synchronization
+Reordering/splitting/merging phases requires a new attempt and durable decision when the ordering itself is architectural.
 
-Examples:
+### Class D — product priority/scope change
 
-- PLANNED -> ACTIVE;
-- ACTIVE -> COMPLETE after merge/runtime validation;
-- updating the active dev milestone;
-- adding the merge SHA for a completed phase.
+Changing Vulkan-only policy, vendor neutrality, tail-latency priority, mandatory LOD, shader/core scope or major compatibility promises requires an explicit durable superseding decision.
 
-Required records:
+### Class E — major removal/rejection
 
-- update this roadmap;
-- update `CURRENT_STATE.md` if current truth changed;
-- attempt/runtime evidence must already exist for claims of validation.
+Mark REJECTED/DEFERRED/SUPERSEDED first, record why durably, update dependencies, then later clean stale detail only after history is preserved.
 
-A new architecture decision is not required if the plan itself did not change.
+Evidence for COMPLETE may include source SHA, exact CI, artifact/checksum, real-machine runtime, deterministic validation, benchmarks and cross-vendor testing as applicable.
 
-#### Class B — Detail refinement
+Attempts remain immutable. `CURRENT_STATE.md` should stay concise/current; this roadmap carries long-range detail. Newer durable decisions override stale roadmap text until synchronized.
 
-Examples:
-
-- expanding validation criteria;
-- breaking a planned phase into smaller milestones;
-- clarifying metrics;
-- adding implementation notes consistent with existing decisions.
-
-Required records:
-
-- update this roadmap;
-- add an attempt if the refinement came from substantive research/API inspection;
-- update `CURRENT_STATE.md` only if immediate next work changed.
-
-#### Class C — Roadmap restructuring
-
-Examples:
-
-- moving greedy meshing to a different phase;
-- reordering transparency/entities;
-- splitting or merging phases;
-- changing a major dependency/gate.
-
-Required records:
-
-- update this roadmap;
-- create a new immutable attempt explaining the proposed/researched change;
-- add or supersede a `DECISIONS.md` entry when the ordering reflects a durable engineering/product choice;
-- update `CURRENT_STATE.md` if the active or next milestone changed;
-- summarize the change in the active PR/issue when relevant.
-
-#### Class D — Product priority/scope change
-
-Examples:
-
-- adding OpenGL support;
-- changing Vulkan-only policy;
-- making shaders a core requirement;
-- abandoning vendor neutrality;
-- changing tail latency from the top priority;
-- making LOD mandatory;
-- broadening/narrowing compatibility promises substantially;
-- dropping a major promised renderer domain.
-
-Required records:
-
-- explicit durable decision in `DECISIONS.md` that supersedes prior policy;
-- roadmap update;
-- `CURRENT_STATE.md` update;
-- attempt/research evidence where technical reasoning is involved;
-- active PR/issue summary;
-- do not silently overwrite the old goal.
-
-#### Class E — Removal/rejection of a major feature
-
-Do not simply delete it.
-
-Required procedure:
-
-1. mark the roadmap item `REJECTED`, `DEFERRED`, or `SUPERSEDED` in the revision that makes the decision;
-2. record why in `DECISIONS.md` or an immutable attempt;
-3. identify the replacement if superseded;
-4. update dependent phases;
-5. after the historical reason is durable, later cleanup may remove excessive stale detail from the canonical roadmap while retaining a concise reference to the superseding decision.
-
-### 15.3 Evidence rules
-
-Do not mark an item COMPLETE based on intention, compilation alone, or chat discussion when runtime behavior is part of the feature contract.
-
-Evidence hierarchy should include, as applicable:
-
-- exact source/commit SHA;
-- CI run;
-- artifact/checksum;
-- real-machine runtime log;
-- deterministic validation/readback;
-- benchmark data;
-- cross-vendor test;
-- attempt record.
-
-### 15.4 Keep CURRENT_STATE and roadmap roles separate
-
-`CURRENT_STATE.md` should remain concise enough to answer:
-
-- what branch/PR/version is active;
-- what just passed;
-- what is currently being tested;
-- what the next concrete action is.
-
-Do **not** copy the entire roadmap into `CURRENT_STATE.md`.
-
-The roadmap should contain long-range plan detail and should link conceptually to the current phase without becoming a daily log.
-
-### 15.5 Decisions override stale roadmap text
-
-If `DECISIONS.md` contains a newer active decision that conflicts with this roadmap, the decision is the stronger architectural record until the roadmap is synchronized.
-
-The agent that notices the mismatch should fix the roadmap as part of the same coherent work when authorized.
-
-### 15.6 Attempts remain immutable
-
-Never edit old attempt files merely because the roadmap changed.
-
-Create a new attempt that says what changed and what prior assumption/plan it supersedes.
-
-### 15.7 Roadmap edits and Git workflow
-
-For roadmap changes made during an active feature branch:
-
-- update the roadmap on that branch;
-- include the roadmap change in the existing coherent PR rather than opening a duplicate PR solely for the same milestone;
-- mention material roadmap changes in the PR body;
-- allow normal CI to run even for docs-heavy branches when the repository workflow does so;
-- do not claim source behavior changed when only docs changed.
-
-For roadmap-only work outside an active feature branch, use a dedicated documentation/planning branch and draft PR unless repository policy later changes.
-
-### 15.8 Required review checklist after roadmap edits
-
-Before handoff, verify:
-
-- priorities still match `OPERATING_MANUAL.md`;
-- current status matches `CURRENT_STATE.md`;
-- durable architecture choices match `DECISIONS.md`;
-- newly completed items have evidence;
-- no planned feature was silently deleted;
-- phase dependencies still make sense;
-- experimental items remain clearly marked;
-- greedy meshing remains governed by D-0024 unless superseded explicitly;
-- native Vulkan scope remains governed by D-0023/D-0025/D-0027 unless superseded explicitly;
-- next milestone is clear;
-- the active PR describes any material plan change.
+After roadmap edits verify priorities, current state, decisions, evidence, phase dependencies, experiment labels, D-0024 greedy/oracle rules and D-0023/D-0025/D-0027 native-scope rules.
 
 ---
 
 ## 16. Roadmap revision log
 
-This is a concise index, **not** the evidence log. Detailed reasoning belongs in attempts/decisions.
+### 2026-08-22 — P3.2 Class-A completion / P3.3 activation
+
+- completed and merged P3.2 binary/bitmask visibility masks via PR #36 merge `54ca3cb2d64eda958579407728e757eb0c98b948`;
+- recorded dev4 reference runtime `phase3GateReady=true`, `schedulerEvidenceReady=true`, `binaryVisibilityEvidenceReady=true`;
+- recorded 288 production visibility builds, 102,367 total faces, exact six-direction accounting, exact 3,072 bytes/build, determinism `7/7` and independent reference audits `7/7`;
+- retained `BakedSectionMesh` as drawable authority during P3.2, so greedy emission remains unclaimed;
+- activated P3.3 greedy rectangle extraction as the next milestone;
+- preserved the permanent independent reference oracle, immutable worker input rule, bounded scheduling/lifetime architecture and future renderer-domain ordering;
+- P3.2 promotion used `[no-release]`.
 
 ### 2026-08-22 — Phase 2 + P3.1 Class-A synchronization
 
-- synchronized Phase 2 to COMPLETE after P2.6/P2.7 validation and PR #25 merge `794483f955c861cbf9e24ade2463ba51ab9ab284`;
-- recorded A-0101's diagnostic-only fixed-anchor load/unload `9/9` + post-return LIVE proof as the stronger downstream evidence that closes A-0084's missing P2.6 event-class observation;
-- synchronized P3.1 to COMPLETE after dev1/dev2/dev3 runtime validation and merges `c39cf17b4864e7f7081007238117aea5be3c26e3`, `58b2b8b8b1962f2809029e32d147a4a96a93b486`, and `1b6615eac2494a197cea86d314cf5b099d2418e8`;
-- recorded fresh retargeted exact CI runs `32582746431`, `32582829896`, and `32582906074` before the Phase 3 merges;
-- activated P3.2 binary/bitmask visibility masks as the next milestone while leaving P3.3 greedy rectangle extraction and later Phase 3 work planned;
-- preserved D-0024's independent reference-oracle requirement, phase ordering, Vulkan/native-scope decisions and public release policy;
-- all internal promotion merges used `[no-release]`; public release remains `v0.0.2-phase0`.
+- synchronized Phase 2 through P2.7 to COMPLETE;
+- recorded A-0101 fixed-anchor unload/return proof closing the final P2.6 event-class observation;
+- synchronized P3.1 dev1/dev2/dev3 to COMPLETE;
+- recorded exact retarget CI and validated merges;
+- activated P3.2 while preserving D-0024 ordering and native-scope decisions.
 
-### 2026-08-21 — P2.5 Class-A status synchronization
+### 2026-08-21 — P2.2 through P2.5 Class-A synchronization
 
-- synchronized P2.5 to COMPLETE after exact Minecraft 26.2 model/cutout API grounding, generalized SOLID/CUTOUT implementation/package CI, reference RX 6800 XT runtime validation, human visual validation, and merge `c17f7c6146678e18cacabc44d85c67413a040f73`;
-- recorded the vanilla `ModelBlockRenderer -> BlockQuadOutput` generalized-quad correctness seam and preserved the independent P2.1 cube oracle;
-- recorded public SOLID/CUTOUT BLOCK-format indexed-indirect validation with exact cutout alpha, bounded memory and completion-gated reclamation;
-- kept leaves force-opaque policy, translucent/fluid terrain, event-driven lifecycle and persistent multi-section ownership in their existing later scopes;
-- left P2.6 as the next planned milestone without changing later phase ordering, product scope, or durable architecture.
-
-### 2026-08-21 — P2.4 Class-A status synchronization
-
-- synchronized P2.4 to COMPLETE after exact Minecraft 26.2 lighting/AO API grounding, implementation/package CI, reference RX 6800 XT runtime validation, human visual validation, and merge `fa0d40182cd0bc29a526b28a8b2b3b43fc8fc8ba`;
-- marked conservative supported-subset lighting and ambient-occlusion foundations complete;
-- recorded that exact 26.2 inspection found no AO-dependent alternate triangle diagonal for the supported path;
-- preserved the validation-only `1/512` anti-depth-fighting comparison offset as non-production presentation behavior;
-- left P2.5 as the next planned milestone without changing later phase ordering, product scope, or durable architecture.
-
-### 2026-08-21 — P2.3 Class-A status synchronization
-
-- synchronized P2.3 to COMPLETE after exact Minecraft 26.2 API grounding, implementation/package CI, reference RX 6800 XT runtime validation, human texture/UV/alignment/tint validation, and merge `667230f51222746083efe89c72265d80ac9d3929`;
-- marked conservative supported-subset material/sprite/UV and tint identity foundations complete;
-- preserved the observed validation-overlay block-edit recapture delay as P2.6 lifecycle/rebuild work rather than changing phase ordering;
-- left P2.4 as the next planned milestone without changing later phase ordering, product scope, or durable architecture.
-
-### 2026-08-21 — P2.2 Class-A status synchronization
-
-- synchronized P2.1 to COMPLETE with its runtime evidence and merge SHA;
-- synchronized P2.2 to COMPLETE after exact CI, reference RX 6800 XT runtime validation, human-visible alignment validation, and merge `f9c64267c5becb3bd80897efdb09ed65a6ce8697`;
-- marked the immutable snapshot, neighbor halo, and permanent reference oracle terrain foundations complete;
-- left P2.3 as the next planned milestone without changing later phase ordering, product scope, or durable architecture.
+Successive status synchronizations recorded validated drawable alignment, texture/material/UV/tint semantics, lighting/AO semantics and generalized SOLID/CUTOUT model-quad support while preserving later lifecycle/multi-section/greedy ordering.
 
 ### 2026-08-20 — v1
 
-- created the canonical master roadmap;
-- consolidated product priorities, architecture direction, all major phases, feature inventory, experimental plan, profiling/benchmark strategy, compatibility/release plan, and roadmap governance;
-- preserved Phase 2 reference-oracle -> Phase 3 binary/bitmask greedy-meshing ordering;
-- established formal change classes and synchronization procedure with `CURRENT_STATE.md`, `DECISIONS.md`, and immutable attempt records.
+Created the canonical master roadmap, consolidated product priorities/architecture/phases/features/experiments/profiling/compatibility/release plans, preserved Phase 2 reference-oracle -> Phase 3 binary/bitmask greedy ordering, and established formal change governance.
 
 ---
 
 ## 17. Immediate roadmap position
 
-Current position at the time of this revision:
-
 - Phase 0: COMPLETE.
-- Phase 1: COMPLETE through GPU visibility/indirect compaction.
+- Phase 1: COMPLETE.
 - Phase 2: COMPLETE through P2.7.
-- P2.1: COMPLETE / `0.2.0-phase2-dev1`.
-- P2.2: COMPLETE / `0.2.0-phase2-dev2`, first drawable real section with human-validated world/camera alignment.
-- P2.3: COMPLETE / `0.2.0-phase2-dev3`, correct texture/material/UV/tint identity for the conservative supported SOLID subset with human-validated textured alignment.
-- P2.4: COMPLETE / `0.2.0-phase2-dev4`, exact block/sky light, directional shade and AO semantics for the conservative supported SOLID subset with human-validated lightmapped comparison.
-- P2.5: COMPLETE / `0.2.0-phase2-dev5`, exact vanilla-emitted generalized MODEL semantics for accepted SOLID/CUTOUT blocks with human-validated layered comparison.
-- P2.6: COMPLETE / `0.2.0-phase2-dev6`, event-driven lifecycle/rebuild correctness with final fixed-target event-class closure in A-0101.
-- P2.7: COMPLETE / `0.2.0-phase2-dev7`, persistent neighboring multi-section scene validation with human-validated borders/camera movement.
 - Phase 3: ACTIVE.
-- P3.1: COMPLETE through `0.3.0-phase3-dev3`, including bounded worker/job architecture, production async scene integration, global relevance scheduling, reusable worker scratch, production metrics and clean lifecycle handling.
-- P3.2: ACTIVE — binary/bitmask visibility masks are the next implementation milestone.
-- P3.3 greedy rectangle extraction and later Phase 3 work remain PLANNED.
-- Public release remains `v0.0.2-phase0`; internal milestone merges were `[no-release]`.
+- P3.1: COMPLETE through `0.3.0-phase3-dev3`.
+- P3.2: COMPLETE through `0.3.0-phase3-dev4`, PR #36 merge `54ca3cb2d64eda958579407728e757eb0c98b948`.
+- P3.3: ACTIVE — greedy rectangle extraction is the next implementation milestone; no greedy production geometry is claimed yet.
+- P3.4 and later Phase 3 work remain PLANNED/EXPERIMENTAL according to their sections.
+- Phases 4-12 retain their planned order and scope.
 
-Always verify the live details in `ai/CURRENT_STATE.md` before acting on this final section because active milestone state changes more frequently than the long-range plan.
+Always verify live details in `ai/CURRENT_STATE.md` before acting because active milestone state changes more frequently than the long-range plan.
