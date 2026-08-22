@@ -6,160 +6,114 @@ Last updated: 2026-08-23
 
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
-- Current public release intent: keep the existing public checkpoint until a separate release decision.
-- Canonical long-range plan: `ai/MASTER_ROADMAP.md`.
-- Current product phase: **Phase 3 — production asynchronous CPU mesher / greedy meshing**.
-- Current active milestone: **P3.4 dev8 — ordinary four-vertex rectangle emission-safety classification**.
-- Active branch: `phase3/rectangle-emission-safety`.
-- Active development version: `0.3.0-phase3-dev8`.
-- Canonical draft PR: #40.
-- Runtime test handoff preference: provide the direct versioned `.jar`, not a GitHub Actions ZIP wrapper.
+- Product phase: **Phase 3 — production asynchronous CPU mesher / greedy meshing**.
+- Active milestone: **P3.4 dev9 — repeat-aware UV descriptor / representability sidecar**.
+- Target branch: `phase3/repeat-aware-uv-descriptor`.
+- Target version: `0.3.0-phase3-dev9`.
+- Public release intent: keep the existing public checkpoint until a separate release decision.
+- Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
 
-## Completed merged foundation
+## Completed foundation
 
-- Phase 0: COMPLETE — public checkpoint `v0.0.2-phase0`.
-- Phase 1: COMPLETE — merge `61df7b8e2abc09ce387e09c9e4d6811a9ef6c40f`.
+- Phase 0: COMPLETE.
+- Phase 1: COMPLETE — closing merge `61df7b8e2abc09ce387e09c9e4d6811a9ef6c40f`.
 - Phase 2 through P2.7: COMPLETE.
 - P3.1 dev1/dev2/dev3: COMPLETE — PRs #29/#32/#34.
-- P3.2 dev4 binary visibility masks: COMPLETE — PR #36 merge `54ca3cb2d64eda958579407728e757eb0c98b948`.
-- P3.3 dev5 greedy rectangle extraction: COMPLETE — PR #37 merge `34caa19a9de70ba8e0395a2992180f3a24a3f7aa`.
-- P3.4 dev6 canonical render-key sidecar: COMPLETE SLICE — PR #38 merge `967c4511cd11cd721886feae6d146f4412790a6d`.
-- P3.4 dev7 render-key-aware merge-candidate sidecar: COMPLETE SLICE — PR #39 merge `cec4ecb2432ec92f17a94a358895de6c2f21257e`.
+- P3.2 dev4 binary visibility: COMPLETE — PR #36 merge `54ca3cb2d64eda958579407728e757eb0c98b948`.
+- P3.3 dev5 topology rectangles: COMPLETE — PR #37 merge `34caa19a9de70ba8e0395a2992180f3a24a3f7aa`.
+- P3.4 dev6 canonical render-key sidecar: COMPLETE — PR #38 merge `967c4511cd11cd721886feae6d146f4412790a6d`.
+- P3.4 dev7 render-key-aware merge candidates: COMPLETE — PR #39 merge `cec4ecb2432ec92f17a94a358895de6c2f21257e`.
+- P3.4 dev8 ordinary four-vertex emission-safety classifier: COMPLETE — PR #40 merge `7a15f857a081fba642fcc28811ce88363b5abb66`.
 
-A-0101 remains the canonical proof for the already-closed Phase 2 fixed-target chunk unload/return lifecycle. Later Phase 3 tests do not repeat that far-travel sequence unless lifecycle semantics change.
+A-0101 remains the canonical fixed-target unload/return lifecycle proof. Later Phase 3 slices do not repeat the old far-travel sequence unless lifecycle semantics change.
 
-## Proven P3.2–P3.4 foundations
+## Durable P3.2–P3.4 truth
 
-`BinarySectionVisibility` is the immutable six-direction conservative canonical face representation: exactly 3,072 retained bytes/section, deterministic construction, and permanent independent `ReferenceFaceMesh` equivalence.
+`BinarySectionVisibility` is the six-direction conservative canonical face topology: exactly 3,072 retained bytes/section, deterministic, and permanently checked against the independent `ReferenceFaceMesh` oracle.
 
-`GreedySectionRectangles` deterministically partitions P3.2 masks into topology-only rectangles with exact no-gap/no-overlap coverage. P3.3 does not emit those rectangles to the GPU.
+`GreedySectionRectangles` deterministically partitions that topology into packed 4-byte rectangles with exact no-gap/no-overlap coverage. Those topology rectangles are not emitted to the GPU.
 
-`CanonicalFaceRenderKeys` maps a canonical face only when exactly one accepted baked SOLID/CUTOUT quad from the same source block is proven to be its exact full unit-cube face. Exact equivalence includes direction, layer, complete material/sprite identity, winding/corner signature, raw UV bits, exact ARGB and packed light. Its retained map is exactly 49,152 bytes/build.
+`CanonicalFaceRenderKeys` maps a canonical face only when exactly one accepted baked SOLID/CUTOUT quad from the same source block is proven to be the exact full unit-cube face. Render equality includes exact direction, layer, material/sprite/tint/shade/emission/animation identity, corner order/winding, raw UV bits, exact ARGB and packed light. Retained mapping: exactly 49,152 bytes/build.
 
-`RenderMergeCandidates` deterministically groups the complete dev6-eligible canonical face set into same-render-key rectangles. P3.3 rectangle boundaries are not mandatory candidate boundaries. Each candidate retains one packed `int` rectangle plus one unsigned `short` source-quad representative = 6 logical bytes/candidate. Every build independently validates exact eligible-face coverage, no overlap, exact representative equivalence and canonical passthrough accounting.
+`RenderMergeCandidates` scans the full dev6-eligible face set and forms deterministic same-render-key rectangles. P3.3 topology boundaries do not artificially cap candidates. Each candidate retains a packed rectangle plus representative source quad = 6 logical bytes/candidate, with exact eligible coverage and passthrough accounting.
+
+`OrdinaryQuadEmissionSafety` classifies whether a dev7 candidate can be represented by one ordinary four-vertex quad under the current captured block-vertex fields. For a repeated geometric-corner field `P[0..3]`, width > 1 requires `P0==P1 && P2==P3`; height > 1 requires `P0==P2 && P1==P3`. The rule is applied independently to exact ARGB, packed light and raw atlas UV pairs.
 
 The generalized `BakedSectionMesh` remains the authoritative GPU drawable.
 
-## P3.4 dev7 closure — COMPLETE SLICE
+## P3.4 dev8 closure — COMPLETE
 
-A-0117 froze dev7, A-0118 recorded the pure classifier compile checkpoint, A-0119 recorded worker/coordinator integration and packaging, A-0120 recorded real runtime success, and A-0121 recorded promotion/dev8 activation.
+Canonical runtime package:
 
-Canonical dev7 runtime package:
+- `Obsidian-0.3.0-phase3-dev8.jar`
+- size `337,502` bytes
+- SHA-256 `f7155754683c6f484356cc4e729bd5de262b4acd355df05a49e55122903f9f4e`
+- package source head `cc7e4d64bdf000635ed765a6e68a6c30cc9c2a8f`
 
-- `Obsidian-0.3.0-phase3-dev7.jar`;
-- size `320,735` bytes;
-- SHA-256 `ef2ff6f1bc78469a9a65db486f735c178565c8982fd62aa1bb60901bf56ce1c7`.
+A-0126 records reference runtime SUCCESS. Final evidence head `f4b8028cb46708a8990b1c4456bc29e5bd993fa9` passed workflow `32604062038`; build/upload succeeded and release publishing was skipped. PR #40 merged with `[no-release]` as `7a15f857a081fba642fcc28811ce88363b5abb66`.
 
-Reference runtime closure:
+Reference runtime:
 
-- all Phase 3/P3.2/P3.3/dev6/dev7 gates true;
-- workers submitted/started/completed `263/263/263`, zero queue-full rejection/failure/shutdown-join failure;
-- visibility `263` builds / `119,422` faces, determinism/reference `6/6` each;
-- topology rectangles `48,846`, all `119,422` faces covered, `70,576` faces saved = 59.0%, primary coverage `263/263`, determinism/reference `6/6` each;
-- render-key visible/eligible/unmapped/ambiguous `119,422 / 95,805 / 0 / 23,617`, determinism `6/6`;
-- merge candidates `85,880`, covered eligible `95,805` exact, canonical passthrough `23,617` exact;
-- candidate singleton/multi-face `78,562 / 7,318`;
-- candidate faces saved `9,925` = 10.3% over eligible faces;
-- candidate retained `515,280 = 85,880 * 6`;
-- candidate coverage `263/263`, determinism `6/6`;
-- workers/staging/arena/resources clean and Prism exit code `0`.
+- all Phase 3/P3.2/P3.3/dev6/dev7/dev8 gates true, including `ordinaryQuadEmissionSafetyEvidenceReady=true`;
+- workers submitted/started/completed `234/234/234`, 190 steals, zero queue-full rejection/failure/shutdown-join failure;
+- visibility: 234 builds / 94,258 faces, exact bytes, determinism/reference `5/5`;
+- topology rectangles: 38,884 covering all 94,258 faces, 55,374 saved = 58.7%, coverage/determinism/reference exact;
+- render keys: visible/eligible/unmapped/ambiguous `94,258 / 74,152 / 0 / 20,106`, determinism `5/5`;
+- dev7 candidates: 65,533 covering 74,152 eligible faces exactly, passthrough 20,106, singleton/multi `59,150 / 6,383`, faces saved 8,619 = 11.6%, coverage `234/234`, determinism `5/5`;
+- dev8 color-safe/unsafe multi-face `6,352 / 31`;
+- dev8 light-safe/unsafe multi-face `6,383 / 0`;
+- dev8 ordinary-atlas-UV-safe/unsafe multi-face `0 / 6,383`;
+- dev8 combined ordinary-safe/unsafe multi-face `0 / 6,383`;
+- repeat-aware-required `6,383`;
+- dev8 retained bytes `65,533 = 65,533 * 1`, classification audits `234/234`, determinism `5/5`;
+- worker world reads after capture 0; synchronous scene mesh builds 0;
+- dropped lifecycle events / unsafe stale installs `0 / 0`;
+- workers/staging/arena/resources clean;
+- staging submitted/reclaimed `23,115,616 / 23,115,616`;
+- arena allocations/retired/reclaimed `454/454/454`, used bytes 0;
+- resources retired/released `227/227`;
+- render-thread `Stopping!` and Prism exit code 0.
 
-Final dev7 evidence head `ae53eb6c9a0deaa86f4e92f70bfd029ab1c2e579` passed workflow `32602740308`; PR #39 merged as `cec4ecb2432ec92f17a94a358895de6c2f21257e` with `[no-release]`.
+No separate human visual verdict is claimed from the pasted dev8 log. Dev8 did not change emitted terrain geometry, so its frozen sidecar/runtime gates govern promotion. Any geometry-changing slice still requires renewed explicit human visual validation.
 
-The dev7 log contains no separately written visual verdict, so none is claimed. This does not weaken dev7 correctness because emitted GPU geometry did not change. Any later geometry-changing slice still requires explicit human visual validation.
+### Dev8 architectural conclusion
 
-## ACTIVE: P3.4 dev8 — ordinary four-vertex emission-safety classification
+The current ordinary atlas UV0 representation cannot directly exploit **any** observed multi-face dev7 candidate. Light interpolation was safe for every multi-face candidate and color interpolation for all but 31, but UV repetition failed for all 6,383.
 
-A-0121 activated dev8. A-0122 froze its exact mathematical/representation contract. A-0123 recorded the isolated classifier compile checkpoint. A-0124 removed an unnecessary validation-only scratch allocation and revalidated CI. A-0125 records full worker/coordinator integration and the canonical runtime package.
+This is a representation limitation, not a failure of render-key grouping. Full-atlas sampler repeat is not an acceptable fix because it would wrap across the atlas rather than within the source sprite. A future exact path needs sprite-local repeat coordinates followed by deterministic remapping into that sprite's atlas rectangle/orientation.
 
-### Source-grounded problem
+## ACTIVE: P3.4 dev9 — repeat-aware UV descriptor / representability
 
-The current authoritative drawable stores exactly four vertices per source quad with float3 position, RGBA8 color, float2 atlas UV0 and packed light UV2. `SectionBakedQuadSnapshot` captures the exact per-corner values.
+A-0127 activates dev9. P3.5 is not active.
 
-Dev7 render-key equality proves repeated unit faces have the same four-corner payload, but one large rectangle would interpolate that payload only once across the whole rectangle instead of restarting it at every cell. Ordinary atlas UV0 likewise cannot generally reproduce per-cell sprite resets without additional repeat metadata.
+Dev9 is **sidecar-only**. It must freeze and prove a compact deterministic descriptor for exact per-cell sprite repetition on a dev7 candidate without changing GPU geometry.
 
-### Frozen exact continuity rule
+Required correctness direction:
 
-For geometric corners `0=(uLow,vLow)`, `1=(uHigh,vLow)`, `2=(uLow,vHigh)`, `3=(uHigh,vHigh)`, a repeated field `P[0..3]` is one-large-quad compatible only when:
+1. consume immutable dev7 candidates, dev6 render keys, dev8 safety evidence and exact `SectionBakedQuadSnapshot` truth;
+2. use the representative canonical baked quad mapped to geometric corners;
+3. prove its four raw atlas UV corners form exactly two U values × two V values — an axis-aligned source sprite rectangle;
+4. preserve the exact geometric-corner-to-UV-corner permutation, including flip/rotation rather than silently normalizing orientation;
+5. define repeat in candidate-local cell coordinates, then remap the repeated local coordinate into the proven source atlas rectangle; never rely on wrapping the full atlas;
+6. measure repeat-aware UV representability for all multi-face candidates;
+7. combine repeat-aware UV representability with dev8 color/light interpolation safety to measure `repeatAwareFourVertexSafe` candidates;
+8. keep color-unsafe or UV-unrepresentable candidates on split/passthrough evidence;
+9. retain bounded primitive metadata with exact source fingerprints, accounting and determinism audits;
+10. preserve all previous worker/lifecycle/lifetime gates.
 
-- width > 1: `P0 == P1` and `P2 == P3`;
-- height > 1: `P0 == P2` and `P1 == P3`.
+Dev9 must keep:
 
-Apply independently to:
-
-- exact ARGB color;
-- packed light;
-- raw atlas `(u,v)` float-bit pairs.
-
-Both-axis merges therefore require a constant four-corner field for each attribute.
-
-### Implemented dev8 sidecar
-
-`OrdinaryQuadEmissionSafety` consumes only `RenderMergeCandidates`, `CanonicalFaceRenderKeys`, and `SectionBakedQuadSnapshot`.
-
-It independently reconstructs each representative baked quad into canonical geometric corners and retains one byte/candidate:
-
-- color interpolation safe;
-- light interpolation safe;
-- UV field safe;
-- ordinary attribute safe = all three.
-
-Maximum logical retained payload is 24,576 bytes/build. Worker scratch is fixed primitive storage.
-
-Production pipeline is now:
-
-`BinarySectionVisibility -> GreedySectionRectangles -> CanonicalFaceRenderKeys -> RenderMergeCandidates -> OrdinaryQuadEmissionSafety -> BakedSectionMesh`.
-
-Completed worker tickets retain the safety sidecar. Metrics cover color/light/UV safe/unsafe multi-face candidates, ordinary-safe/unsafe multi-face candidates, safe covered faces/faces saved, per-direction safe accounting, exact retained bytes, build timing/scratch high-water, primary classification audits and first/every-64 determinism audits.
-
-### Dev8 runtime gate
-
-`ordinaryQuadEmissionSafetyEvidenceReady=true` requires all prior dev7 gates plus exact dev8 classifier accounting, one-byte retained accounting, primary classification audits matching builds, nonzero/matching determinism audits, and clean lifetime closure.
-
-The gate deliberately does **not** require ordinary-safe multi-face candidates to be nonzero. Zero is valid evidence that the current ordinary atlas/block vertex representation cannot directly exploit dev7 grouping and a repeat-aware representation is required.
-
-Dev8 remains sidecar-only:
-
-- `ordinaryQuadEmissionSafetySidecarIntegrated=true`;
 - `greedyRectangleGpuEmission=false`;
 - `renderCorrectMergeKeyComplete=false`;
-- `BakedSectionMesh` remains authoritative.
+- `BakedSectionMesh` authoritative.
 
-### Canonical dev8 package
-
-Integrated runtime source/package head:
-
-- `cc7e4d64bdf000635ed765a6e68a6c30cc9c2a8f`.
-
-Exact workflow `32603270509`:
-
-- Java 25 / Gradle 9.5.1 build SUCCESS;
-- artifact upload SUCCESS;
-- release publishing SKIPPED.
-
-Canonical runtime JAR:
-
-- `Obsidian-0.3.0-phase3-dev8.jar`;
-- size `337,502` bytes;
-- SHA-256 `f7155754683c6f484356cc4e729bd5de262b4acd355df05a49e55122903f9f4e`.
-
-Package metadata: Minecraft `~26.2`, Fabric Loader `>=0.19.3`, Java `>=25`, client environment.
-
-### Remaining dev8 closure
-
-Real reference runtime evidence is still required. Run ordinary READY/rebuild/resource-reload activity, fully exit, and capture the complete shutdown tail plus Prism exit code. Promotion requires all prior gates plus `ordinaryQuadEmissionSafetyEvidenceReady=true` and clean workers/staging/arena/resources.
-
-P3.5 border/halo correctness remains planned and is not active.
+A later slice may implement a custom vertex/shader representation only after dev9 proves its descriptor. That geometry-changing slice must separately address raster/T-junction obligations relevant to its emission path and requires renewed explicit human visual validation before promotion.
 
 ## Promotion authorization
 
-Standing user merge authorization applies to this validated Phase 3 chain once each frozen slice's exact CI/package/runtime gates pass. Internal commits/merges use `[no-release]`.
+Standing merge authorization applies to the Phase 3 milestone chain after each frozen slice's exact CI/package/runtime gates pass. Internal commits/merges use `[no-release]`.
 
-A slice that actually changes GPU-emitted terrain geometry requires renewed explicit human visual validation before promotion.
-
-## Continuity model
-
-Read in order before architecture or milestone changes:
+## Continuity order
 
 1. `ai/CURRENT_STATE.md`
 2. `ai/MASTER_ROADMAP.md`
@@ -178,7 +132,7 @@ Source/runtime evidence overrides stale planning text. Attempts are immutable.
 - Fabric Loader 0.19.3
 - Fabric API 0.158.0+26.2
 - Java 25.0.1
-- AMD Radeon RX 6800 XT, 16 GB VRAM
+- AMD Radeon RX 6800 XT 16 GB
 - Ryzen 5 5600X
 - 16 GB DDR4-2666
 - Vulkan backend
