@@ -399,10 +399,19 @@ public final class RepeatAwareUvDescriptors {
         int v2 = Float.floatToRawIntBits(baked.v(representative, vertex2));
         int v3 = Float.floatToRawIntBits(baked.v(representative, vertex3));
 
-        int uOther = secondDistinct(u0, u1, u2, u3);
-        int vOther = secondDistinct(v0, v1, v2, v3);
-        if (uOther == Integer.MIN_VALUE || vOther == Integer.MIN_VALUE
-                || !onlyTwo(u0, uOther, u1, u2, u3)
+        int uOther;
+        if (u1 != u0) uOther = u1;
+        else if (u2 != u0) uOther = u2;
+        else if (u3 != u0) uOther = u3;
+        else return false;
+
+        int vOther;
+        if (v1 != v0) vOther = v1;
+        else if (v2 != v0) vOther = v2;
+        else if (v3 != v0) vOther = v3;
+        else return false;
+
+        if (!onlyTwo(u0, uOther, u1, u2, u3)
                 || !onlyTwo(v0, vOther, v1, v2, v3)) {
             return false;
         }
@@ -442,13 +451,6 @@ public final class RepeatAwareUvDescriptors {
         out[3] = vHigh;
         out[4] = c0 | (c1 << 2) | (c2 << 4) | (c3 << 6);
         return true;
-    }
-
-    private static int secondDistinct(int first, int a, int b, int c) {
-        if (a != first) return a;
-        if (b != first) return b;
-        if (c != first) return c;
-        return Integer.MIN_VALUE;
     }
 
     private static boolean onlyTwo(int first, int second, int a, int b, int c) {
