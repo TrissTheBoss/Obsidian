@@ -7,6 +7,7 @@ import dev.obsidian.render.terrain.GreedySectionRectangles;
 import dev.obsidian.render.terrain.OrdinaryQuadEmissionSafety;
 import dev.obsidian.render.terrain.ReferenceFaceMesh;
 import dev.obsidian.render.terrain.RenderMergeCandidates;
+import dev.obsidian.render.terrain.RepeatAwareTransportProof;
 import dev.obsidian.render.terrain.RepeatAwareUvDescriptors;
 import dev.obsidian.render.terrain.SectionBakedQuadSnapshot;
 import dev.obsidian.render.terrain.SectionSnapshot;
@@ -26,10 +27,11 @@ import java.util.concurrent.atomic.AtomicLongArray;
  * P3.3 partitions that proven topology into deterministic greedy rectangles,
  * P3.4 dev6 maps conservative canonical faces to exact baked render keys,
  * dev7 partitions only those eligible faces into render-key-aware merge
- * candidates, dev8 classifies ordinary four-vertex emission safety, and dev9
+ * candidates, dev8 classifies ordinary four-vertex emission safety, dev9
  * proves exact sprite-local repeat-aware UV descriptors for multi-face
- * candidates. The existing baked mesh remains the production drawable. No
- * worker touches Minecraft world/chunk/model state or GPU objects.</p>
+ * candidates, and dev10 proves the no-emission repeat transport obligations.
+ * The existing baked mesh remains the production drawable. No worker touches
+ * Minecraft world/chunk/model state or GPU objects.</p>
  */
 public final class SectionMeshWorkerPool implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/SectionMeshWorkers");
@@ -65,6 +67,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private volatile RenderMergeCandidates mergeCandidates;
         private volatile OrdinaryQuadEmissionSafety emissionSafety;
         private volatile RepeatAwareUvDescriptors repeatAwareUv;
+        private volatile RepeatAwareTransportProof repeatAwareTransport;
         private volatile BakedSectionMesh mesh;
         private volatile Throwable failure;
         private volatile long startNs;
@@ -105,6 +108,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         public RenderMergeCandidates mergeCandidates() { return mergeCandidates; }
         public OrdinaryQuadEmissionSafety emissionSafety() { return emissionSafety; }
         public RepeatAwareUvDescriptors repeatAwareUv() { return repeatAwareUv; }
+        public RepeatAwareTransportProof repeatAwareTransport() { return repeatAwareTransport; }
         public BakedSectionMesh mesh() { return mesh; }
         public Throwable failure() { return failure; }
         public long queueWaitNs() { return startNs == 0L ? 0L : Math.max(0L, startNs - enqueueNs); }
@@ -175,6 +179,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private final RenderMergeCandidates.BuildScratch mergeCandidateScratch = new RenderMergeCandidates.BuildScratch();
         private final OrdinaryQuadEmissionSafety.BuildScratch emissionSafetyScratch = new OrdinaryQuadEmissionSafety.BuildScratch();
         private final RepeatAwareUvDescriptors.BuildScratch repeatAwareUvScratch = new RepeatAwareUvDescriptors.BuildScratch();
+        private final RepeatAwareTransportProof.BuildScratch repeatAwareTransportScratch = new RepeatAwareTransportProof.BuildScratch();
         private long completedLocalBuilds;
         private long lastFingerprint;
 
@@ -383,6 +388,44 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     return;
                 }
 
+                RepeatAwareTransportProof firstRepeatAwareTransport = RepeatAwareTransportProof.build(
+                        firstMergeCandidates, firstEmissionSafety, firstRepeatAwareUv,
+                        ticket.bakedSnapshot, repeatAwareTransportScratch);
+                recordRepeatAwareTransportScratchUse(repeatAwareTransportScratch);
+                repeatAwareTransportBuilds.incrementAndGet();
+                totalRepeatAwareTransportSourceMultiFace.addAndGet(firstRepeatAwareTransport.sourceMultiFaceCandidates());
+                totalRepeatAwareTransportSourceRepresentable.addAndGet(firstRepeatAwareTransport.sourceRepresentableCandidates());
+                totalRepeatAwareTransportSourceFourVertexSafe.addAndGet(firstRepeatAwareTransport.sourceFourVertexSafeCandidates());
+                totalRepeatAwareTransportRecords.addAndGet(firstRepeatAwareTransport.recordCount());
+                totalRepeatAwareTransportUnsafe.addAndGet(firstRepeatAwareTransport.unsafeCandidates());
+                totalRepeatAwareTransportCoveredFaces.addAndGet(firstRepeatAwareTransport.coveredFaces());
+                totalRepeatAwareTransportFacesSaved.addAndGet(firstRepeatAwareTransport.facesSaved());
+                totalRepeatAwareTransportExplicitGradient.addAndGet(firstRepeatAwareTransport.explicitGradientRequired());
+                totalRepeatAwareTransportInternalS.addAndGet(firstRepeatAwareTransport.internalSResetCandidates());
+                totalRepeatAwareTransportInternalT.addAndGet(firstRepeatAwareTransport.internalTResetCandidates());
+                totalRepeatAwareTransportInternalBoth.addAndGet(firstRepeatAwareTransport.internalBothResetCandidates());
+                totalRepeatAwareTransportOuterEdge.addAndGet(firstRepeatAwareTransport.outerEdgePolicyRequired());
+                totalRepeatAwareTransportSameSampler.addAndGet(firstRepeatAwareTransport.sameAtlasSamplerRequired());
+                totalRepeatAwareTransportRasterReview.addAndGet(firstRepeatAwareTransport.rasterBoundaryReviewRequired());
+                totalRepeatAwareTransportRetainedBytes.addAndGet(firstRepeatAwareTransport.retainedBytes());
+                totalRepeatAwareTransportBuildNs.addAndGet(firstRepeatAwareTransport.buildTimeNs());
+                updateMax(maxRepeatAwareTransportRecords, firstRepeatAwareTransport.recordCount());
+                updateMax(maxRepeatAwareTransportBuildNs, firstRepeatAwareTransport.buildTimeNs());
+                repeatAwareTransportProofAudits.incrementAndGet();
+                repeatAwareTransportProofAuditMatches.incrementAndGet();
+                for (int direction = 0; direction < BinarySectionVisibility.DIRECTION_COUNT; direction++) {
+                    repeatAwareTransportRecordsByDirection.addAndGet(
+                            direction, firstRepeatAwareTransport.directionRecordCount(direction));
+                    repeatAwareTransportCoveredFacesByDirection.addAndGet(
+                            direction, firstRepeatAwareTransport.directionCoveredFaces(direction));
+                    repeatAwareTransportFacesSavedByDirection.addAndGet(
+                            direction, firstRepeatAwareTransport.directionFacesSaved(direction));
+                }
+                if (ticket.cancellationRequested || closed) {
+                    cancelTicket(ticket);
+                    return;
+                }
+
                 BakedSectionMesh first = BakedSectionMesh.build(
                         ticket.snapshot, ticket.bakedSnapshot, buildScratch);
                 recordScratchUse(buildScratch);
@@ -461,6 +504,16 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     }
                     repeatAwareUvDeterminismAuditMatches.incrementAndGet();
 
+                    repeatAwareTransportDeterminismAudits.incrementAndGet();
+                    RepeatAwareTransportProof secondRepeatAwareTransport = RepeatAwareTransportProof.build(
+                            secondMergeCandidates, secondEmissionSafety, secondRepeatAwareUv,
+                            ticket.bakedSnapshot, repeatAwareTransportScratch);
+                    recordRepeatAwareTransportScratchUse(repeatAwareTransportScratch);
+                    if (!firstRepeatAwareTransport.contentEquals(secondRepeatAwareTransport)) {
+                        throw new IllegalStateException("Worker-produced repeat-aware transport proof was nondeterministic");
+                    }
+                    repeatAwareTransportDeterminismAuditMatches.incrementAndGet();
+
                     determinismAudits.incrementAndGet();
                     BakedSectionMesh second = BakedSectionMesh.build(
                             ticket.snapshot, ticket.bakedSnapshot, buildScratch);
@@ -481,6 +534,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 ticket.mergeCandidates = firstMergeCandidates;
                 ticket.emissionSafety = firstEmissionSafety;
                 ticket.repeatAwareUv = firstRepeatAwareUv;
+                ticket.repeatAwareTransport = firstRepeatAwareTransport;
                 ticket.mesh = first;
                 ticket.endNs = System.nanoTime();
                 ticket.state = TicketState.COMPLETED;
@@ -646,6 +700,32 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLong repeatAwareUvDeterminismAudits = new AtomicLong();
     private final AtomicLong repeatAwareUvDeterminismAuditMatches = new AtomicLong();
 
+    private final AtomicLong repeatAwareTransportBuilds = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportSourceMultiFace = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportSourceRepresentable = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportSourceFourVertexSafe = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportRecords = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportUnsafe = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportCoveredFaces = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportFacesSaved = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportExplicitGradient = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportInternalS = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportInternalT = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportInternalBoth = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportOuterEdge = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportSameSampler = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportRasterReview = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportRetainedBytes = new AtomicLong();
+    private final AtomicLong totalRepeatAwareTransportBuildNs = new AtomicLong();
+    private final AtomicLong maxRepeatAwareTransportBuildNs = new AtomicLong();
+    private final AtomicLong maxRepeatAwareTransportRecords = new AtomicLong();
+    private final AtomicLong repeatAwareTransportScratchBuildUses = new AtomicLong();
+    private final AtomicLong maxRepeatAwareTransportScratchRecords = new AtomicLong();
+    private final AtomicLong repeatAwareTransportProofAudits = new AtomicLong();
+    private final AtomicLong repeatAwareTransportProofAuditMatches = new AtomicLong();
+    private final AtomicLong repeatAwareTransportDeterminismAudits = new AtomicLong();
+    private final AtomicLong repeatAwareTransportDeterminismAuditMatches = new AtomicLong();
+
     private final AtomicLong shutdownJoinFailures = new AtomicLong();
 
     private final AtomicLongArray submittedByPriority = new AtomicLongArray(PRIORITY_COUNT);
@@ -676,6 +756,12 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLongArray repeatAwareUvSafeByDirection =
             new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
     private final AtomicLongArray repeatAwareUvSafeCoveredFacesByDirection =
+            new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
+    private final AtomicLongArray repeatAwareTransportRecordsByDirection =
+            new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
+    private final AtomicLongArray repeatAwareTransportCoveredFacesByDirection =
+            new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
+    private final AtomicLongArray repeatAwareTransportFacesSavedByDirection =
             new AtomicLongArray(BinarySectionVisibility.DIRECTION_COUNT);
 
     private volatile boolean closed;
@@ -837,6 +923,11 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private void recordRepeatAwareUvScratchUse(RepeatAwareUvDescriptors.BuildScratch scratch) {
         repeatAwareUvScratchBuildUses.incrementAndGet();
         updateMax(maxRepeatAwareUvScratchDescriptors, scratch.highWaterDescriptors());
+    }
+
+    private void recordRepeatAwareTransportScratchUse(RepeatAwareTransportProof.BuildScratch scratch) {
+        repeatAwareTransportScratchBuildUses.incrementAndGet();
+        updateMax(maxRepeatAwareTransportScratchRecords, scratch.highWaterRecords());
     }
 
     private static void validateJob(
@@ -1086,6 +1177,50 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
             throw new IllegalArgumentException("Invalid repeat-aware UV direction");
         }
         return repeatAwareUvSafeCoveredFacesByDirection.get(direction);
+    }
+
+    public long repeatAwareTransportBuilds() { return repeatAwareTransportBuilds.get(); }
+    public long totalRepeatAwareTransportSourceMultiFace() { return totalRepeatAwareTransportSourceMultiFace.get(); }
+    public long totalRepeatAwareTransportSourceRepresentable() { return totalRepeatAwareTransportSourceRepresentable.get(); }
+    public long totalRepeatAwareTransportSourceFourVertexSafe() { return totalRepeatAwareTransportSourceFourVertexSafe.get(); }
+    public long totalRepeatAwareTransportRecords() { return totalRepeatAwareTransportRecords.get(); }
+    public long totalRepeatAwareTransportUnsafe() { return totalRepeatAwareTransportUnsafe.get(); }
+    public long totalRepeatAwareTransportCoveredFaces() { return totalRepeatAwareTransportCoveredFaces.get(); }
+    public long totalRepeatAwareTransportFacesSaved() { return totalRepeatAwareTransportFacesSaved.get(); }
+    public long totalRepeatAwareTransportExplicitGradient() { return totalRepeatAwareTransportExplicitGradient.get(); }
+    public long totalRepeatAwareTransportInternalS() { return totalRepeatAwareTransportInternalS.get(); }
+    public long totalRepeatAwareTransportInternalT() { return totalRepeatAwareTransportInternalT.get(); }
+    public long totalRepeatAwareTransportInternalBoth() { return totalRepeatAwareTransportInternalBoth.get(); }
+    public long totalRepeatAwareTransportOuterEdge() { return totalRepeatAwareTransportOuterEdge.get(); }
+    public long totalRepeatAwareTransportSameSampler() { return totalRepeatAwareTransportSameSampler.get(); }
+    public long totalRepeatAwareTransportRasterReview() { return totalRepeatAwareTransportRasterReview.get(); }
+    public long totalRepeatAwareTransportRetainedBytes() { return totalRepeatAwareTransportRetainedBytes.get(); }
+    public long totalRepeatAwareTransportBuildNs() { return totalRepeatAwareTransportBuildNs.get(); }
+    public long maxRepeatAwareTransportBuildNs() { return maxRepeatAwareTransportBuildNs.get(); }
+    public long maxRepeatAwareTransportRecords() { return maxRepeatAwareTransportRecords.get(); }
+    public long repeatAwareTransportScratchBuildUses() { return repeatAwareTransportScratchBuildUses.get(); }
+    public long maxRepeatAwareTransportScratchRecords() { return maxRepeatAwareTransportScratchRecords.get(); }
+    public long repeatAwareTransportProofAudits() { return repeatAwareTransportProofAudits.get(); }
+    public long repeatAwareTransportProofAuditMatches() { return repeatAwareTransportProofAuditMatches.get(); }
+    public long repeatAwareTransportDeterminismAudits() { return repeatAwareTransportDeterminismAudits.get(); }
+    public long repeatAwareTransportDeterminismAuditMatches() { return repeatAwareTransportDeterminismAuditMatches.get(); }
+    public long repeatAwareTransportRecords(int direction) {
+        if (direction < 0 || direction >= BinarySectionVisibility.DIRECTION_COUNT) {
+            throw new IllegalArgumentException("Invalid repeat-aware transport direction");
+        }
+        return repeatAwareTransportRecordsByDirection.get(direction);
+    }
+    public long repeatAwareTransportCoveredFaces(int direction) {
+        if (direction < 0 || direction >= BinarySectionVisibility.DIRECTION_COUNT) {
+            throw new IllegalArgumentException("Invalid repeat-aware transport direction");
+        }
+        return repeatAwareTransportCoveredFacesByDirection.get(direction);
+    }
+    public long repeatAwareTransportFacesSaved(int direction) {
+        if (direction < 0 || direction >= BinarySectionVisibility.DIRECTION_COUNT) {
+            throw new IllegalArgumentException("Invalid repeat-aware transport direction");
+        }
+        return repeatAwareTransportFacesSavedByDirection.get(direction);
     }
 
     public long shutdownJoinFailures() { return shutdownJoinFailures.get(); }
