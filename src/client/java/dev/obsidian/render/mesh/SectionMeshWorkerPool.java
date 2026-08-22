@@ -7,13 +7,16 @@ import dev.obsidian.render.terrain.SectionSnapshot;
 import java.util.ArrayDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongArray;
 
 /**
  * Bounded dedicated worker pool for pure section mesh construction.
  *
  * <p>Jobs contain only immutable renderer-owned Phase 2 snapshots. There are
  * three bounded priority lanes per worker and idle workers steal from peers.
- * No worker touches Minecraft world/chunk/model state or GPU objects.</p>
+ * Dev3 chooses work by priority across the whole pool before falling through to
+ * lower relevance. No worker touches Minecraft world/chunk/model state or GPU
+ * objects.</p>
  */
 public final class SectionMeshWorkerPool implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/SectionMeshWorkers");
@@ -21,11 +24,13 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     public static final int PRIORITY_HIGH = 0;
     public static final int PRIORITY_NORMAL = 1;
     public static final int PRIORITY_LOW = 2;
+    public static final int PRIORITY_COUNT = 3;
 
     private static final int MAX_WORKERS = 4;
     private static final int QUEUE_CAPACITY_PER_WORKER = 16;
     private static final long IDLE_WAIT_MS = 4L;
     private static final long SHUTDOWN_JOIN_MS = 500L;
+    private static final long DETERMINISM_AUDIT_INTERVAL = 64L;
 
     public enum TicketState { QUEUED, RUNNING, COMPLETED, CANCELLED, FAILED }
 
@@ -96,40 +101,41 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
             return true;
         }
 
-        synchronized Ticket pollOwn() {
-            for (ArrayDeque<Ticket> lane : lanes) {
-                Ticket ticket = lane.pollFirst();
-                if (ticket != null) {
-                    size--;
-                    return ticket;
-                }
-            }
-            return null;
+        synchronized Ticket poll(int priority) {
+            Ticket ticket = lanes[priority].pollFirst();
+            if (ticket != null) size--;
+            return ticket;
         }
 
-        synchronized Ticket steal() {
-            for (ArrayDeque<Ticket> lane : lanes) {
-                Ticket ticket = lane.pollLast();
-                if (ticket != null) {
-                    size--;
-                    return ticket;
-                }
-            }
-            return null;
+        synchronized Ticket steal(int priority) {
+            Ticket ticket = lanes[priority].pollLast();
+            if (ticket != null) size--;
+            return ticket;
+        }
+
+        synchronized boolean removeQueued(Ticket ticket) {
+            if (ticket == null || ticket.state != TicketState.QUEUED) return false;
+            if (!lanes[ticket.priority].remove(ticket)) return false;
+            size--;
+            return true;
         }
 
         synchronized int size() { return size; }
 
-        synchronized void cancelQueued() {
-            for (ArrayDeque<Ticket> lane : lanes) {
+        synchronized int[] cancelQueued() {
+            int[] cancelled = new int[PRIORITY_COUNT];
+            for (int priority = 0; priority < PRIORITY_COUNT; priority++) {
+                ArrayDeque<Ticket> lane = lanes[priority];
                 Ticket ticket;
                 while ((ticket = lane.pollFirst()) != null) {
                     ticket.cancellationRequested = true;
                     ticket.state = TicketState.CANCELLED;
                     ticket.endNs = System.nanoTime();
+                    cancelled[priority]++;
                 }
             }
             size = 0;
+            return cancelled;
         }
     }
 
@@ -137,7 +143,8 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private final int index;
         private final WorkerQueue queue = new WorkerQueue();
         private final Thread thread;
-        private long localBuilds;
+        private final BakedSectionMesh.BuildScratch buildScratch = new BakedSectionMesh.BuildScratch();
+        private long completedLocalBuilds;
         private long lastFingerprint;
 
         Worker(int index) {
@@ -151,10 +158,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         @Override
         public void run() {
             while (!closed) {
-                Ticket ticket = queue.pollOwn();
-                if (ticket == null) {
-                    ticket = stealFor(index);
-                }
+                Ticket ticket = takeNext(index);
                 if (ticket == null) {
                     synchronized (signal) {
                         if (closed) break;
@@ -180,22 +184,38 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
             ticket.startNs = System.nanoTime();
             runningJobs.incrementAndGet();
             startedJobs.incrementAndGet();
-            updateMax(maxQueueWaitNs, ticket.queueWaitNs());
-            totalQueueWaitNs.addAndGet(ticket.queueWaitNs());
+            startedByPriority.incrementAndGet(ticket.priority);
+            long queueWait = ticket.queueWaitNs();
+            updateMax(maxQueueWaitNs, queueWait);
+            updateMax(maxQueueWaitByPriority, ticket.priority, queueWait);
+            totalQueueWaitNs.addAndGet(queueWait);
+            totalQueueWaitByPriority.addAndGet(ticket.priority, queueWait);
 
             try {
                 if (ticket.cancellationRequested || closed) {
                     cancelTicket(ticket);
                     return;
                 }
-                BakedSectionMesh first = BakedSectionMesh.build(ticket.snapshot, ticket.bakedSnapshot);
+
+                BakedSectionMesh first = BakedSectionMesh.build(
+                        ticket.snapshot, ticket.bakedSnapshot, buildScratch);
+                recordScratchUse(buildScratch);
                 if (ticket.cancellationRequested || closed) {
                     cancelTicket(ticket);
                     return;
                 }
-                BakedSectionMesh second = BakedSectionMesh.build(ticket.snapshot, ticket.bakedSnapshot);
-                if (!first.contentEquals(second)) {
-                    throw new IllegalStateException("Worker-produced section mesh was nondeterministic");
+
+                boolean audit = completedLocalBuilds == 0L
+                        || (completedLocalBuilds % DETERMINISM_AUDIT_INTERVAL) == 0L;
+                if (audit) {
+                    determinismAudits.incrementAndGet();
+                    BakedSectionMesh second = BakedSectionMesh.build(
+                            ticket.snapshot, ticket.bakedSnapshot, buildScratch);
+                    recordScratchUse(buildScratch);
+                    if (!first.contentEquals(second)) {
+                        throw new IllegalStateException("Worker-produced section mesh was nondeterministic");
+                    }
+                    determinismAuditMatches.incrementAndGet();
                 }
                 if (ticket.cancellationRequested || closed) {
                     cancelTicket(ticket);
@@ -205,9 +225,14 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 ticket.mesh = first;
                 ticket.endNs = System.nanoTime();
                 ticket.state = TicketState.COMPLETED;
-                localBuilds++;
+                completedLocalBuilds++;
                 lastFingerprint = first.fingerprint();
                 completedJobs.incrementAndGet();
+                completedByPriority.incrementAndGet(ticket.priority);
+                totalOutputQuads.addAndGet(first.quadCount());
+                totalOutputVertexBytes.addAndGet(first.vertexBytes());
+                totalOutputIndexBytes.addAndGet(first.indexBytes());
+                updateMax(maxOutputBytes, (long) first.vertexBytes() + first.indexBytes());
                 long executionNs = ticket.executionNs();
                 totalExecutionNs.addAndGet(executionNs);
                 updateMax(maxExecutionNs, executionNs);
@@ -216,6 +241,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 ticket.endNs = System.nanoTime();
                 ticket.state = TicketState.FAILED;
                 failedJobs.incrementAndGet();
+                failedByPriority.incrementAndGet(ticket.priority);
                 LOG.log(System.Logger.Level.ERROR,
                         "Section mesh worker failed job " + ticket.id + ".", t);
             } finally {
@@ -243,6 +269,25 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLong totalExecutionNs = new AtomicLong();
     private final AtomicLong maxExecutionNs = new AtomicLong();
     private final AtomicLong maxObservedQueueDepth = new AtomicLong();
+    private final AtomicLong totalOutputQuads = new AtomicLong();
+    private final AtomicLong totalOutputVertexBytes = new AtomicLong();
+    private final AtomicLong totalOutputIndexBytes = new AtomicLong();
+    private final AtomicLong maxOutputBytes = new AtomicLong();
+    private final AtomicLong scratchBuildUses = new AtomicLong();
+    private final AtomicLong maxScratchQuads = new AtomicLong();
+    private final AtomicLong determinismAudits = new AtomicLong();
+    private final AtomicLong determinismAuditMatches = new AtomicLong();
+    private final AtomicLong shutdownJoinFailures = new AtomicLong();
+
+    private final AtomicLongArray submittedByPriority = new AtomicLongArray(PRIORITY_COUNT);
+    private final AtomicLongArray startedByPriority = new AtomicLongArray(PRIORITY_COUNT);
+    private final AtomicLongArray completedByPriority = new AtomicLongArray(PRIORITY_COUNT);
+    private final AtomicLongArray cancelledByPriority = new AtomicLongArray(PRIORITY_COUNT);
+    private final AtomicLongArray failedByPriority = new AtomicLongArray(PRIORITY_COUNT);
+    private final AtomicLongArray queueFullByPriority = new AtomicLongArray(PRIORITY_COUNT);
+    private final AtomicLongArray cancellationRequestsByPriority = new AtomicLongArray(PRIORITY_COUNT);
+    private final AtomicLongArray totalQueueWaitByPriority = new AtomicLongArray(PRIORITY_COUNT);
+    private final AtomicLongArray maxQueueWaitByPriority = new AtomicLongArray(PRIORITY_COUNT);
 
     private volatile boolean closed;
 
@@ -283,7 +328,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         return enqueue(chosen, generation, eventSequence, priority, snapshot, bakedSnapshot);
     }
 
-    /** Validation-only pinned submit used to make work stealing deterministic in the P3.1 proof. */
+    /** Validation-only pinned submit retained for the historical dev1 proof. */
     Ticket submitPinnedForValidation(
             int workerIndex,
             long generation,
@@ -302,7 +347,19 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     public void cancel(Ticket ticket) {
         if (ticket == null || ticket.terminal()) return;
         cancellationRequests.incrementAndGet();
+        cancellationRequestsByPriority.incrementAndGet(ticket.priority);
         ticket.cancellationRequested = true;
+
+        for (Worker worker : workers) {
+            if (worker.queue.removeQueued(ticket)) {
+                ticket.endNs = System.nanoTime();
+                ticket.state = TicketState.CANCELLED;
+                cancelledJobs.incrementAndGet();
+                cancelledByPriority.incrementAndGet(ticket.priority);
+                synchronized (signal) { signal.notifyAll(); }
+                return;
+            }
+        }
         synchronized (signal) { signal.notifyAll(); }
     }
 
@@ -317,18 +374,31 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 nextTicketId.getAndIncrement(), generation, eventSequence, priority, snapshot, bakedSnapshot);
         if (!workers[workerIndex].queue.offer(ticket)) {
             queueFullRejections.incrementAndGet();
+            queueFullByPriority.incrementAndGet(priority);
             return null;
         }
         submittedJobs.incrementAndGet();
+        submittedByPriority.incrementAndGet(priority);
         updateMax(maxObservedQueueDepth, totalQueuedJobs());
         synchronized (signal) { signal.notifyAll(); }
         return ticket;
     }
 
-    private Ticket stealFor(int thiefIndex) {
+    private Ticket takeNext(int workerIndex) {
+        Worker own = workers[workerIndex];
+        for (int priority = PRIORITY_HIGH; priority <= PRIORITY_LOW; priority++) {
+            Ticket ticket = own.queue.poll(priority);
+            if (ticket != null) return ticket;
+            ticket = stealFor(workerIndex, priority);
+            if (ticket != null) return ticket;
+        }
+        return null;
+    }
+
+    private Ticket stealFor(int thiefIndex, int priority) {
         for (int offset = 1; offset < workers.length; offset++) {
             int victim = (thiefIndex + offset) % workers.length;
-            Ticket ticket = workers[victim].queue.steal();
+            Ticket ticket = workers[victim].queue.steal(priority);
             if (ticket != null) {
                 ticket.stolen = true;
                 stolenJobs.incrementAndGet();
@@ -343,15 +413,19 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         ticket.endNs = System.nanoTime();
         ticket.state = TicketState.CANCELLED;
         cancelledJobs.incrementAndGet();
+        cancelledByPriority.incrementAndGet(ticket.priority);
+    }
+
+    private void recordScratchUse(BakedSectionMesh.BuildScratch scratch) {
+        scratchBuildUses.incrementAndGet();
+        updateMax(maxScratchQuads, scratch.highWaterQuads());
     }
 
     private static void validateJob(
             int priority,
             SectionSnapshot snapshot,
             SectionBakedQuadSnapshot bakedSnapshot) {
-        if (priority < PRIORITY_HIGH || priority > PRIORITY_LOW) {
-            throw new IllegalArgumentException("Invalid mesh job priority");
-        }
+        validatePriority(priority);
         if (snapshot == null || bakedSnapshot == null) {
             throw new NullPointerException("snapshot and bakedSnapshot are required");
         }
@@ -360,6 +434,12 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 || snapshot.sectionZ() != bakedSnapshot.sectionZ()
                 || snapshot.fingerprint() != bakedSnapshot.sourceSnapshotFingerprint()) {
             throw new IllegalArgumentException("Worker mesh job snapshot identity mismatch");
+        }
+    }
+
+    private static void validatePriority(int priority) {
+        if (priority < PRIORITY_HIGH || priority > PRIORITY_LOW) {
+            throw new IllegalArgumentException("Invalid mesh job priority");
         }
     }
 
@@ -377,10 +457,28 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         } while (!target.compareAndSet(previous, value));
     }
 
+    private static void updateMax(AtomicLongArray target, int index, long value) {
+        long previous;
+        do {
+            previous = target.get(index);
+            if (value <= previous) return;
+        } while (!target.compareAndSet(index, previous, value));
+    }
+
+    public static String priorityName(int priority) {
+        return switch (priority) {
+            case PRIORITY_HIGH -> "HIGH";
+            case PRIORITY_NORMAL -> "NORMAL";
+            case PRIORITY_LOW -> "LOW";
+            default -> "UNKNOWN";
+        };
+    }
+
     public int workerCount() { return workers.length; }
     public int queueCapacity() { return workers.length * QUEUE_CAPACITY_PER_WORKER; }
     public int queuedJobs() { return totalQueuedJobs(); }
     public int runningJobs() { return runningJobs.get(); }
+    public int outstandingJobs() { return queuedJobs() + runningJobs(); }
     public long submittedJobs() { return submittedJobs.get(); }
     public long queueFullRejections() { return queueFullRejections.get(); }
     public long startedJobs() { return startedJobs.get(); }
@@ -394,12 +492,38 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     public long totalExecutionNs() { return totalExecutionNs.get(); }
     public long maxExecutionNs() { return maxExecutionNs.get(); }
     public long maxObservedQueueDepth() { return maxObservedQueueDepth.get(); }
+    public long totalOutputQuads() { return totalOutputQuads.get(); }
+    public long totalOutputVertexBytes() { return totalOutputVertexBytes.get(); }
+    public long totalOutputIndexBytes() { return totalOutputIndexBytes.get(); }
+    public long maxOutputBytes() { return maxOutputBytes.get(); }
+    public long scratchBuildUses() { return scratchBuildUses.get(); }
+    public long maxScratchQuads() { return maxScratchQuads.get(); }
+    public long determinismAudits() { return determinismAudits.get(); }
+    public long determinismAuditMatches() { return determinismAuditMatches.get(); }
+    public long shutdownJoinFailures() { return shutdownJoinFailures.get(); }
+
+    public long submittedJobs(int priority) { validatePriority(priority); return submittedByPriority.get(priority); }
+    public long startedJobs(int priority) { validatePriority(priority); return startedByPriority.get(priority); }
+    public long completedJobs(int priority) { validatePriority(priority); return completedByPriority.get(priority); }
+    public long cancelledJobs(int priority) { validatePriority(priority); return cancelledByPriority.get(priority); }
+    public long failedJobs(int priority) { validatePriority(priority); return failedByPriority.get(priority); }
+    public long queueFullRejections(int priority) { validatePriority(priority); return queueFullByPriority.get(priority); }
+    public long cancellationRequests(int priority) { validatePriority(priority); return cancellationRequestsByPriority.get(priority); }
+    public long totalQueueWaitNs(int priority) { validatePriority(priority); return totalQueueWaitByPriority.get(priority); }
+    public long maxQueueWaitNs(int priority) { validatePriority(priority); return maxQueueWaitByPriority.get(priority); }
 
     @Override
     public void close() {
         if (closed) return;
         closed = true;
-        for (Worker worker : workers) worker.queue.cancelQueued();
+        for (Worker worker : workers) {
+            int[] cancelled = worker.queue.cancelQueued();
+            for (int priority = 0; priority < PRIORITY_COUNT; priority++) {
+                if (cancelled[priority] == 0) continue;
+                cancelledJobs.addAndGet(cancelled[priority]);
+                cancelledByPriority.addAndGet(priority, cancelled[priority]);
+            }
+        }
         synchronized (signal) { signal.notifyAll(); }
         for (Worker worker : workers) worker.thread.interrupt();
         for (Worker worker : workers) {
@@ -410,6 +534,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 break;
             }
             if (worker.thread.isAlive()) {
+                shutdownJoinFailures.incrementAndGet();
                 LOG.log(System.Logger.Level.WARNING,
                         "Mesh worker {0} did not stop inside the bounded shutdown join.", worker.index);
             }
