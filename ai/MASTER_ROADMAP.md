@@ -1,6 +1,6 @@
 # Obsidian Master Roadmap and Product Plan
 
-Last materially revised: 2026-08-28  
+Last materially revised: 2026-08-29  
 Roadmap schema: v1  
 Canonical repository: `TrissTheBoss/Obsidian`
 
@@ -208,7 +208,7 @@ Validated as `0.3.0-phase3-dev5`; PR #37 merge `34caa19a9de70ba8e0395a2992180f3a
 
 `GreedySectionRectangles` deterministically partitions P3.2 topology into packed 4-byte rectangles with exact no-gap/no-overlap expansion, permanent independent reference checks and bounded reusable scratch. P3.3 does not emit topology rectangles to the GPU.
 
-#### P3.4 — Render-correct merge and emission semantics — ACTIVE
+#### P3.4 — Render-correct merge and emission semantics — COMPLETE
 
 Goal: move from topology-only greedy rectangles to render-correct merge candidates and GPU-emitted greedy geometry without weakening exact material/UV/color/light/model semantics.
 
@@ -274,38 +274,49 @@ Reference dev10 runtime (A-0135):
 
 Through dev10, `BakedSectionMesh` remained the authoritative drawable and no new visual verdict was required because emitted geometry did not change.
 
-**dev11 — repeat-aware greedy GPU emission canary — ACTIVE.** Target version `0.3.0-phase3-dev11`.
+**dev11 — repeat-aware greedy GPU emission canary — COMPLETE.** Validated as `0.3.0-phase3-dev11`; promotion PR #44 merge `b01ff98c4dbe6e548550f86784547afc37db2b2d`.
 
-Dev11 is the first geometry-changing P3.4 slice. It must replace only dev10-proven transport-safe source-face groups with one repeat-aware large quad per admitted candidate in a bounded canary/validation path while leaving every unsafe, ambiguous, noncanonical and generalized face on the exact passthrough path.
+Dev11 is the first geometry-changing P3.4 slice. It replaces only dev10-proven transport-safe source-face groups with one repeat-aware large quad per admitted candidate while leaving every unsafe, ambiguous, noncanonical and generalized face on the exact passthrough path.
 
-Before freezing implementation, dev11 must inspect the exact Minecraft 26.2/public-Blaze3D graphics path for source-quad suppression/hybrid mesh construction, pipeline/shader inputs, live blocks-atlas texture/sampler binding, worker install ownership, staging/arena uploads and the transport of candidate-local repeat coordinates plus explicit gradients. D-0023 remains graphics-first; D-0025 must not expand for convenience.
+Implemented invariants:
 
-Required dev11 invariants:
-
-- eligibility may only narrow the exact dev10 transport records, never widen them;
+- eligibility never widens beyond exact dev10 transport records;
 - dev6/dev7 material/render equivalence remains authoritative;
 - dev8 color/light safety remains authoritative;
 - dev9 atlas rectangle/orientation remains exact;
 - dev10 repeat/remap, explicit-gradient, same-atlas/sampler, positive outer-edge and source-order/diagonal obligations remain exact;
-- one admitted merged candidate must replace its covered source faces exactly once, with no double-draw and no hole;
+- one admitted merged candidate replaces its covered source faces exactly once, with exact install-time suppression/replacement validation;
 - unsafe/noncanonical/generalized source geometry remains present;
 - render-thread live capture/GPU ownership, zero worker live-world reads, bounded staging/arena/resource lifetime and independent oracle behavior remain unchanged;
-- use a dedicated emission flag such as `repeatAwareGreedyGpuEmission=true`; do not imply raw P3.3 topology rectangles are directly drawn;
-- keep `renderCorrectMergeKeyComplete=false` until a later explicit completion proof justifies changing it.
+- a dedicated `repeatAwareGreedyGpuEmission=true` flag identifies the actual emitted path; raw P3.3 topology rectangles are not directly drawn.
 
-**Mandatory visual/raster gate:** dev11 cannot promote from counters alone. The reference-machine run must deliberately inspect internal repeat-reset lines, rectangle T-junctions and section boundaries at close/oblique angles and during camera motion; check texture stretch/atlas bleed/mip shimmer, one-pixel seams, cracks/z-fighting, winding/culling, color/light mismatch, double-draw and missing faces; exercise block break/place and F3+T; and end with clean lifetime accounting. The user must provide an **explicit human visual PASS**. Absence of complaints is not a verdict.
+The merged public-Blaze3D path uses a 60-byte merged vertex format, namespaced repeat-aware shaders, candidate-local atlas remapping, `textureGrad` from unwrapped repeat coordinates, the same live blocks-atlas view/sampler and four fixed indexed-indirect classes: passthrough/merged × SOLID/CUTOUT. No native Vulkan graphics seam expansion was required.
 
-If artifacts appear, follow D-0024: prefer stable positions plus targeted selective splitting/mitigation or conservative candidate exclusion. Do not globally conform the mesh or abandon greedy meshing without evidence.
+Reference dev11 runtime (A-0140):
 
-P3.6 remains the broader T-junction policy milestone; dev11 may solve only concrete emission-canary needs without falsely completing P3.6.
+- all prior gates plus `repeatAwareGreedyEmissionEvidenceReady=true`;
+- workers `284/284/284`, steals `208`, zero queue-full rejection/failure/join failure;
+- transport source multi-face/representable/four-vertex-safe `6,565 / 6,565 / 6,541`;
+- transport records `6,541`, covered faces `15,800`, faces saved `9,259`;
+- validated installed records `261`;
+- draw submissions `43,044`;
+- actual/expected indirect calls `172,176 / 172,176 = 43,044 * 4`;
+- `repeatAwareGreedyInstallValidationPassed=true` and `repeatAwareGreedyFixedFourClassDrawContract=true`;
+- READY transitions `29`, rebuilds `28`, camera recenters `11`, resource reloads `1`;
+- workers/staging/arena/resources clean and Prism exit code 0;
+- explicit human visual PASS: **“Everything looked visually fine.”**
 
-#### P3.5 — Border/halo correctness — PLANNED
+The dev11 visual PASS closes the concrete P3.4 canary raster obligation on the tested Vulkan reference hardware. It does not falsely complete P3.6's broader T-junction policy. The runtime diagnostic `renderCorrectMergeKeyComplete=false` remains a narrower implementation diagnostic; P3.4 roadmap completion means the frozen dev6-dev11 chain satisfied its required merge/emission correctness and canary validation, not that every future terrain/render class is greedily mergeable.
+
+#### P3.5 — Border/halo correctness — ACTIVE
 
 Validate face visibility, light/AO and rebuild invalidation across section boundaries with no worker-thread live-world reads.
 
+P3.5 must begin by freezing an exact correctness/runtime contract against current snapshot/halo capture, cross-section visibility, supported light/AO semantics, neighbor dirty propagation, generation identity, worker inputs and the already-proven dev11 hybrid emission path. Existing greedy eligibility may remain equal or narrow when border proof is insufficient; it must never widen correctness assumptions silently.
+
 #### P3.6 — T-junction policy — PLANNED
 
-Default to greedy topology unless real Vulkan hardware shows cracks. Prefer stable positions and targeted mitigation/splitting over globally abandoning greedy meshing. P3.4 emission work must identify any immediate raster obligations without falsely declaring P3.6 complete.
+Default to greedy topology unless real Vulkan hardware shows cracks. Prefer stable positions and targeted mitigation/splitting over globally abandoning greedy meshing. P3.4 emission work identified and exercised its immediate raster obligations without declaring this broader policy complete.
 
 #### P3.7 — Differential correctness framework — PLANNED
 
@@ -372,7 +383,8 @@ Configuration/UI polish, presets/migration, crash diagnostics, benchmark export,
 - [COMPLETE foundation] Ordinary four-vertex emission-safety classification.
 - [COMPLETE foundation] Repeat-aware UV descriptor / representability proof.
 - [COMPLETE foundation] Repeat-aware transport/sampling proof.
-- [ACTIVE] Repeat-aware render-correct greedy GPU emission canary.
+- [COMPLETE canary] Repeat-aware render-correct greedy GPU emission.
+- [ACTIVE] Border/halo visibility, light/AO and rebuild-invalidation correctness.
 - [PLANNED] Full production opaque/cutout terrain replacement.
 - [COMPLETE foundation] Supported lighting/AO/tint/material/UV capture truth.
 - [PLANNED] Fluids/translucent terrain.
@@ -390,7 +402,7 @@ Configuration/UI polish, presets/migration, crash diagnostics, benchmark export,
 - [COMPLETE foundation] Indexed indirect rendering.
 - [COMPLETE foundation] Compute-generated commands + visibility/compaction primitive.
 - [COMPLETE foundation] Persistent multi-section real-scene validation path.
-- [ACTIVE canary] Repeat-aware large-quad terrain emission for proven-safe canonical candidates.
+- [COMPLETE canary] Repeat-aware large-quad terrain emission for proven-safe canonical candidates.
 - [PLANNED] Large-scale persistent scene database/culling hierarchy.
 - [PLANNED] Temporal visibility.
 - [EXPERIMENTAL] Hi-Z occlusion.
@@ -480,6 +492,16 @@ Newer durable decisions override stale roadmap text until synchronized. Always p
 
 ## 16. Roadmap revision log
 
+### 2026-08-29 — P3.4 dev11 completion and P3.5 activation
+
+- completed the geometry-changing dev11 repeat-aware greedy GPU emission canary from exact evidence head `66c38250426cd6d35629fda088ade768420dee0f`;
+- A-0140 proved `repeatAwareGreedyEmissionEvidenceReady=true`, exact four-class indirect accounting, clean lifetime and Prism exit code 0;
+- received the mandatory explicit human visual PASS on the real RX 6800 XT Vulkan reference system;
+- promoted dev11 via PR #44 merge `b01ff98c4dbe6e548550f86784547afc37db2b2d`; PR #43 was superseded only because the connected ready-for-review mutation was broken while it remained draft;
+- marked P3.4 render-correct merge/emission semantics COMPLETE through dev11;
+- activated P3.5 border/halo correctness;
+- kept P3.6 as the broader T-junction policy milestone and kept later phase order unchanged.
+
 ### 2026-08-28 — dev10 completion and dev11 geometry-canary activation
 
 - completed dev10 repeat-aware transport/sampling proof via PR #42 merge `3f75cf4d7e4a65aa6b12053fd75507d1cd292b34`;
@@ -540,8 +562,9 @@ Created the canonical master roadmap and formal governance model.
 - P3.1: COMPLETE through `0.3.0-phase3-dev3`.
 - P3.2: COMPLETE through `0.3.0-phase3-dev4`, PR #36.
 - P3.3: COMPLETE through `0.3.0-phase3-dev5`, PR #37.
-- P3.4: ACTIVE — dev6/dev7/dev8/dev9/dev10 COMPLETE; **dev11 repeat-aware greedy GPU emission canary ACTIVE**.
-- P3.5-P3.9 remain PLANNED/EXPERIMENTAL as marked.
+- **P3.4: COMPLETE through `0.3.0-phase3-dev11`, promotion PR #44.**
+- **P3.5: ACTIVE — border/halo correctness.**
+- P3.6-P3.9 remain PLANNED/EXPERIMENTAL as marked.
 - Phases 4-12 retain their planned order/scope.
 
 Always verify live details in `ai/CURRENT_STATE.md` before acting because active milestone state changes more frequently than the long-range plan.
