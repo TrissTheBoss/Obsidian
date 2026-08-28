@@ -1,6 +1,6 @@
 # Obsidian Master Roadmap and Product Plan
 
-Last materially revised: 2026-08-23  
+Last materially revised: 2026-08-28  
 Roadmap schema: v1  
 Canonical repository: `TrissTheBoss/Obsidian`
 
@@ -210,7 +210,7 @@ Validated as `0.3.0-phase3-dev5`; PR #37 merge `34caa19a9de70ba8e0395a2992180f3a
 
 #### P3.4 — Render-correct merge and emission semantics — ACTIVE
 
-Goal: move from topology-only greedy rectangles to render-correct merge candidates and eventually GPU-emitted greedy geometry without weakening exact material/UV/color/light/model semantics.
+Goal: move from topology-only greedy rectangles to render-correct merge candidates and GPU-emitted greedy geometry without weakening exact material/UV/color/light/model semantics.
 
 **dev6 — canonical render-key sidecar — COMPLETE.** Validated as `0.3.0-phase3-dev6`; PR #38 merge `967c4511cd11cd721886feae6d146f4412790a6d`.
 
@@ -244,26 +244,60 @@ Reference dev9 runtime (A-0131):
 
 The observed dev9 result removes UV representation and light interpolation as blockers for the multi-face candidate set. The sole observed four-vertex exclusion is color interpolation.
 
-**dev10 — repeat-aware transport/sampling correctness proof — ACTIVE.** Target version `0.3.0-phase3-dev10`.
+**dev10 — repeat-aware transport/sampling correctness proof — COMPLETE.** Validated as `0.3.0-phase3-dev10`; PR #42 merge `3f75cf4d7e4a65aa6b12053fd75507d1cd292b34`.
 
-Dev10 is proof-first and **must not change emitted terrain geometry**. It must freeze and validate the representation that a later emission slice could consume:
+Dev10 froze and production-integrated the no-emission transport representation a later merged-quad path must consume:
 
-- exact candidate-local repeat-coordinate transport;
-- exact preservation of dev9 raw atlas bounds and orientation;
-- deterministic repeat/remap equations at integer cell boundaries and candidate edges;
-- source-atlas filtering, padding/inset, mip and edge assumptions necessary to avoid adjacent-sprite bleeding or seams;
-- preservation of material/sprite/layer/tint/shade/emission/animation identity;
-- bounded primitive metadata and deterministic validation;
-- exact worker/render-thread ownership and prior lifetime gates;
-- raster/T-junction obligations relevant to the eventual large-quad path, following D-0024's preference for stable positions and targeted selective mitigation rather than global conforming subdivision.
+- candidate-local half-open repeat coordinates with an explicit positive outer-edge endpoint;
+- exact dev9 raw atlas bounds/orientation preservation;
+- explicit gradients derived from **unwrapped** repeat coordinates rather than derivatives of wrapped/`fract` coordinates;
+- source baked vertex-order/diagonal preservation;
+- required use of the same live blocks-atlas texture view and sampler under the same resource epoch;
+- compact 4-byte transport proof records and deterministic/accounting audits;
+- explicit retention of the internal repeat-line raster/T-junction review obligation.
 
-Through dev10:
+Reference dev10 runtime (A-0135):
 
-- `greedyRectangleGpuEmission=false`;
-- `renderCorrectMergeKeyComplete=false`;
-- `BakedSectionMesh` remains the authoritative GPU drawable.
+- all prior gates plus `repeatAwareTransportEvidenceReady=true`;
+- workers `92/92/92`, steals `69`, zero queue-full rejection/failure/join failure;
+- dev7 multi-face candidates `2,229`;
+- dev9 repeat-aware representable `2,229/2,229`;
+- dev9 four-vertex-safe `2,219/2,229`;
+- dev10 transport records **2,219**, exactly equal to the dev9-safe set;
+- covered faces `5,460`, faces saved `3,241`;
+- explicit-gradient / outer-edge / same-atlas-sampler / raster-review obligations all `2,219`;
+- internal S/T/both/union reset counts `900 / 1,409 / 90 / 2,219`;
+- retained bytes `8,876 = 2,219 * 4`;
+- proof audits `92/92`, determinism `4/4`;
+- clean worker/staging/arena/resource lifetime and Prism exit code 0;
+- `repeatAwareTransportBoundaryRasterObligationOpen=true` intentionally remains open.
 
-A later geometry-changing P3.4 slice may consume dev10 proof only after its own frozen emission contract is established. Any geometry-changing P3.4 runtime slice requires renewed explicit human visual validation before promotion.
+Through dev10, `BakedSectionMesh` remained the authoritative drawable and no new visual verdict was required because emitted geometry did not change.
+
+**dev11 — repeat-aware greedy GPU emission canary — ACTIVE.** Target version `0.3.0-phase3-dev11`.
+
+Dev11 is the first geometry-changing P3.4 slice. It must replace only dev10-proven transport-safe source-face groups with one repeat-aware large quad per admitted candidate in a bounded canary/validation path while leaving every unsafe, ambiguous, noncanonical and generalized face on the exact passthrough path.
+
+Before freezing implementation, dev11 must inspect the exact Minecraft 26.2/public-Blaze3D graphics path for source-quad suppression/hybrid mesh construction, pipeline/shader inputs, live blocks-atlas texture/sampler binding, worker install ownership, staging/arena uploads and the transport of candidate-local repeat coordinates plus explicit gradients. D-0023 remains graphics-first; D-0025 must not expand for convenience.
+
+Required dev11 invariants:
+
+- eligibility may only narrow the exact dev10 transport records, never widen them;
+- dev6/dev7 material/render equivalence remains authoritative;
+- dev8 color/light safety remains authoritative;
+- dev9 atlas rectangle/orientation remains exact;
+- dev10 repeat/remap, explicit-gradient, same-atlas/sampler, positive outer-edge and source-order/diagonal obligations remain exact;
+- one admitted merged candidate must replace its covered source faces exactly once, with no double-draw and no hole;
+- unsafe/noncanonical/generalized source geometry remains present;
+- render-thread live capture/GPU ownership, zero worker live-world reads, bounded staging/arena/resource lifetime and independent oracle behavior remain unchanged;
+- use a dedicated emission flag such as `repeatAwareGreedyGpuEmission=true`; do not imply raw P3.3 topology rectangles are directly drawn;
+- keep `renderCorrectMergeKeyComplete=false` until a later explicit completion proof justifies changing it.
+
+**Mandatory visual/raster gate:** dev11 cannot promote from counters alone. The reference-machine run must deliberately inspect internal repeat-reset lines, rectangle T-junctions and section boundaries at close/oblique angles and during camera motion; check texture stretch/atlas bleed/mip shimmer, one-pixel seams, cracks/z-fighting, winding/culling, color/light mismatch, double-draw and missing faces; exercise block break/place and F3+T; and end with clean lifetime accounting. The user must provide an **explicit human visual PASS**. Absence of complaints is not a verdict.
+
+If artifacts appear, follow D-0024: prefer stable positions plus targeted selective splitting/mitigation or conservative candidate exclusion. Do not globally conform the mesh or abandon greedy meshing without evidence.
+
+P3.6 remains the broader T-junction policy milestone; dev11 may solve only concrete emission-canary needs without falsely completing P3.6.
 
 #### P3.5 — Border/halo correctness — PLANNED
 
@@ -337,8 +371,8 @@ Configuration/UI polish, presets/migration, crash diagnostics, benchmark export,
 - [COMPLETE foundation] Render-key-aware merge-candidate partition.
 - [COMPLETE foundation] Ordinary four-vertex emission-safety classification.
 - [COMPLETE foundation] Repeat-aware UV descriptor / representability proof.
-- [ACTIVE] Repeat-aware transport/sampling correctness proof.
-- [PLANNED] Key-aware production greedy geometry emission.
+- [COMPLETE foundation] Repeat-aware transport/sampling proof.
+- [ACTIVE] Repeat-aware render-correct greedy GPU emission canary.
 - [PLANNED] Full production opaque/cutout terrain replacement.
 - [COMPLETE foundation] Supported lighting/AO/tint/material/UV capture truth.
 - [PLANNED] Fluids/translucent terrain.
@@ -356,6 +390,7 @@ Configuration/UI polish, presets/migration, crash diagnostics, benchmark export,
 - [COMPLETE foundation] Indexed indirect rendering.
 - [COMPLETE foundation] Compute-generated commands + visibility/compaction primitive.
 - [COMPLETE foundation] Persistent multi-section real-scene validation path.
+- [ACTIVE canary] Repeat-aware large-quad terrain emission for proven-safe canonical candidates.
 - [PLANNED] Large-scale persistent scene database/culling hierarchy.
 - [PLANNED] Temporal visibility.
 - [EXPERIMENTAL] Hi-Z occlusion.
@@ -445,6 +480,15 @@ Newer durable decisions override stale roadmap text until synchronized. Always p
 
 ## 16. Roadmap revision log
 
+### 2026-08-28 — dev10 completion and dev11 geometry-canary activation
+
+- completed dev10 repeat-aware transport/sampling proof via PR #42 merge `3f75cf4d7e4a65aa6b12053fd75507d1cd292b34`;
+- A-0135 proved `repeatAwareTransportEvidenceReady=true`, 2,219 exact transport records, exact 4-byte accounting and clean lifetime on the reference Vulkan system;
+- preserved `repeatAwareTransportBoundaryRasterObligationOpen=true` as an intentionally unresolved geometry/raster obligation rather than falsely closing it;
+- activated dev11 repeat-aware greedy GPU emission canary inside P3.4;
+- made renewed explicit human visual validation mandatory for dev11 promotion;
+- kept P3.5+ phase order unchanged and kept P3.6 as the broader T-junction policy milestone.
+
 ### 2026-08-23 — dev8/dev9 completion and dev10 activation
 
 - completed dev8 ordinary four-vertex emission-safety classification via PR #40 merge `7a15f857a081fba642fcc28811ce88363b5abb66`;
@@ -496,7 +540,7 @@ Created the canonical master roadmap and formal governance model.
 - P3.1: COMPLETE through `0.3.0-phase3-dev3`.
 - P3.2: COMPLETE through `0.3.0-phase3-dev4`, PR #36.
 - P3.3: COMPLETE through `0.3.0-phase3-dev5`, PR #37.
-- P3.4: ACTIVE — dev6/dev7/dev8/dev9 COMPLETE; **dev10 repeat-aware transport/sampling correctness proof ACTIVE**; no greedy GPU geometry is claimed yet.
+- P3.4: ACTIVE — dev6/dev7/dev8/dev9/dev10 COMPLETE; **dev11 repeat-aware greedy GPU emission canary ACTIVE**.
 - P3.5-P3.9 remain PLANNED/EXPERIMENTAL as marked.
 - Phases 4-12 retain their planned order/scope.
 
