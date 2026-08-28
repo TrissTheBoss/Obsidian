@@ -3,16 +3,16 @@ package dev.obsidian.render.terrain;
 import java.util.Arrays;
 
 /**
- * P3.4 dev10 no-emission proof that dev9 repeat-aware UV descriptors can be
- * transported by a later four-vertex large-quad path without losing source
- * vertex order or using wrapped-coordinate implicit derivatives.
+ * P3.4 dev10 proof that dev9 repeat-aware UV descriptors can be transported by
+ * a four-vertex large-quad path without losing source vertex order or using
+ * wrapped-coordinate implicit derivatives.
  *
- * <p>This sidecar deliberately does not emit GPU geometry. It proves the
- * candidate-local repeat algebra for open unit-cell interiors, preserves the
- * source baked vertex order/diagonal signature, and records the obligations a
- * later shader path must obey: explicit gradients from unwrapped repeat
- * coordinates, the same live blocks-atlas texture/sampler, an outer-max
- * endpoint policy, and explicit raster review at internal reset boundaries.</p>
+ * <p>Dev11 retains the frozen dev10 proof/accounting unchanged and additionally
+ * derives the validated {@link RepeatAwareGreedyMesh} on the same worker before
+ * publishing this object. The transport proof records the obligations the GPU
+ * path must obey: explicit gradients from unwrapped repeat coordinates, the
+ * same live blocks-atlas texture/sampler, an outer-max endpoint policy, and
+ * explicit raster review at internal reset boundaries.</p>
  */
 public final class RepeatAwareTransportProof {
     public static final int BYTES_PER_RECORD = Short.BYTES + Byte.BYTES + Byte.BYTES;
@@ -111,6 +111,7 @@ public final class RepeatAwareTransportProof {
     private final long sourceBakedFingerprint;
     private final long fingerprint;
     private final long buildTimeNs;
+    private RepeatAwareGreedyMesh greedyMesh;
 
     private RepeatAwareTransportProof(
             short[] candidateIndices,
@@ -226,6 +227,14 @@ public final class RepeatAwareTransportProof {
                 hash,
                 System.nanoTime() - startNs);
         result.validateAgainst(candidates, safety, uv, baked, scratch);
+
+        CanonicalFaceRenderKeys renderKeys = uv.sourceRenderKeys();
+        SectionSnapshot snapshot = renderKeys == null ? null : renderKeys.sourceSnapshot();
+        if (renderKeys == null || snapshot == null) {
+            throw new IllegalStateException("Dev11 worker hybrid mesh lost retained render-key/snapshot source identity");
+        }
+        result.greedyMesh = RepeatAwareGreedyMesh.build(
+                snapshot, baked, renderKeys, candidates, uv, result);
         return result;
     }
 
@@ -586,6 +595,9 @@ public final class RepeatAwareTransportProof {
                 && sourceUvFingerprint == other.sourceUvFingerprint
                 && sourceBakedFingerprint == other.sourceBakedFingerprint
                 && fingerprint == other.fingerprint
+                && greedyMesh != null
+                && other.greedyMesh != null
+                && greedyMesh.contentEquals(other.greedyMesh)
                 && Arrays.equals(candidateIndices, other.candidateIndices)
                 && Arrays.equals(sourceCornerOrders, other.sourceCornerOrders)
                 && Arrays.equals(obligationFlags, other.obligationFlags)
@@ -618,6 +630,10 @@ public final class RepeatAwareTransportProof {
     public long sourceBakedFingerprint() { return sourceBakedFingerprint; }
     public long fingerprint() { return fingerprint; }
     public long buildTimeNs() { return buildTimeNs; }
+    public RepeatAwareGreedyMesh greedyMesh() {
+        if (greedyMesh == null) throw new IllegalStateException("Dev11 worker hybrid mesh was not published");
+        return greedyMesh;
+    }
 
     public int candidateIndex(int record) {
         validateRecord(record);
