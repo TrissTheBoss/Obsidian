@@ -13,7 +13,7 @@ import dev.obsidian.render.terrain.SectionLifecycleEvents;
 import dev.obsidian.render.upload.StagingUploadArena;
 import net.minecraft.client.renderer.GameRenderer;
 
-/** Render-thread lifecycle root for active Phase 3 P3.4 dev10 repeat-aware transport proof. */
+/** Render-thread lifecycle root for active Phase 3 P3.4 dev11 repeat-aware greedy GPU emission canary. */
 public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
     private static final int VALIDATION_STAGING_BYTES = 4 * 1024 * 1024;
@@ -45,10 +45,10 @@ public final class FrameCoordinator implements AutoCloseable {
         try {
             workers = new SectionMeshWorkerPool(SectionMeshWorkerPool.defaultWorkerCount());
             staging = new StagingUploadArena(
-                    device, () -> "Obsidian Phase 3 dev10 bounded scene staging ring",
+                    device, () -> "Obsidian Phase 3 dev11 bounded scene staging ring",
                     VALIDATION_STAGING_BYTES);
             arena = new DeviceGeometryArena(
-                    device, () -> "Obsidian Phase 3 dev10 scene device geometry arena",
+                    device, () -> "Obsidian Phase 3 dev11 scene device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
             sceneProbe = new AsyncMultiSectionSceneProbe(device, staging, arena, deferredReleases, workers);
         } catch (RuntimeException e) {
@@ -58,7 +58,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (arena != null) try { arena.close(); } catch (RuntimeException ignored) { }
             try { deferredReleases.close(); } catch (RuntimeException ignored) { }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev10 P3.4 initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 3 dev11 P3.4 initialization failed; Minecraft will continue for diagnosis.", e);
             hardFailure = true;
         }
         meshWorkers = workers;
@@ -78,13 +78,13 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev10 P3.4 frame coordinator active. contextSlots=" + frameContexts.size()
+                    "Phase 3 dev11 P3.4 frame coordinator active. contextSlots=" + frameContexts.size()
                             + ", cpuTimingCapacity=" + cpuFrameTimings.capacity()
                             + ", meshWorkers=" + (meshWorkers == null ? 0 : meshWorkers.workerCount())
                             + ", meshQueueCapacity=" + (meshWorkers == null ? 0 : meshWorkers.queueCapacity())
                             + ", stagingCapacity=" + (stagingUploads == null ? 0 : stagingUploads.capacityBytes())
                             + ", deviceArenaCapacity=" + (deviceArena == null ? 0L : deviceArena.capacityBytes())
-                            + "; P3.2 visibility, P3.3 topology rectangles, dev6 canonical render keys, dev7 merge candidates, dev8 ordinary emission-safety, dev9 repeat-aware UV descriptors and dev10 repeat transport proof are armed. Dev10 proves no-emission transport obligations only; internal repeat-line raster review remains explicitly open and GPU greedy rectangle emission remains disabled.");
+                            + "; P3.2 visibility, P3.3 topology rectangles, dev6 canonical render keys, dev7 merge candidates, dev8 ordinary emission-safety, dev9 repeat-aware UV descriptors, dev10 repeat transport proof and dev11 repeat-aware greedy GPU emission are armed. Dev11 replaces only exact dev10 transport-safe canonical groups, preserves exact passthrough for all other baked geometry, samples the same live blocks atlas with explicit textureGrad gradients, and intentionally turns the previously open repeat-line/raster obligation into a mandatory runtime plus human visual validation gate.");
         }
     }
 
@@ -97,7 +97,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (!visualDelayLogged) {
                 visualDelayLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev10 P3.4 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
+                        "Phase 3 dev11 P3.4 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
             }
             return;
         }
@@ -111,7 +111,7 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!runtimeInstructionsLogged && sceneProbe != null && sceneProbe.productionWorkerIntegrationReady()) {
             runtimeInstructionsLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev10 P3.4 runtime gate is active. Let the 3x3 async scene reach READY; perform a normal block break/place rebuild and F3+T rebuild; ordinary movement/recentering is useful if convenient; then exit normally. Required flags are phase3GateReady=true, schedulerEvidenceReady=true, binaryVisibilityEvidenceReady=true, greedyRectangleEvidenceReady=true, renderMergeKeyEvidenceReady=true, renderMergeCandidateEvidenceReady=true, ordinaryQuadEmissionSafetyEvidenceReady=true, repeatAwareUvEvidenceReady=true and repeatAwareTransportEvidenceReady=true. Dev10 requires transport records to equal the dev9 repeat-aware-four-vertex-safe set exactly and records explicit-gradient, same-atlas-sampler, outer-edge and raster-review obligations. A logged repeatAwareTransportBoundaryRasterObligationOpen=true is expected and does not fail dev10 because emitted geometry is unchanged. Dev10 keeps greedyRectangleGpuEmission=false and renderCorrectMergeKeyComplete=false; the existing generalized BakedSectionMesh remains the drawable. The old fixed-anchor unload/return proof is already closed and is not required again.");
+                    "Phase 3 dev11 P3.4 runtime gate is active. Let the 3x3 async scene reach READY; deliberately inspect merged repeat surfaces while moving the camera; inspect repeat-reset lines and rectangle/section T-junctions for stretching, atlas bleed, mip shimmer, seams/cracks, winding/culling, light/color mismatch, double-draw or holes; perform a normal block break/place rebuild and inspect again; perform F3+T and inspect again; then exit normally and report an explicit human visual PASS or FAIL. Required automated flags are phase3GateReady=true, schedulerEvidenceReady=true, binaryVisibilityEvidenceReady=true, greedyRectangleEvidenceReady=true, renderMergeKeyEvidenceReady=true, renderMergeCandidateEvidenceReady=true, ordinaryQuadEmissionSafetyEvidenceReady=true, repeatAwareUvEvidenceReady=true, repeatAwareTransportEvidenceReady=true and repeatAwareGreedyEmissionEvidenceReady=true. Dev11 uses four fixed indexed-indirect classes (passthrough/merged x SOLID/CUTOUT), exact source suppression/replacement validation before install, candidate-local repeat with textureGrad from unwrapped gradients, and the same live blocks-atlas sampler. Full-atlas sampler wrapping remains forbidden. Automated success alone does not promote dev11: an explicit visual PASS is mandatory. The old fixed-anchor unload/return proof is already closed and is not required again.");
         }
     }
 
@@ -488,6 +488,24 @@ public final class FrameCoordinator implements AutoCloseable {
                         resourcesClean);
         boolean repeatAwareTransportEvidenceReady = repeatAwareTransport.ready();
 
+        RepeatAwareGreedyEmissionEvidence.Snapshot repeatAwareGreedyEmission =
+                RepeatAwareGreedyEmissionEvidence.capture(
+                        repeatAwareTransportEvidenceReady,
+                        productionWorkerIntegrationReady,
+                        localSceneReady,
+                        recordInstallCount,
+                        sceneWorkerInstalls,
+                        sceneWorkerCompleted,
+                        comparisonDraws,
+                        indirectCalls,
+                        resourceEpochChecks,
+                        repeatAwareTransport,
+                        workersClean,
+                        stagingClean,
+                        arenaClean,
+                        resourcesClean);
+        boolean repeatAwareGreedyEmissionEvidenceReady = repeatAwareGreedyEmission.ready();
+
         boolean phase2ChunkLifecycleEvidenceReady = phase3GateReady
                 && fixedAnchorChunkUnloadEvents > 0L
                 && fixedAnchorChunkLoadEvents > 0L
@@ -496,8 +514,8 @@ public final class FrameCoordinator implements AutoCloseable {
                 && unsafeStaleSceneInstalls == 0L
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
-        StringBuilder out = new StringBuilder(18432);
-        out.append("Phase 3 dev10 P3.4 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
+        StringBuilder out = new StringBuilder(19456);
+        out.append("Phase 3 dev11 P3.4 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
                 .append("phase3GateReady=").append(phase3GateReady)
                 .append(", schedulerEvidenceReady=").append(schedulerEvidenceReady)
                 .append(", binaryVisibilityEvidenceReady=").append(binaryVisibilityEvidenceReady)
@@ -507,14 +525,15 @@ public final class FrameCoordinator implements AutoCloseable {
                 .append(", ordinaryQuadEmissionSafetyEvidenceReady=").append(ordinaryQuadEmissionSafetyEvidenceReady)
                 .append(", repeatAwareUvEvidenceReady=").append(repeatAwareUvEvidenceReady)
                 .append(", repeatAwareTransportEvidenceReady=").append(repeatAwareTransportEvidenceReady)
+                .append(", repeatAwareGreedyEmissionEvidenceReady=").append(repeatAwareGreedyEmissionEvidenceReady)
                 .append(", phase2ChunkLifecycleEvidenceReady=").append(phase2ChunkLifecycleEvidenceReady)
                 .append(", fixedAnchorReturnSceneReady=").append(fixedAnchorReturnSceneReady)
                 .append(", productionWorkerIntegrationReady=").append(productionWorkerIntegrationReady)
                 .append(", hardFailure=").append(hardFailure)
                 .append(", productionSceneInstallStillSynchronous=false, productionWorkerSceneIntegration=true")
                 .append(", renderThreadCaptureOwnership=true, renderThreadGpuOwnership=true, workerWorldReadsAfterCapture=0")
-                .append(", binaryVisibilitySidecarIntegrated=true, greedyRectangleSidecarIntegrated=true, renderMergeKeySidecarIntegrated=true, renderMergeCandidateSidecarIntegrated=true, ordinaryQuadEmissionSafetySidecarIntegrated=true, repeatAwareUvDescriptorSidecarIntegrated=true, repeatAwareTransportSidecarIntegrated=true")
-                .append(", greedyRectangleGpuEmission=false, renderCorrectMergeKeyComplete=false")
+                .append(", binaryVisibilitySidecarIntegrated=true, greedyRectangleSidecarIntegrated=true, renderMergeKeySidecarIntegrated=true, renderMergeCandidateSidecarIntegrated=true, ordinaryQuadEmissionSafetySidecarIntegrated=true, repeatAwareUvDescriptorSidecarIntegrated=true, repeatAwareTransportSidecarIntegrated=true, repeatAwareGreedyMeshIntegrated=true")
+                .append(", repeatAwareGreedyGpuEmission=true, renderCorrectMergeKeyComplete=false")
                 .append(", synchronousSceneMeshBuilds=").append(synchronousSceneMeshBuilds)
                 .append(", workerCount=").append(meshWorkers == null ? 0 : meshWorkers.workerCount())
                 .append(", workerQueueCapacity=").append(meshWorkers == null ? 0 : meshWorkers.queueCapacity())
@@ -652,6 +671,7 @@ public final class FrameCoordinator implements AutoCloseable {
         emissionSafety.appendTo(out);
         repeatAwareUv.appendTo(out);
         repeatAwareTransport.appendTo(out);
+        repeatAwareGreedyEmission.appendTo(out);
         out.append(", sceneWorkerSubmitted=").append(sceneWorkerSubmitted)
                 .append(", sceneWorkerCompleted=").append(sceneWorkerCompleted)
                 .append(", sceneWorkerCancelled=").append(sceneWorkerCancelled)

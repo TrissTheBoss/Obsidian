@@ -25,6 +25,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.resources.Identifier;
 import org.joml.Matrix4f;
 
 import java.nio.ByteBuffer;
@@ -34,21 +35,26 @@ import java.util.OptionalDouble;
 import java.util.function.Supplier;
 
 /**
- * Phase 3 dev2 worker-backed section record.
+ * Phase 3 worker-backed section record.
  *
  * <p>All live Minecraft capture remains on the render thread. Dedicated workers
- * receive only immutable section/generalized snapshots and perform pure
- * {@link BakedSectionMesh#build(SectionSnapshot, SectionBakedQuadSnapshot)} work.
- * Accepted worker output returns to the render thread before any GPU allocation,
- * upload, draw encoding, installation or completion-gated retirement.</p>
+ * receive only immutable section/generalized snapshots and publish both the
+ * exact {@link BakedSectionMesh} oracle and the dev11 validated
+ * {@link RepeatAwareGreedyMesh}. Accepted worker output returns to the render
+ * thread before any GPU allocation, upload, draw encoding, installation or
+ * completion-gated retirement.</p>
  */
 public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/WorkerBackedSectionLifecycleProbe");
-    private static final Supplier<String> SOLID_PASS_LABEL = () -> "Obsidian Phase 3 dev2 SOLID worker scene";
-    private static final Supplier<String> CUTOUT_PASS_LABEL = () -> "Obsidian Phase 3 dev2 CUTOUT worker scene";
-    private static final Supplier<String> INDIRECT_LABEL = () -> "Obsidian Phase 3 dev2 layered indirect commands";
-    private static final int INDIRECT_COMMAND_COUNT = 2;
+    private static final Supplier<String> PASSTHROUGH_SOLID_PASS_LABEL = () -> "Obsidian Phase 3 dev11 passthrough SOLID";
+    private static final Supplier<String> PASSTHROUGH_CUTOUT_PASS_LABEL = () -> "Obsidian Phase 3 dev11 passthrough CUTOUT";
+    private static final Supplier<String> MERGED_SOLID_PASS_LABEL = () -> "Obsidian Phase 3 dev11 merged SOLID";
+    private static final Supplier<String> MERGED_CUTOUT_PASS_LABEL = () -> "Obsidian Phase 3 dev11 merged CUTOUT";
+    private static final Supplier<String> INDIRECT_LABEL = () -> "Obsidian Phase 3 dev11 four-class indirect commands";
+    private static final int INDIRECT_COMMAND_COUNT = 4;
     private static final long RETRY_DELAY_NS = 500_000_000L;
+    private static final Identifier REPEAT_AWARE_SHADER =
+            Identifier.fromNamespaceAndPath("obsidian", "core/repeat_aware_block");
 
     public enum State {
         WAITING_WORLD,
@@ -68,15 +74,17 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     private final DeferredReleaseQueue deferredReleases;
     private final SectionMeshWorkerPool workers;
     private final int workerPriority;
-    private final long[] retirementHandles = new long[2];
+    private final long[] retirementHandles = new long[3];
     private final long generation;
     private final long buildEventSequence;
     private final int requestedSectionX;
     private final int requestedSectionY;
     private final int requestedSectionZ;
 
-    private RenderPipeline solidPipeline;
-    private RenderPipeline cutoutPipeline;
+    private RenderPipeline passthroughSolidPipeline;
+    private RenderPipeline passthroughCutoutPipeline;
+    private RenderPipeline mergedSolidPipeline;
+    private RenderPipeline mergedCutoutPipeline;
     private IndexedIndirectCommandBuffer indirectCommands;
     private GpuFence pendingArenaFence;
     private GpuFence pendingResourceFence;
@@ -85,9 +93,11 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     private SectionSnapshot snapshot;
     private ReferenceFaceMesh referenceMesh;
     private SectionBakedQuadSnapshot bakedSnapshot;
-    private BakedSectionMesh drawableMesh;
+    private BakedSectionMesh oracleMesh;
+    private RepeatAwareGreedyMesh drawableMesh;
 
-    private long vertexHandle = DeviceGeometryArena.INVALID_HANDLE;
+    private long passthroughVertexHandle = DeviceGeometryArena.INVALID_HANDLE;
+    private long mergedVertexHandle = DeviceGeometryArena.INVALID_HANDLE;
     private long indexHandle = DeviceGeometryArena.INVALID_HANDLE;
     private long uploadBatchOrdinal;
     private long resourceReleaseOrdinal;
@@ -108,6 +118,13 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     private long workerResultInstalls;
     private long workerQueueRejections;
     private long installAdmissionDeferrals;
+    private long emittedMergedQuads;
+    private long emittedSuppressedSourceQuads;
+    private long emittedFacesSaved;
+    private long emittedPassthroughQuads;
+    private long emittedHybridQuads;
+    private long emittedHybridUploadBytes;
+    private long emittedSourceUploadBytes;
     private int invalidationReasons;
     private boolean waitingLayerLogged;
     private boolean preinstallInvalidated;
@@ -154,7 +171,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         this.requestedSectionY = sectionY;
         this.requestedSectionZ = sectionZ;
         if (!device.getDeviceInfo().features().drawIndirect()) {
-            throw new IllegalStateException("Phase 3 dev2 requires indexed indirect drawing");
+            throw new IllegalStateException("Phase 3 dev11 requires indexed indirect drawing");
         }
     }
 
@@ -190,7 +207,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         } catch (RuntimeException e) {
             validationFailure = e;
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev2 worker-backed section record failed; beginning safe cleanup.", e);
+                    "Phase 3 dev11 worker-backed section record failed; beginning safe cleanup.", e);
             if (initialSubmissionCompleted) beginCleanupRetirement(frameSerial);
             else failBeforeGpuInstall();
         }
@@ -213,19 +230,19 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         ReferenceFaceMesh firstReference = ReferenceFaceMesh.build(captured);
         ReferenceFaceMesh secondReference = ReferenceFaceMesh.build(captured);
         if (firstReference.faceCount() <= 0 || !firstReference.contentEquals(secondReference)) {
-            throw new IllegalStateException("Phase 3 dev2 permanent cube oracle is empty or nondeterministic");
+            throw new IllegalStateException("Phase 3 dev11 permanent cube oracle is empty or nondeterministic");
         }
 
         SectionBakedQuadSnapshot firstBaked = SectionBakedQuadSnapshot.capture(captured);
         SectionBakedQuadSnapshot secondBaked = SectionBakedQuadSnapshot.capture(captured);
         if (!firstBaked.contentEquals(secondBaked)) {
-            throw new IllegalStateException("Phase 3 dev2 generalized vanilla quad capture is nondeterministic");
+            throw new IllegalStateException("Phase 3 dev11 generalized vanilla quad capture is nondeterministic");
         }
         if (firstBaked.solidQuads() <= 0 || firstBaked.cutoutQuads() <= 0) {
             if (!waitingLayerLogged) {
                 waitingLayerLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev2 scene record needs both supported SOLID and CUTOUT quads. section=({0},{1},{2}), solidQuads={3}, cutoutQuads={4}.",
+                        "Phase 3 dev11 scene record needs both supported SOLID and CUTOUT quads. section=({0},{1},{2}), solidQuads={3}, cutoutQuads={4}.",
                         captured.sectionX(), captured.sectionY(), captured.sectionZ(),
                         firstBaked.solidQuads(), firstBaked.cutoutQuads());
             }
@@ -253,7 +270,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         state = State.WAITING_MESH;
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev2 submitted production scene mesh job {0}: generation={1}, eventSequence={2}, priority={3}, section=({4},{5},{6}), generalizedQuads={7}, worldReadsAfterGeneralizedCapture=0.",
+                "Phase 3 dev11 submitted production scene mesh job {0}: generation={1}, eventSequence={2}, priority={3}, section=({4},{5},{6}), generalizedQuads={7}, worldReadsAfterGeneralizedCapture=0.",
                 ticket.id(), generation, buildEventSequence, workerPriority,
                 captured.sectionX(), captured.sectionY(), captured.sectionZ(), firstBaked.quadCount());
     }
@@ -266,7 +283,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
             Throwable cause = ticket.failure();
             throw cause instanceof RuntimeException runtime
                     ? runtime
-                    : new IllegalStateException("Phase 3 dev2 worker job failed", cause);
+                    : new IllegalStateException("Phase 3 dev11 worker job failed", cause);
         }
         if (ticket.state() == SectionMeshWorkerPool.TicketState.CANCELLED) {
             workerJobsCancelled++;
@@ -277,10 +294,12 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         if (ticket.state() != SectionMeshWorkerPool.TicketState.COMPLETED) return;
 
         workerJobsCompleted++;
-        BakedSectionMesh mesh = ticket.mesh();
-        if (mesh == null) {
-            throw new IllegalStateException("Completed Phase 3 dev2 worker ticket published no mesh");
+        BakedSectionMesh exact = ticket.mesh();
+        RepeatAwareTransportProof transport = ticket.repeatAwareTransport();
+        if (exact == null || transport == null) {
+            throw new IllegalStateException("Completed Phase 3 dev11 worker ticket published incomplete proof/mesh output");
         }
+        RepeatAwareGreedyMesh hybrid = transport.greedyMesh();
         if (ticket.generation() != generation
                 || ticket.eventSequence() != buildEventSequence
                 || SectionLifecycleEvents.latestSequence() != buildEventSequence
@@ -291,26 +310,38 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
             return;
         }
 
-        mesh.validateAgainst(snapshot, bakedSnapshot);
-        if (mesh.quadCount() != bakedSnapshot.quadCount()
-                || mesh.solidQuadCount() != bakedSnapshot.solidQuads()
-                || mesh.cutoutQuadCount() != bakedSnapshot.cutoutQuads()
-                || mesh.vertexCount() != mesh.quadCount() * BakedSectionMesh.VERTICES_PER_QUAD
-                || mesh.indexCount() != mesh.quadCount() * BakedSectionMesh.INDICES_PER_QUAD) {
-            throw new IllegalStateException("Phase 3 dev2 worker mesh accounting mismatch");
+        exact.validateAgainst(snapshot, bakedSnapshot);
+        if (exact.quadCount() != bakedSnapshot.quadCount()
+                || exact.solidQuadCount() != bakedSnapshot.solidQuads()
+                || exact.cutoutQuadCount() != bakedSnapshot.cutoutQuads()
+                || exact.vertexCount() != exact.quadCount() * BakedSectionMesh.VERTICES_PER_QUAD
+                || exact.indexCount() != exact.quadCount() * BakedSectionMesh.INDICES_PER_QUAD) {
+            throw new IllegalStateException("Phase 3 dev11 exact worker mesh accounting mismatch");
         }
-        if (mesh.vertexBytes() + mesh.indexBytes() > BakedSectionMesh.MAX_UPLOAD_BYTES) {
-            throw new IllegalStateException("Phase 3 dev2 worker mesh exceeded bounded upload contract");
+        if (exact.vertexBytes() + exact.indexBytes() > BakedSectionMesh.MAX_UPLOAD_BYTES) {
+            throw new IllegalStateException("Phase 3 dev11 exact worker mesh exceeded bounded upload contract");
+        }
+        if (hybrid.sourceBakedFingerprint() != bakedSnapshot.fingerprint()
+                || hybrid.sourceTransportFingerprint() != transport.fingerprint()
+                || hybrid.sourceQuadCount() != exact.quadCount()
+                || hybrid.hybridQuadCount() != exact.quadCount() - transport.facesSaved()
+                || hybrid.mergedQuadCount() != transport.recordCount()
+                || hybrid.suppressedSourceQuads() != transport.coveredFaces()
+                || hybrid.facesSaved() != transport.facesSaved()
+                || hybrid.totalUploadBytes() > hybrid.sourceUploadBytes()
+                || hybrid.sourceUploadBytes() != exact.vertexBytes() + exact.indexBytes()) {
+            throw new IllegalStateException("Phase 3 dev11 hybrid worker mesh accounting/source identity mismatch");
         }
 
-        drawableMesh = mesh;
+        oracleMesh = exact;
+        drawableMesh = hybrid;
         workerTicket = null;
         state = State.READY_TO_INSTALL;
     }
 
     private void tryInstallWorkerResult(GameRenderer renderer, long frameSerial) {
-        if (drawableMesh == null || snapshot == null || bakedSnapshot == null || referenceMesh == null) {
-            throw new IllegalStateException("Phase 3 dev2 install-ready record is incomplete");
+        if (drawableMesh == null || oracleMesh == null || snapshot == null || bakedSnapshot == null || referenceMesh == null) {
+            throw new IllegalStateException("Phase 3 dev11 install-ready record is incomplete");
         }
         if (SectionLifecycleEvents.latestSequence() != buildEventSequence
                 || SectionMaterialSnapshot.currentResourceEpoch() != bakedSnapshot.resourceEpoch()) {
@@ -326,35 +357,29 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         boolean batchOpen = false;
         try {
             ensurePipelines();
-            vertexHandle = arena.allocate(drawableMesh.vertexBytes(), 16);
-            if (vertexHandle == DeviceGeometryArena.INVALID_HANDLE) {
-                throw new IllegalStateException("Device arena could not fit Phase 3 dev2 BLOCK vertex data");
-            }
+            passthroughVertexHandle = allocateOrPlaceholder(drawableMesh.passthroughVertexBytes(), 16);
+            mergedVertexHandle = allocateOrPlaceholder(drawableMesh.mergedVertexBytes(), 16);
             indexHandle = arena.allocate(drawableMesh.indexBytes(), 4);
             if (indexHandle == DeviceGeometryArena.INVALID_HANDLE) {
-                throw new IllegalStateException("Device arena could not fit Phase 3 dev2 index data");
+                throw new IllegalStateException("Device arena could not fit Phase 3 dev11 hybrid index data");
             }
 
             indirectCommands = new IndexedIndirectCommandBuffer(device, INDIRECT_LABEL, INDIRECT_COMMAND_COUNT);
-            GpuBufferSlice vertexSlice = arena.slice(vertexHandle);
+            GpuBufferSlice passthroughVertexSlice = arena.slice(passthroughVertexHandle);
+            GpuBufferSlice mergedVertexSlice = arena.slice(mergedVertexHandle);
             GpuBufferSlice indexSlice = arena.slice(indexHandle);
             int baseFirstIndex = checkedFirstIndex(indexSlice);
-            int cutoutFirstIndex = Math.addExact(baseFirstIndex, drawableMesh.cutoutFirstLocalIndex());
 
             if (!staging.beginBatch()) {
-                throw new IllegalStateException("Phase 3 dev2 could not open bounded staging batch");
+                throw new IllegalStateException("Phase 3 dev11 could not open bounded staging batch");
             }
             batchOpen = true;
             CommandEncoder encoder = device.createCommandEncoder();
-            if (!staging.stageCopy(encoder, drawableMesh.vertexBuffer(), vertexSlice)
+            if (!stageIfNonEmpty(encoder, drawableMesh.passthroughVertexBuffer(), passthroughVertexSlice)
+                    || !stageIfNonEmpty(encoder, drawableMesh.mergedVertexBuffer(), mergedVertexSlice)
                     || !staging.stageCopy(encoder, drawableMesh.indexBuffer(), indexSlice)
-                    || !staging.stageCopy(encoder,
-                            indirectCommand(drawableMesh.solidIndexCount(), baseFirstIndex),
-                            indirectCommands.buffer(), 0L)
-                    || !staging.stageCopy(encoder,
-                            indirectCommand(drawableMesh.cutoutIndexCount(), cutoutFirstIndex),
-                            indirectCommands.buffer(), IndexedIndirectCommandBuffer.COMMAND_BYTES)) {
-                throw new IllegalStateException("Phase 3 dev2 layered upload hit bounded staging backpressure");
+                    || !stageIndirectCommands(encoder, baseFirstIndex)) {
+                throw new IllegalStateException("Phase 3 dev11 hybrid upload hit bounded staging backpressure");
             }
 
             encodeLiveDraw(encoder, renderer);
@@ -376,43 +401,120 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
             usefulSubmissions++;
             drawSubmissions++;
             indirectCalls += INDIRECT_COMMAND_COUNT;
-            triangles += drawableMesh.indexCount() / 3L;
+            triangles += drawableMesh.indexBytes() / Integer.BYTES / 3L;
+            emittedMergedQuads += drawableMesh.mergedQuadCount();
+            emittedSuppressedSourceQuads += drawableMesh.suppressedSourceQuads();
+            emittedFacesSaved += drawableMesh.facesSaved();
+            emittedPassthroughQuads += drawableMesh.passthroughQuadCount();
+            emittedHybridQuads += drawableMesh.hybridQuadCount();
+            emittedHybridUploadBytes += drawableMesh.totalUploadBytes();
+            emittedSourceUploadBytes += drawableMesh.sourceUploadBytes();
             initialSubmissionCompleted = true;
             workerResultInstalls++;
             state = State.LIVE;
 
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev2 worker result installed on frame {0}: generation={1}, eventSequence={2}, priority={3}, section=({4},{5},{6}), workerMeshFingerprint={7}, quads={8}, vertexBytes={9}, indexBytes={10}, workerBuildNs={11}, synchronousSceneMeshBuilds=0, renderThreadGpuOwnershipPreserved=true.",
+                    "Phase 3 dev11 hybrid worker result installed on frame {0}: generation={1}, eventSequence={2}, priority={3}, section=({4},{5},{6}), oracleFingerprint={7}, hybridFingerprint={8}, sourceQuads={9}, suppressedSourceQuads={10}, passthroughQuads={11}, mergedQuads={12}, hybridQuads={13}, facesSaved={14}, sourceUploadBytes={15}, hybridUploadBytes={16}, synchronousSceneMeshBuilds=0, repeatAwareGreedyGpuEmission=true, renderThreadGpuOwnershipPreserved=true.",
                     frameSerial, generation, buildEventSequence, workerPriority,
                     snapshot.sectionX(), snapshot.sectionY(), snapshot.sectionZ(),
-                    Long.toUnsignedString(drawableMesh.fingerprint()), drawableMesh.quadCount(),
-                    drawableMesh.vertexBytes(), drawableMesh.indexBytes(), drawableMesh.buildTimeNs());
+                    Long.toUnsignedString(oracleMesh.fingerprint()), Long.toUnsignedString(drawableMesh.fingerprint()),
+                    drawableMesh.sourceQuadCount(), drawableMesh.suppressedSourceQuads(),
+                    drawableMesh.passthroughQuadCount(), drawableMesh.mergedQuadCount(),
+                    drawableMesh.hybridQuadCount(), drawableMesh.facesSaved(), drawableMesh.sourceUploadBytes(),
+                    drawableMesh.totalUploadBytes());
         } catch (RuntimeException e) {
             if (batchOpen) staging.abortBatch();
             throw e;
         }
     }
 
+    private long allocateOrPlaceholder(int bytes, int alignment) {
+        int allocationBytes = Math.max(bytes, alignment);
+        long handle = arena.allocate(allocationBytes, alignment);
+        if (handle == DeviceGeometryArena.INVALID_HANDLE) {
+            throw new IllegalStateException("Device arena could not fit Phase 3 dev11 hybrid vertex data");
+        }
+        return handle;
+    }
+
+    private boolean stageIfNonEmpty(CommandEncoder encoder, ByteBuffer data, GpuBufferSlice target) {
+        return !data.hasRemaining() || staging.stageCopy(encoder, data, target);
+    }
+
+    private boolean stageIndirectCommands(CommandEncoder encoder, int baseFirstIndex) {
+        int[] counts = {
+                drawableMesh.passthroughSolidIndexCount(),
+                drawableMesh.passthroughCutoutIndexCount(),
+                drawableMesh.mergedSolidIndexCount(),
+                drawableMesh.mergedCutoutIndexCount()
+        };
+        int[] first = {
+                drawableMesh.passthroughSolidFirstLocalIndex(),
+                drawableMesh.passthroughCutoutFirstLocalIndex(),
+                drawableMesh.mergedSolidFirstLocalIndex(),
+                drawableMesh.mergedCutoutFirstLocalIndex()
+        };
+        for (int command = 0; command < INDIRECT_COMMAND_COUNT; command++) {
+            int firstIndex = Math.addExact(baseFirstIndex, first[command]);
+            if (!staging.stageCopy(encoder, indirectCommand(counts[command], firstIndex),
+                    indirectCommands.buffer(), (long) command * IndexedIndirectCommandBuffer.COMMAND_BYTES)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private void ensurePipelines() {
-        if (solidPipeline != null && cutoutPipeline != null) return;
+        if (passthroughSolidPipeline != null && passthroughCutoutPipeline != null
+                && mergedSolidPipeline != null && mergedCutoutPipeline != null) return;
         RenderPipeline depthTemplate = RenderPipelines.DEBUG_QUADS;
-        solidPipeline = buildComparisonPipeline(
-                "obsidian_phase3_dev2_solid", RenderPipelines.SOLID_BLOCK, depthTemplate, false);
-        cutoutPipeline = buildComparisonPipeline(
-                "obsidian_phase3_dev2_cutout", RenderPipelines.CUTOUT_BLOCK, depthTemplate, true);
-        CompiledRenderPipeline solidCompiled = device.precompilePipeline(solidPipeline);
-        CompiledRenderPipeline cutoutCompiled = device.precompilePipeline(cutoutPipeline);
-        pipelineValid = solidCompiled.isValid() && cutoutCompiled.isValid();
+        passthroughSolidPipeline = buildPassthroughPipeline(
+                "obsidian_phase3_dev11_passthrough_solid", RenderPipelines.SOLID_BLOCK, depthTemplate, false);
+        passthroughCutoutPipeline = buildPassthroughPipeline(
+                "obsidian_phase3_dev11_passthrough_cutout", RenderPipelines.CUTOUT_BLOCK, depthTemplate, true);
+        mergedSolidPipeline = buildMergedPipeline(
+                "obsidian_phase3_dev11_merged_solid", RenderPipelines.SOLID_BLOCK, depthTemplate, false);
+        mergedCutoutPipeline = buildMergedPipeline(
+                "obsidian_phase3_dev11_merged_cutout", RenderPipelines.CUTOUT_BLOCK, depthTemplate, true);
+        CompiledRenderPipeline passthroughSolidCompiled = device.precompilePipeline(passthroughSolidPipeline);
+        CompiledRenderPipeline passthroughCutoutCompiled = device.precompilePipeline(passthroughCutoutPipeline);
+        CompiledRenderPipeline mergedSolidCompiled = device.precompilePipeline(mergedSolidPipeline);
+        CompiledRenderPipeline mergedCutoutCompiled = device.precompilePipeline(mergedCutoutPipeline);
+        pipelineValid = passthroughSolidCompiled.isValid() && passthroughCutoutCompiled.isValid()
+                && mergedSolidCompiled.isValid() && mergedCutoutCompiled.isValid();
         if (!pipelineValid) {
-            throw new IllegalStateException("Phase 3 dev2 public SOLID/CUTOUT BLOCK pipelines failed to compile");
+            throw new IllegalStateException("Phase 3 dev11 public passthrough/repeat-aware pipelines failed to compile");
         }
     }
 
-    private static RenderPipeline buildComparisonPipeline(
+    private static RenderPipeline buildPassthroughPipeline(
             String location,
             RenderPipeline template,
             RenderPipeline depthTemplate,
             boolean cutout) {
+        RenderPipeline.Builder builder = basePipeline(location, template, depthTemplate)
+                .withVertexBinding(0, DefaultVertexFormat.BLOCK);
+        if (cutout) builder.withShaderDefine("ALPHA_CUTOUT", 0.5f);
+        return builder.build();
+    }
+
+    private static RenderPipeline buildMergedPipeline(
+            String location,
+            RenderPipeline template,
+            RenderPipeline depthTemplate,
+            boolean cutout) {
+        RenderPipeline.Builder builder = basePipeline(location, template, depthTemplate)
+                .withVertexShader(REPEAT_AWARE_SHADER)
+                .withFragmentShader(REPEAT_AWARE_SHADER)
+                .withVertexBinding(0, RepeatAwareGreedyRenderFormat.MERGED);
+        if (cutout) builder.withShaderDefine("ALPHA_CUTOUT", 0.5f);
+        return builder.build();
+    }
+
+    private static RenderPipeline.Builder basePipeline(
+            String location,
+            RenderPipeline template,
+            RenderPipeline depthTemplate) {
         RenderPipeline.Builder builder = RenderPipeline.builder()
                 .withLocation(location)
                 .withVertexShader(template.getVertexShader())
@@ -420,11 +522,9 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
                 .withCull(false)
                 .withColorTargetState(template.getColorTargetState())
                 .withDepthStencilState(depthTemplate.getDepthStencilState())
-                .withVertexBinding(0, DefaultVertexFormat.BLOCK)
                 .withPrimitiveTopology(PrimitiveTopology.TRIANGLES);
-        if (cutout) builder.withShaderDefine("ALPHA_CUTOUT", 0.5f);
         for (BindGroupLayout layout : template.getBindGroupLayouts()) builder.withBindGroupLayout(layout);
-        return builder.build();
+        return builder;
     }
 
     private void submitDraw(GameRenderer renderer) {
@@ -434,7 +534,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         usefulSubmissions++;
         drawSubmissions++;
         indirectCalls += INDIRECT_COMMAND_COUNT;
-        triangles += drawableMesh.indexCount() / 3L;
+        triangles += drawableMesh.indexBytes() / Integer.BYTES / 3L;
     }
 
     public void requestInvalidate(int reasons, long frameSerial) {
@@ -467,12 +567,12 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
 
     private void encodeLiveDraw(CommandEncoder encoder, GameRenderer renderer) {
         if (drawableMesh == null || bakedSnapshot == null || indirectCommands == null) {
-            throw new IllegalStateException("Phase 3 dev2 worker-backed GPU resources are incomplete");
+            throw new IllegalStateException("Phase 3 dev11 worker-backed GPU resources are incomplete");
         }
         long currentEpoch = SectionMaterialSnapshot.currentResourceEpoch();
         resourceEpochChecks++;
         if (currentEpoch != bakedSnapshot.resourceEpoch()) {
-            throw new IllegalStateException("Minecraft model/atlas resource epoch changed during Phase 3 dev2 draw");
+            throw new IllegalStateException("Minecraft model/atlas resource epoch changed during Phase 3 dev11 draw");
         }
 
         CameraRenderState camera = renderer.gameRenderState().levelRenderState.cameraRenderState;
@@ -483,7 +583,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         double relativeY = drawableMesh.originY() - camera.pos.y;
         double relativeZ = drawableMesh.originZ() - camera.pos.z;
         if (!Double.isFinite(relativeX) || !Double.isFinite(relativeY) || !Double.isFinite(relativeZ)) {
-            throw new IllegalStateException("Non-finite Phase 3 dev2 camera-relative section origin");
+            throw new IllegalStateException("Non-finite Phase 3 dev11 camera-relative section origin");
         }
 
         Matrix4f modelView = new Matrix4f(camera.viewRotationMatrix)
@@ -493,7 +593,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         GpuBufferSlice fog = RenderSystem.getShaderFog();
         if (dynamicTransforms == null || projection == null || fog == null
                 || RenderSystem.getGlobalSettingsUniform() == null) {
-            throw new IllegalStateException("Minecraft world uniform buffers are unavailable for Phase 3 dev2");
+            throw new IllegalStateException("Minecraft world uniform buffers are unavailable for Phase 3 dev11");
         }
 
         Minecraft minecraft = Minecraft.getInstance();
@@ -510,15 +610,24 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
                 || target.getDepthTextureView() == null) {
             throw new IllegalStateException("Minecraft main world color/depth target is unavailable");
         }
-        GpuBufferSlice vertexSlice = arena.slice(vertexHandle);
+        GpuBufferSlice passthroughVertexSlice = arena.slice(passthroughVertexHandle);
+        GpuBufferSlice mergedVertexSlice = arena.slice(mergedVertexHandle);
         GpuBufferSlice indexSlice = arena.slice(indexHandle);
 
-        encodeLayerPass(encoder, target, solidPipeline, SOLID_PASS_LABEL,
-                dynamicTransforms, projection, fog, blocksAtlas, renderer, vertexSlice, indexSlice,
+        encodeLayerPass(encoder, target, passthroughSolidPipeline, PASSTHROUGH_SOLID_PASS_LABEL,
+                dynamicTransforms, projection, fog, blocksAtlas, renderer, passthroughVertexSlice, indexSlice,
                 indirectCommands.buffer().slice(0L, IndexedIndirectCommandBuffer.COMMAND_BYTES));
-        encodeLayerPass(encoder, target, cutoutPipeline, CUTOUT_PASS_LABEL,
-                dynamicTransforms, projection, fog, blocksAtlas, renderer, vertexSlice, indexSlice,
+        encodeLayerPass(encoder, target, passthroughCutoutPipeline, PASSTHROUGH_CUTOUT_PASS_LABEL,
+                dynamicTransforms, projection, fog, blocksAtlas, renderer, passthroughVertexSlice, indexSlice,
                 indirectCommands.buffer().slice(IndexedIndirectCommandBuffer.COMMAND_BYTES,
+                        IndexedIndirectCommandBuffer.COMMAND_BYTES));
+        encodeLayerPass(encoder, target, mergedSolidPipeline, MERGED_SOLID_PASS_LABEL,
+                dynamicTransforms, projection, fog, blocksAtlas, renderer, mergedVertexSlice, indexSlice,
+                indirectCommands.buffer().slice(2L * IndexedIndirectCommandBuffer.COMMAND_BYTES,
+                        IndexedIndirectCommandBuffer.COMMAND_BYTES));
+        encodeLayerPass(encoder, target, mergedCutoutPipeline, MERGED_CUTOUT_PASS_LABEL,
+                dynamicTransforms, projection, fog, blocksAtlas, renderer, mergedVertexSlice, indexSlice,
+                indirectCommands.buffer().slice(3L * IndexedIndirectCommandBuffer.COMMAND_BYTES,
                         IndexedIndirectCommandBuffer.COMMAND_BYTES));
 
         if (!firstTransformCaptured) {
@@ -574,7 +683,8 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
 
         if (!tryRegisterRetirements(frameSerial)) return;
         if (staging.reclaimedBatches() < uploadBatchOrdinal) return;
-        if (arena.isAllocated(vertexHandle) || arena.isAllocated(indexHandle)) return;
+        if (arena.isAllocated(passthroughVertexHandle) || arena.isAllocated(mergedVertexHandle)
+                || arena.isAllocated(indexHandle)) return;
         if (resourceReleaseOrdinal > 0L && deferredReleases.releasedCount() < resourceReleaseOrdinal) return;
 
         if (validationFailure != null) {
@@ -618,15 +728,16 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
             pendingResourceFence = encoder.createFence();
             encoder.submit();
             usefulSubmissions++;
-            retirementHandles[0] = vertexHandle;
-            retirementHandles[1] = indexHandle;
+            retirementHandles[0] = passthroughVertexHandle;
+            retirementHandles[1] = mergedVertexHandle;
+            retirementHandles[2] = indexHandle;
             state = State.RETIRING;
             tryRegisterRetirements(frameSerial);
         } catch (RuntimeException cleanupFailure) {
             validationFailure = cleanupFailure;
             state = State.FAILED;
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev2 could not submit completion-gated cleanup; preserving ownership for shutdown.",
+                    "Phase 3 dev11 could not submit completion-gated cleanup; preserving ownership for shutdown.",
                     cleanupFailure);
         }
     }
@@ -634,7 +745,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     private boolean tryRegisterRetirements(long frameSerial) {
         if (pendingArenaFence != null) {
             try {
-                if (!arena.retireBatch(pendingArenaFence, retirementHandles, 2)) {
+                if (!arena.retireBatch(pendingArenaFence, retirementHandles, retirementHandles.length)) {
                     retirementBackpressureEvents++;
                     return false;
                 }
@@ -675,17 +786,17 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
 
     private int checkedFirstIndex(GpuBufferSlice indexSlice) {
         if ((indexSlice.offset() & (Integer.BYTES - 1L)) != 0L) {
-            throw new IllegalStateException("Phase 3 dev2 index allocation is not 4-byte aligned");
+            throw new IllegalStateException("Phase 3 dev11 index allocation is not 4-byte aligned");
         }
         long value = indexSlice.offset() / Integer.BYTES;
         if (value > Integer.MAX_VALUE) {
-            throw new IllegalStateException("Phase 3 dev2 firstIndex exceeds public indirect command range");
+            throw new IllegalStateException("Phase 3 dev11 firstIndex exceeds public indirect command range");
         }
         return (int) value;
     }
 
     private static ByteBuffer indirectCommand(int indexCount, int firstIndex) {
-        if (indexCount <= 0) throw new IllegalArgumentException("Phase 3 dev2 indirect layer must be non-empty");
+        if (indexCount < 0) throw new IllegalArgumentException("Phase 3 dev11 indirect index count is negative");
         ByteBuffer out = ByteBuffer.allocateDirect(IndexedIndirectCommandBuffer.COMMAND_BYTES)
                 .order(ByteOrder.nativeOrder());
         out.putInt(indexCount);
@@ -697,22 +808,22 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     }
 
     private void cancelUnsubmittedAllocations() {
-        if (vertexHandle != DeviceGeometryArena.INVALID_HANDLE && arena.isLive(vertexHandle)) {
-            arena.cancelUnsubmitted(vertexHandle);
-        }
-        if (indexHandle != DeviceGeometryArena.INVALID_HANDLE && arena.isLive(indexHandle)) {
-            arena.cancelUnsubmitted(indexHandle);
-        }
-        vertexHandle = DeviceGeometryArena.INVALID_HANDLE;
+        cancelHandle(passthroughVertexHandle);
+        cancelHandle(mergedVertexHandle);
+        cancelHandle(indexHandle);
+        passthroughVertexHandle = DeviceGeometryArena.INVALID_HANDLE;
+        mergedVertexHandle = DeviceGeometryArena.INVALID_HANDLE;
         indexHandle = DeviceGeometryArena.INVALID_HANDLE;
+    }
+
+    private void cancelHandle(long handle) {
+        if (handle != DeviceGeometryArena.INVALID_HANDLE && arena.isLive(handle)) arena.cancelUnsubmitted(handle);
     }
 
     private void closeIndirectIfOwned() {
         if (indirectCommands == null) return;
         try {
             indirectCommands.close();
-        } catch (RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "Failed to close unsubmitted dev2 indirect command buffer.", e);
         } finally {
             indirectCommands = null;
         }
@@ -722,17 +833,19 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     public SectionSnapshot snapshot() { return snapshot; }
     public ReferenceFaceMesh referenceMesh() { return referenceMesh; }
     public SectionBakedQuadSnapshot bakedSnapshot() { return bakedSnapshot; }
-    public BakedSectionMesh drawableMesh() { return drawableMesh; }
+    public BakedSectionMesh drawableMesh() { return oracleMesh; }
+    public RepeatAwareGreedyMesh repeatAwareGreedyMesh() { return drawableMesh; }
+    public boolean pipelineValid() { return pipelineValid; }
+    public boolean initialSubmissionCompleted() { return initialSubmissionCompleted; }
+    public boolean workerBacked() { return true; }
+    public boolean repeatAwareGreedyEmissionInstalled() { return initialSubmissionCompleted && drawableMesh != null && pipelineValid; }
     public long usefulSubmissions() { return usefulSubmissions; }
     public long drawSubmissions() { return drawSubmissions; }
-    public long resourceEpochChecks() { return resourceEpochChecks; }
     public long indirectCalls() { return indirectCalls; }
+    public long triangles() { return triangles; }
+    public long resourceEpochChecks() { return resourceEpochChecks; }
     public long retirementBackpressureEvents() { return retirementBackpressureEvents; }
     public long retirementRegistrationFailures() { return retirementRegistrationFailures; }
-    public long generation() { return generation; }
-    public long buildEventSequence() { return buildEventSequence; }
-    public boolean pipelineValid() { return pipelineValid; }
-    public int workerPriority() { return workerPriority; }
     public long workerJobsSubmitted() { return workerJobsSubmitted; }
     public long workerJobsCompleted() { return workerJobsCompleted; }
     public long workerJobsCancelled() { return workerJobsCancelled; }
@@ -746,7 +859,28 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         SectionMeshWorkerPool.Ticket ticket = workerTicket;
         return ticket != null && !ticket.terminal();
     }
+    public long emittedMergedQuads() { return emittedMergedQuads; }
+    public long emittedSuppressedSourceQuads() { return emittedSuppressedSourceQuads; }
+    public long emittedFacesSaved() { return emittedFacesSaved; }
+    public long emittedPassthroughQuads() { return emittedPassthroughQuads; }
+    public long emittedHybridQuads() { return emittedHybridQuads; }
+    public long emittedHybridUploadBytes() { return emittedHybridUploadBytes; }
+    public long emittedSourceUploadBytes() { return emittedSourceUploadBytes; }
+    public int invalidationReasons() { return invalidationReasons; }
     public boolean preinstallInvalidated() { return preinstallInvalidated; }
+    public Throwable validationFailure() { return validationFailure; }
+    public long generation() { return generation; }
+    public long buildEventSequence() { return buildEventSequence; }
+    public int workerPriority() { return workerPriority; }
+    public int sectionX() { return requestedSectionX; }
+    public int sectionY() { return requestedSectionY; }
+    public int sectionZ() { return requestedSectionZ; }
+    public long vertexBytes() {
+        return drawableMesh == null ? 0L : (long) drawableMesh.passthroughVertexBytes() + drawableMesh.mergedVertexBytes();
+    }
+    public long indexBytes() { return drawableMesh == null ? 0L : drawableMesh.indexBytes(); }
+    public long quadCount() { return drawableMesh == null ? 0L : drawableMesh.hybridQuadCount(); }
+    public boolean transformCaptured() { return firstTransformCaptured; }
     public double firstCameraX() { return firstCameraX; }
     public double firstCameraY() { return firstCameraY; }
     public double firstCameraZ() { return firstCameraZ; }
@@ -759,12 +893,33 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         RenderSystem.assertOnRenderThread();
         if (state == State.CLOSED) return;
         cancelWorkerTicket();
-        if (state == State.LIVE) beginCleanupRetirement(lastFrameSerial);
-        if (state == State.RETIRING && initialSubmissionCompleted) tryRegisterRetirements(lastFrameSerial);
-        if (!initialSubmissionCompleted) {
+
+        if (initialSubmissionCompleted) {
+            if (state != State.RETIRING && state != State.RETIRED) beginCleanupRetirement(lastFrameSerial);
+            if (pendingArenaFence != null) {
+                try {
+                    if (arena.retireBatch(pendingArenaFence, retirementHandles, retirementHandles.length)) pendingArenaFence = null;
+                } catch (RuntimeException ignored) { }
+            }
+            if (pendingResourceFence != null && indirectCommands != null) {
+                try {
+                    deferredReleases.retire(indirectCommands, pendingResourceFence, lastFrameSerial);
+                    resourceReleaseOrdinal = deferredReleases.retiredCount();
+                    indirectCommands = null;
+                    pendingResourceFence = null;
+                } catch (RuntimeException ignored) { }
+            }
+        } else {
             cancelUnsubmittedAllocations();
             closeIndirectIfOwned();
         }
+
+        snapshot = null;
+        referenceMesh = null;
+        bakedSnapshot = null;
+        oracleMesh = null;
+        drawableMesh = null;
+        workerTicket = null;
         state = State.CLOSED;
     }
 }

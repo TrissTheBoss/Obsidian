@@ -63,6 +63,7 @@ public final class CanonicalFaceRenderKeys {
     private final long sameKeyAdjacentPairs;
     private final long differentKeyAdjacentPairs;
     private final long ineligibleAdjacentPairs;
+    private final SectionSnapshot sourceSnapshot;
     private final long sourceSnapshotFingerprint;
     private final long sourceVisibilityFingerprint;
     private final long sourceBakedFingerprint;
@@ -80,6 +81,7 @@ public final class CanonicalFaceRenderKeys {
             long sameKeyAdjacentPairs,
             long differentKeyAdjacentPairs,
             long ineligibleAdjacentPairs,
+            SectionSnapshot sourceSnapshot,
             long sourceSnapshotFingerprint,
             long sourceVisibilityFingerprint,
             long sourceBakedFingerprint,
@@ -95,6 +97,7 @@ public final class CanonicalFaceRenderKeys {
         this.sameKeyAdjacentPairs = sameKeyAdjacentPairs;
         this.differentKeyAdjacentPairs = differentKeyAdjacentPairs;
         this.ineligibleAdjacentPairs = ineligibleAdjacentPairs;
+        this.sourceSnapshot = sourceSnapshot;
         this.sourceSnapshotFingerprint = sourceSnapshotFingerprint;
         this.sourceVisibilityFingerprint = sourceVisibilityFingerprint;
         this.sourceBakedFingerprint = sourceBakedFingerprint;
@@ -179,6 +182,7 @@ public final class CanonicalFaceRenderKeys {
                 adjacency.same,
                 adjacency.different,
                 adjacency.ineligible,
+                snapshot,
                 snapshot.fingerprint(),
                 visibility.fingerprint(),
                 baked.fingerprint(),
@@ -213,7 +217,9 @@ public final class CanonicalFaceRenderKeys {
             BinarySectionVisibility visibility,
             SectionBakedQuadSnapshot baked,
             BuildScratch scratch) {
-        if (sourceSnapshotFingerprint != snapshot.fingerprint()
+        if (sourceSnapshot == null
+                || sourceSnapshot.fingerprint() != sourceSnapshotFingerprint
+                || sourceSnapshotFingerprint != snapshot.fingerprint()
                 || sourceVisibilityFingerprint != visibility.fingerprint()
                 || sourceBakedFingerprint != baked.fingerprint()) {
             throw new IllegalStateException("P3.4 render-key source fingerprint mismatch");
@@ -337,6 +343,7 @@ public final class CanonicalFaceRenderKeys {
     public int eligiblePermille() {
         return visibleFaces == 0 ? 0 : (int) (((long) eligibleFaces * 1000L) / visibleFaces);
     }
+    SectionSnapshot sourceSnapshot() { return sourceSnapshot; }
     public long sourceSnapshotFingerprint() { return sourceSnapshotFingerprint; }
     public long sourceVisibilityFingerprint() { return sourceVisibilityFingerprint; }
     public long sourceBakedFingerprint() { return sourceBakedFingerprint; }
