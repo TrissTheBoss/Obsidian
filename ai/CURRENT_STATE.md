@@ -8,8 +8,10 @@ Last updated: 2026-08-23
 - Default branch: `main`
 - Product phase: **Phase 3 — production asynchronous CPU mesher / greedy meshing**.
 - Active milestone: **P3.4 dev10 — repeat-aware transport/sampling correctness proof**.
-- Dev10 target branch: to be cut from synchronized `main`.
-- Dev10 target version: `0.3.0-phase3-dev10`.
+- Active branch: `phase3/repeat-aware-transport-proof`.
+- Draft PR: #42 — `Phase 3 dev10: repeat-aware transport proof`.
+- Version: `0.3.0-phase3-dev10`.
+- Status: **implementation/package CI GREEN; reference runtime pending**.
 - Public release intent: keep the existing public checkpoint until a separate release decision.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
 
@@ -41,6 +43,8 @@ A-0101 remains the canonical fixed-target unload/return lifecycle proof. Later P
 `OrdinaryQuadEmissionSafety` classifies whether a dev7 candidate can be represented by one ordinary four-vertex quad under captured color/light/raw-atlas-UV fields. Dev8 proved ordinary atlas UV reset is the dominant blocker.
 
 `RepeatAwareUvDescriptors` proves whether a multi-face candidate can preserve the representative source sprite by repeating in candidate-local sprite coordinates and remapping into the same exact raw atlas rectangle/orientation. Full-atlas sampler wrapping is not the correctness model.
+
+`RepeatAwareTransportProof` is the dev10 no-emission bridge from dev9 representation to a later large-quad path. It independently revalidates the representative UV endpoints/orientation, preserves source baked vertex order/diagonal, freezes candidate-local repeat/remap and explicit-gradient obligations, and records that a future path must bind the same live blocks-atlas view/sampler. It deliberately keeps internal repeat-line raster ownership as an explicit open later obligation.
 
 The generalized `BakedSectionMesh` remains the authoritative GPU drawable.
 
@@ -84,29 +88,143 @@ No geometry changed in dev9, so no new visual verdict was required for dev9 prom
 
 ## ACTIVE: P3.4 dev10 — repeat-aware transport/sampling correctness proof
 
-A-0132 activates dev10. P3.5 is not active.
+A-0132 activates dev10. A-0133 freezes the dev10 contract. A-0134 records implementation and canonical package CI. P3.5 is not active.
 
-Dev10 is **proof-first and no-emission**. It must freeze and validate the actual representation that a later geometry-changing slice could use, without yet replacing `BakedSectionMesh`.
+### Frozen transport algebra and obligations
 
-Required correctness direction:
+For candidate extent `W x H`, candidate-local repeat coordinates use a half-open cell rule plus explicit positive outer endpoint:
 
-1. define the exact candidate-local repeat-coordinate transport representation;
-2. preserve the dev9 raw source-atlas rectangle and orientation without normalization loss;
-3. deterministically map candidate-local repeated coordinates into that source sprite rectangle;
-4. define integer repeat-boundary and candidate-edge semantics;
-5. inspect/prove atlas filtering, padding/inset, mip and edge assumptions needed to avoid bleeding/seams;
-6. preserve render-layer/material/sprite/tint/shade/emission/animation identity and keep unsupported/generalized geometry on passthrough;
-7. identify the raster/T-junction obligations relevant to the eventual large-quad path under D-0024, preferring stable positions and selective mitigation/splitting rather than global conforming subdivision;
-8. keep primitive metadata bounded and deterministic;
-9. preserve render-thread capture/GPU ownership, bounded workers/staging/arena/resource lifetime and zero worker live-world reads.
+- `cellS = min(floor(s), W - 1)`;
+- `cellT = min(floor(t), H - 1)`;
+- local unit-cell coordinates are `x = s - cellS`, `y = t - cellT`.
 
-Dev10 must keep:
+Dev9's affine square orientation remaps `(x,y)` through exact raw `uLow/uHigh/vLow/vHigh` source atlas bounds. A future shader/path must use explicit gradients derived from the **unwrapped** candidate-local `s,t`, not derivatives of wrapped/`fract` coordinates, so repeat discontinuities do not create mip/filter derivative spikes.
 
+The future geometry-changing path is required to bind the **same live blocks-atlas texture view and sampler** as the existing block path under the same resource epoch. Dev10 does not invent a parallel immutable sampler/filter/mip model.
+
+Each retained transport proof record is exactly 4 logical bytes:
+
+- unsigned-short dev7 candidate index;
+- one byte source geometric-corner order in source baked vertex order;
+- one byte obligation flags.
+
+Flags prove/record:
+
+- explicit gradient required;
+- internal S reset when width > 1;
+- internal T reset when height > 1;
+- positive outer-edge endpoint policy required;
+- same atlas view/sampler required;
+- internal reset-line raster review remains open.
+
+Every dev10 record is a multi-face candidate and therefore has at least one internal reset boundary. The open raster flag is **expected, nonblocking evidence in dev10** because dev10 emits no large quad.
+
+### Production worker integration
+
+Every successful worker job now builds:
+
+1. `BinarySectionVisibility`;
+2. `GreedySectionRectangles`;
+3. `CanonicalFaceRenderKeys`;
+4. `RenderMergeCandidates`;
+5. `OrdinaryQuadEmissionSafety`;
+6. `RepeatAwareUvDescriptors`;
+7. `RepeatAwareTransportProof`;
+8. unchanged `BakedSectionMesh`.
+
+Completed tickets retain dev10 proof records. Workers expose source/safe/record, coverage/savings, obligation, direction, retained byte, build timing/scratch, primary proof-audit and determinism metrics.
+
+The duplicate determinism cadence rebuilds dev10 proof from the duplicate dev6/dev7/dev8/dev9 chain and requires `contentEquals` before the unchanged baked-mesh determinism check.
+
+### Dev10 runtime gate
+
+New required gate:
+
+- `repeatAwareTransportEvidenceReady=true`.
+
+It sits strictly after `repeatAwareUvEvidenceReady=true` and requires:
+
+- transport builds > 0 and >= completed worker jobs;
+- source multi-face == dev9 multi-face;
+- source representable == dev9 representable;
+- source four-vertex-safe == dev9 repeat-aware-four-vertex-safe;
+- transport record count == source four-vertex-safe count;
+- unsafe == source multi-face - records;
+- explicit-gradient / outer-edge / same-atlas-sampler / raster-review obligation counts == records;
+- `internalS + internalT - internalBoth == records`;
+- directional records/covered/saved sums exact;
+- faces saved == covered faces - records;
+- retained bytes == `records * 4`;
+- scratch uses >= builds;
+- primary proof audits == builds and all match;
+- determinism audits > 0 and all match;
+- all prior worker/lifecycle/staging/arena/resource gates remain clean.
+
+`repeatAwareTransportBoundaryRasterObligationOpen=true` is expected when records exist and is **not** a dev10 failure. It must be resolved/exercised by the later geometry-changing P3.4 slice.
+
+### Dev10 package / CI
+
+Pure core:
+
+- commit `360726418f009713199686e89dd42b3ea7b6ad1a`;
+- workflow `32605684776` SUCCESS.
+
+Worker integration:
+
+- commit `23f1d360bf2164657d41a55e3c5d985d0643bca7`;
+- workflow `32605901656` SUCCESS.
+
+Canonical integrated source/package head:
+
+- `5dd6f04f3635f8c0436a49bf43396adcbc532bab`.
+
+Integrated workflow:
+
+- `32606020092`;
+- Java 25 / Gradle 9.5.1 build SUCCESS;
+- artifact upload SUCCESS;
+- versioned release publishing SKIPPED.
+
+Artifact:
+
+- id `9484142328`;
+- wrapper `obsidian-9b408838882837ec7be8ae39cf56ad765e811f40`;
+- size `546,484` bytes;
+- digest `sha256:e907b9652dd0b7d54a21d8a76d96fbfec91d207f038f327dfec3b688eb8bb8cf`.
+
+Canonical direct runtime JAR:
+
+- `Obsidian-0.3.0-phase3-dev10.jar`;
+- size **376,137 bytes**;
+- SHA-256 **`f37531a48608d6a2e0c0143a7ef72dc6d0c8533f4871d21137ea85a69a8feaf9`**.
+
+Package metadata confirms client environment, Minecraft `~26.2`, Fabric Loader `>=0.19.3`, Java `>=25`, and packaged dev10 proof/evidence/worker/coordinator/bootstrap classes.
+
+### Reference runtime handoff
+
+Use the canonical direct dev10 JAR on the reference Vulkan system:
+
+1. let the initial 3x3 async scene reach READY;
+2. perform a normal block break/place rebuild and let it reach READY;
+3. press F3+T and let the scene reach READY again;
+4. ordinary movement/recentering is useful but optional;
+5. fully exit Minecraft/Prism and retain the complete shutdown tail through `Process exited with code 0`.
+
+Required final flags include all prior dev9 gates plus:
+
+- `repeatAwareTransportEvidenceReady=true`;
+- `repeatAwareTransportSidecarIntegrated=true`;
 - `greedyRectangleGpuEmission=false`;
 - `renderCorrectMergeKeyComplete=false`;
-- `BakedSectionMesh` authoritative.
+- `hardFailure=false`;
+- `workerWorldReadsAfterCapture=0`;
+- `synchronousSceneMeshBuilds=0`.
 
-A later geometry-changing P3.4 slice may consume dev10 proof only after its own frozen emission contract is established. That later slice requires renewed explicit human visual validation before promotion.
+`repeatAwareTransportBoundaryRasterObligationOpen=true` is expected/nonblocking. The old fixed-anchor far-travel sequence is not required.
+
+Keep PR #42 draft/unmerged until runtime closure. Standing Phase 3 authorization covers promotion after the frozen runtime gates pass.
+
+Dev10 changes no emitted terrain geometry, so no new visual verdict is required for dev10 promotion. The subsequent geometry-changing P3.4 slice must freeze its own emission contract and requires renewed explicit human visual validation before promotion.
 
 ## Promotion authorization
 
