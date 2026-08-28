@@ -255,7 +255,7 @@ public final class CanonicalFaceRenderKeys {
                     }
                     expectedEligible++;
                 } else {
-                    if (mapping != AMIGUOUS) throw new IllegalStateException("P3.4 ambiguous mapping status mismatch");
+                    if (mapping != AMBIGUOUS) throw new IllegalStateException("P3.4 ambiguous mapping status mismatch");
                     expectedAmbiguous++;
                 }
             }
