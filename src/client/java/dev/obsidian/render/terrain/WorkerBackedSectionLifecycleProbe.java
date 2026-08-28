@@ -830,6 +830,11 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     }
 
     public State state() { return state; }
+    public SectionSnapshot snapshot() { return snapshot; }
+    public ReferenceFaceMesh referenceMesh() { return referenceMesh; }
+    public SectionBakedQuadSnapshot bakedSnapshot() { return bakedSnapshot; }
+    public BakedSectionMesh drawableMesh() { return oracleMesh; }
+    public RepeatAwareGreedyMesh repeatAwareGreedyMesh() { return drawableMesh; }
     public boolean pipelineValid() { return pipelineValid; }
     public boolean initialSubmissionCompleted() { return initialSubmissionCompleted; }
     public boolean workerBacked() { return true; }
@@ -850,6 +855,10 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     public long workerQueueRejections() { return workerQueueRejections; }
     public long installAdmissionDeferrals() { return installAdmissionDeferrals; }
     public long synchronousMeshBuilds() { return 0L; }
+    public boolean workerJobOutstanding() {
+        SectionMeshWorkerPool.Ticket ticket = workerTicket;
+        return ticket != null && !ticket.terminal();
+    }
     public long emittedMergedQuads() { return emittedMergedQuads; }
     public long emittedSuppressedSourceQuads() { return emittedSuppressedSourceQuads; }
     public long emittedFacesSaved() { return emittedFacesSaved; }
