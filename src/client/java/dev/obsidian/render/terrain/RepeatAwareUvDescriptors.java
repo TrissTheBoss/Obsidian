@@ -62,6 +62,7 @@ public final class RepeatAwareUvDescriptors {
     private final int[] directionRepresentableCounts;
     private final int[] directionSafeCounts;
     private final int[] directionSafeCoveredFaces;
+    private final CanonicalFaceRenderKeys sourceRenderKeys;
     private final long sourceCandidateFingerprint;
     private final long sourceRenderKeyFingerprint;
     private final long sourceSafetyFingerprint;
@@ -87,6 +88,7 @@ public final class RepeatAwareUvDescriptors {
             int[] directionRepresentableCounts,
             int[] directionSafeCounts,
             int[] directionSafeCoveredFaces,
+            CanonicalFaceRenderKeys sourceRenderKeys,
             long sourceCandidateFingerprint,
             long sourceRenderKeyFingerprint,
             long sourceSafetyFingerprint,
@@ -110,6 +112,7 @@ public final class RepeatAwareUvDescriptors {
         this.directionRepresentableCounts = directionRepresentableCounts;
         this.directionSafeCounts = directionSafeCounts;
         this.directionSafeCoveredFaces = directionSafeCoveredFaces;
+        this.sourceRenderKeys = sourceRenderKeys;
         this.sourceCandidateFingerprint = sourceCandidateFingerprint;
         this.sourceRenderKeyFingerprint = sourceRenderKeyFingerprint;
         this.sourceSafetyFingerprint = sourceSafetyFingerprint;
@@ -240,6 +243,7 @@ public final class RepeatAwareUvDescriptors {
                 representableByDirection,
                 safeByDirection,
                 safeFacesByDirection,
+                renderKeys,
                 candidates.fingerprint(),
                 renderKeys.fingerprint(),
                 safety.fingerprint(),
@@ -279,7 +283,9 @@ public final class RepeatAwareUvDescriptors {
             BuildScratch scratch) {
         validateSource(candidates, renderKeys, safety, baked);
         if (scratch == null) throw new NullPointerException("validation scratch is required");
-        if (sourceCandidateFingerprint != candidates.fingerprint()
+        if (sourceRenderKeys == null
+                || sourceRenderKeys.fingerprint() != sourceRenderKeyFingerprint
+                || sourceCandidateFingerprint != candidates.fingerprint()
                 || sourceRenderKeyFingerprint != renderKeys.fingerprint()
                 || sourceSafetyFingerprint != safety.fingerprint()
                 || sourceBakedFingerprint != baked.fingerprint()
@@ -602,6 +608,7 @@ public final class RepeatAwareUvDescriptors {
         return sourceEligibleFaces == 0 ? 0 : (int) (((long) safeFacesSaved * 1000L) / sourceEligibleFaces);
     }
     public int retainedBytes() { return descriptorCount() * BYTES_PER_DESCRIPTOR; }
+    CanonicalFaceRenderKeys sourceRenderKeys() { return sourceRenderKeys; }
     public long sourceCandidateFingerprint() { return sourceCandidateFingerprint; }
     public long sourceRenderKeyFingerprint() { return sourceRenderKeyFingerprint; }
     public long sourceSafetyFingerprint() { return sourceSafetyFingerprint; }
