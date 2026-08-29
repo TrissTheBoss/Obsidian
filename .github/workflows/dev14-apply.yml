@@ -18,14 +18,15 @@ jobs:
           ref: phase3/differential-correctness
           fetch-depth: 0
 
-      - name: Apply dev14 source patch
+      - name: Reassemble and apply dev14 source patch
         run: |
-          base64 -d tools/dev14.patch.gz.b64 | gzip -d > /tmp/dev14.patch
+          cat tools/dev14-parts/00 tools/dev14-parts/01 tools/dev14-parts/02 tools/dev14-parts/03 tools/dev14-parts/04 tools/dev14-parts/05 tools/dev14-parts/06 tools/dev14-parts/07 | base64 -d | gzip -d > /tmp/dev14.patch
           git apply --check /tmp/dev14.patch
           git apply /tmp/dev14.patch
 
       - name: Remove temporary patch machinery
         run: |
+          rm -rf tools/dev14-parts
           rm -f tools/dev14.patch.gz.b64
           rm -f .github/workflows/dev14-apply.yml
 
