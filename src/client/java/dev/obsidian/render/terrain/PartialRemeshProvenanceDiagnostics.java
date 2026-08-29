@@ -1,7 +1,7 @@
 package dev.obsidian.render.terrain;
 
 /**
- * P3.9 dev19 fixed-size primitive diagnostics for the already-existing
+ * P3.9 dev20 fixed-size primitive diagnostics for the already-existing
  * FALLBACK_PROVENANCE decision. This class is observational only: it never
  * changes admission, invalidation, meshing, upload, install, draw, or any
  * A-0159 threshold.
@@ -23,6 +23,7 @@ public final class PartialRemeshProvenanceDiagnostics {
     private static boolean lastPendingEpisode;
     private static boolean lastContextCaptured;
     private static boolean lastPendingProbeAvailable;
+    private static int lastLifecycleRelevantEventCount;
 
     private static long provenanceFallbacks;
     private static long missingOrEmpty;
@@ -41,6 +42,7 @@ public final class PartialRemeshProvenanceDiagnostics {
     private static boolean firstPendingEpisode;
     private static boolean firstContextCaptured;
     private static boolean firstPendingProbeAvailable;
+    private static int firstLifecycleRelevantEventCount;
 
     private PartialRemeshProvenanceDiagnostics() { }
 
@@ -54,6 +56,7 @@ public final class PartialRemeshProvenanceDiagnostics {
         lastPendingEpisode = false;
         lastContextCaptured = false;
         lastPendingProbeAvailable = false;
+        lastLifecycleRelevantEventCount = 0;
         provenanceFallbacks = 0L;
         missingOrEmpty = 0L;
         offRenderThread = 0L;
@@ -70,19 +73,24 @@ public final class PartialRemeshProvenanceDiagnostics {
         firstPendingEpisode = false;
         firstContextCaptured = false;
         firstPendingProbeAvailable = false;
+        firstLifecycleRelevantEventCount = 0;
+        PartialRemeshSectionDirtyOriginDiagnostics.begin();
     }
 
     public static synchronized void captureContext(
             int sceneStateOrdinal,
             boolean centerKnown,
             boolean pendingEpisode,
-            boolean pendingProbeAvailable) {
+            boolean pendingProbeAvailable,
+            int lifecycleRelevantEventCount) {
         if (!armed) return;
         lastSceneStateOrdinal = sceneStateOrdinal;
         lastCenterKnown = centerKnown;
         lastPendingEpisode = pendingEpisode;
         lastContextCaptured = true;
         lastPendingProbeAvailable = pendingProbeAvailable;
+        lastLifecycleRelevantEventCount = Math.max(0, lifecycleRelevantEventCount);
+        PartialRemeshSectionDirtyOriginDiagnostics.captureLifecycleDrain(lastLifecycleRelevantEventCount);
     }
 
     public static synchronized void captureDrain(int count, int fallbackFlags, long reportedOverflowEvents) {
@@ -114,17 +122,23 @@ public final class PartialRemeshProvenanceDiagnostics {
             firstPendingEpisode = lastPendingEpisode;
             firstContextCaptured = lastContextCaptured;
             firstPendingProbeAvailable = lastPendingProbeAvailable;
+            firstLifecycleRelevantEventCount = lastLifecycleRelevantEventCount;
         }
+
+        PartialRemeshSectionDirtyOriginDiagnostics.observeProvenanceFallback(
+                lastDrainCount, lastFallbackFlags, lastSceneStateOrdinal,
+                lastCenterKnown, lastPendingEpisode);
     }
 
     public static synchronized void logFinal() {
         if (!armed) return;
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev19 P3.9 final provenance diagnostics: provenanceFallbacksObserved={0}, missingOrEmpty={1}, offRenderThread={2}, overflowFlag={3}, overflowEvents={4}, other={5}, subreasonCountersMayOverlap=true, highLevelFallbackAccountingChanged=false, firstRetained={6}, firstFallbackIndex={7}, firstDrainCount={8}, firstFallbackFlags={9}, firstOverflowEvents={10}, firstSceneStateOrdinal={11}, firstSceneStateName={12}, firstCenterKnown={13}, firstPendingEpisode={14}, firstContextCaptured={15}, firstPendingProbeAvailable={16}, selfTest={17}, boundedPrimitiveState=true, productionRendererChanged=false, admissionPolicyChanged=false, thresholdsChanged=false.",
+                "Phase 3 dev20 P3.9 final provenance diagnostics: provenanceFallbacksObserved={0}, missingOrEmpty={1}, offRenderThread={2}, overflowFlag={3}, overflowEvents={4}, other={5}, subreasonCountersMayOverlap=true, highLevelFallbackAccountingChanged=false, firstRetained={6}, firstFallbackIndex={7}, firstDrainCount={8}, firstFallbackFlags={9}, firstOverflowEvents={10}, firstSceneStateOrdinal={11}, firstSceneStateName={12}, firstCenterKnown={13}, firstPendingEpisode={14}, firstContextCaptured={15}, firstPendingProbeAvailable={16}, firstLifecycleRelevantEvents={17}, selfTest={18}, boundedPrimitiveState=true, productionRendererChanged=false, admissionPolicyChanged=false, thresholdsChanged=false.",
                 provenanceFallbacks, missingOrEmpty, offRenderThread, overflowFlag, overflowEvents, other,
                 firstRetained, firstFallbackIndex, firstDrainCount, firstFallbackFlags, firstOverflowEvents,
                 firstSceneStateOrdinal, stateName(firstSceneStateOrdinal), firstCenterKnown, firstPendingEpisode,
-                firstContextCaptured, firstPendingProbeAvailable, selfTest());
+                firstContextCaptured, firstPendingProbeAvailable, firstLifecycleRelevantEventCount, selfTest());
+        PartialRemeshSectionDirtyOriginDiagnostics.logFinal();
     }
 
     private static int classify(int count, int flags) {
@@ -164,7 +178,8 @@ public final class PartialRemeshProvenanceDiagnostics {
                 && classify(1, 0) == 0
                 && shouldRetainFirst(false)
                 && !shouldRetainFirst(true)
-                && highLevelIncrementForAnySubreasonMask(SUBREASON_OFF_RENDER_THREAD | SUBREASON_OVERFLOW) == 1;
+                && highLevelIncrementForAnySubreasonMask(SUBREASON_OFF_RENDER_THREAD | SUBREASON_OVERFLOW) == 1
+                && PartialRemeshSectionDirtyOriginDiagnostics.selfTest();
     }
 
     private static boolean shouldRetainFirst(boolean alreadyRetained) {
