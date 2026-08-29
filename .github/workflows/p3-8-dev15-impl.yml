@@ -1,0 +1,42 @@
+name: P3.8 Dev15 Implementation
+
+on:
+  push:
+    branches:
+      - phase3/meshing-benchmarks
+    paths:
+      - .github/workflows/p3-8-dev15-impl.yml
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout P3.8 branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase3/meshing-benchmarks
+          fetch-depth: 0
+
+      - name: Validate helper syntax
+        run: python -m py_compile tools/p3_8_dev15_runner.py tools/p3_8_dev15_impl.py
+
+      - name: Apply dev15 benchmark instrumentation
+        run: python tools/p3_8_dev15_runner.py
+
+      - name: Remove temporary helper files
+        run: rm -f tools/p3_8_dev15_impl.py tools/p3_8_dev15_runner.py .github/workflows/p3-8-dev15-impl.yml
+
+      - name: Commit implementation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No implementation changes produced'
+            exit 1
+          fi
+          git commit -m '[no-release] Implement P3.8 dev15 benchmark telemetry'
+          git push origin HEAD:phase3/meshing-benchmarks
