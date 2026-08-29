@@ -1,0 +1,51 @@
+name: P3.9 dev18 implementation helper
+
+on:
+  push:
+    branches: [phase3/partial-remeshing]
+    paths:
+      - '.github/workflows/p3-9-dev18-helper.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase3/partial-remeshing
+          fetch-depth: 0
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle 9.5.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+
+      - name: Apply frozen dev18 patch
+        run: python3 tools/p3_9_dev18_impl.py
+
+      - name: Build exact Minecraft 26.2 project
+        run: gradle build --stacktrace
+
+      - name: Remove temporary helper files
+        run: |
+          rm tools/p3_9_dev18_impl.py
+          rm .github/workflows/p3-9-dev18-helper.yml
+
+      - name: Commit clean implementation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m '[no-release] Implement P3.9 dev18 pending coalescing correction'
+          git push origin HEAD:phase3/partial-remeshing
