@@ -1,0 +1,59 @@
+name: P3.9 dev21 exact single-section callers
+
+on:
+  push:
+    branches: [phase3/partial-remeshing]
+    paths:
+      - '.github/workflows/p3-9-dev21-single-section-callers.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: phase3/partial-remeshing
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Set up Gradle 9.5.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+      - name: Resolve exact Minecraft 26.2 client and enumerate public single-section callers
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle compileClientJava --no-daemon
+          JAR="$HOME/.gradle/caches/fabric-loom/26.2/minecraft-client-only.jar"
+          test -f "$JAR"
+          echo "MINECRAFT_CLIENT_JAR=$JAR"
+          rm -rf /tmp/mcclient
+          mkdir -p /tmp/mcclient
+          unzip -q "$JAR" -d /tmp/mcclient
+          mapfile -t CANDIDATES < <(grep -a -l -r 'setSectionDirty' /tmp/mcclient/net/minecraft/client --include='*.class' | sort)
+          echo "CANDIDATE_CLASS_COUNT=${#CANDIDATES[@]}"
+          printf '%s\n' "${CANDIDATES[@]}"
+          found=0
+          for file in "${CANDIDATES[@]}"; do
+            rel="${file#/tmp/mcclient/}"
+            cls="${rel%.class}"
+            cls="${cls//\//.}"
+            out="/tmp/javap-${found}.txt"
+            javap -classpath "$JAR" -c -p "$cls" > "$out" || continue
+            if grep -q 'LevelExtractor.setSectionDirty:(III)V' "$out"; then
+              found=$((found + 1))
+              echo "=== CALLER_CLASS $cls ==="
+              grep -n -B 60 -A 35 'LevelExtractor.setSectionDirty:(III)V' "$out" || true
+            fi
+          done
+          echo "PUBLIC_SINGLE_SECTION_CALLER_CLASSES=$found"
+          echo '=== LEVEL_EXTRACTOR_PUBLIC_SINGLE_SECTION_BODY ==='
+          javap -classpath "$JAR" -c -p net.minecraft.client.renderer.extract.LevelExtractor | grep -n -B 25 -A 45 -E '^  public void setSectionDirty\(int, int, int\);|setSectionDirty:\(III\)V' || true
+          test "$found" -gt 0
