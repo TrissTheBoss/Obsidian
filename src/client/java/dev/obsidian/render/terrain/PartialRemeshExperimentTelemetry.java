@@ -4,7 +4,7 @@ import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.util.Arrays;
 
-/** Bounded render-thread collector for the frozen A-0159 matched shadow experiment; dev17 diagnostics. */
+/** Bounded render-thread collector for the frozen A-0159 matched shadow experiment; dev23 safety fallback. */
 public final class PartialRemeshExperimentTelemetry {
     public static final int CAPACITY = 512;
 
@@ -15,9 +15,10 @@ public final class PartialRemeshExperimentTelemetry {
     public static final int FALLBACK_ALL_SLICES = 1 << 4;
     public static final int FALLBACK_PENDING_EPISODE = 1 << 5;
     public static final int FALLBACK_NOT_LIVE = 1 << 6;
+    public static final int FALLBACK_UNSELECTED_TRUTH_CHANGED = 1 << 7;
     private static final int ALL_FALLBACK_REASONS = FALLBACK_GLOBAL_LIFECYCLE | FALLBACK_PROVENANCE
             | FALLBACK_MULTI_SECTION | FALLBACK_HALO_OR_BOUNDARY | FALLBACK_ALL_SLICES
-            | FALLBACK_PENDING_EPISODE | FALLBACK_NOT_LIVE;
+            | FALLBACK_PENDING_EPISODE | FALLBACK_NOT_LIVE | FALLBACK_UNSELECTED_TRUTH_CHANGED;
 
     public record Distribution(long p50, long p95, long p99, long max, long mean) { }
 
@@ -39,6 +40,7 @@ public final class PartialRemeshExperimentTelemetry {
             int fallbackReasonMask,
             long fallbackGlobalLifecycle, long fallbackProvenance, long fallbackMultiSection,
             long fallbackHaloOrBoundary, long fallbackAllSlices, long fallbackPendingEpisode, long fallbackNotLive,
+            long fallbackUnselectedTruthChanged,
             long firstFailureEpisodeId, int firstFailureSectionX, int firstFailureSectionY, int firstFailureSectionZ,
             int firstFailureSliceMask, int firstFailureEditCount, int firstFailureCode, int firstFailureIndex,
             boolean firstFailureDeterministic,
@@ -51,7 +53,8 @@ public final class PartialRemeshExperimentTelemetry {
 
         public boolean fallbackAccountingCoherent() {
             return fallbackEpisodes == fallbackGlobalLifecycle + fallbackProvenance + fallbackMultiSection
-                    + fallbackHaloOrBoundary + fallbackAllSlices + fallbackPendingEpisode + fallbackNotLive;
+                    + fallbackHaloOrBoundary + fallbackAllSlices + fallbackPendingEpisode + fallbackNotLive
+                    + fallbackUnselectedTruthChanged;
         }
 
         public String firstFailureName() { return PartialRemeshShadowResult.failureName(firstFailureCode); }
@@ -139,6 +142,7 @@ public final class PartialRemeshExperimentTelemetry {
     private long fallbackAllSlices;
     private long fallbackPendingEpisode;
     private long fallbackNotLive;
+    private long fallbackUnselectedTruthChanged;
     private long firstFailureEpisodeId;
     private int firstFailureSectionX;
     private int firstFailureSectionY;
@@ -166,6 +170,7 @@ public final class PartialRemeshExperimentTelemetry {
         fallbackReasonMask = 0;
         fallbackGlobalLifecycle = fallbackProvenance = fallbackMultiSection = 0L;
         fallbackHaloOrBoundary = fallbackAllSlices = fallbackPendingEpisode = fallbackNotLive = 0L;
+        fallbackUnselectedTruthChanged = 0L;
         firstFailureEpisodeId = 0L;
         firstFailureSectionX = firstFailureSectionY = firstFailureSectionZ = 0;
         firstFailureSliceMask = firstFailureEditCount = firstFailureCode = 0;
@@ -181,7 +186,7 @@ public final class PartialRemeshExperimentTelemetry {
     public void recordFallback(int reasonMask) {
         if (!armed) return;
         if (Integer.bitCount(reasonMask) != 1 || (reasonMask & ~ALL_FALLBACK_REASONS) != 0) {
-            throw new IllegalArgumentException("dev17 fallback reason must be exactly one known bit: " + reasonMask);
+            throw new IllegalArgumentException("dev23 fallback reason must be exactly one known bit: " + reasonMask);
         }
         fallbacks++;
         fallbackReasonMask |= reasonMask;
@@ -193,6 +198,7 @@ public final class PartialRemeshExperimentTelemetry {
             case FALLBACK_ALL_SLICES -> fallbackAllSlices++;
             case FALLBACK_PENDING_EPISODE -> fallbackPendingEpisode++;
             case FALLBACK_NOT_LIVE -> fallbackNotLive++;
+            case FALLBACK_UNSELECTED_TRUTH_CHANGED -> fallbackUnselectedTruthChanged++;
             default -> throw new IllegalStateException("unreachable fallback reason");
         }
     }
@@ -205,6 +211,10 @@ public final class PartialRemeshExperimentTelemetry {
             long controlUploadBytes,
             boolean deterministic) {
         if (!armed || request == null || result == null) return;
+        if (shouldFallbackUnselectedTruth(result.failureCode(), deterministic)) {
+            recordFallback(FALLBACK_UNSELECTED_TRUTH_CHANGED);
+            return;
+        }
         completed++;
         int slices = request.selectedSliceCount();
         if (slices == 1) oneSlice++; else if (slices == 2) twoSlice++; else if (slices == 3) threeSlice++;
@@ -278,6 +288,7 @@ public final class PartialRemeshExperimentTelemetry {
                 fallbackReasonMask,
                 fallbackGlobalLifecycle, fallbackProvenance, fallbackMultiSection,
                 fallbackHaloOrBoundary, fallbackAllSlices, fallbackPendingEpisode, fallbackNotLive,
+                fallbackUnselectedTruthChanged,
                 firstFailureEpisodeId, firstFailureSectionX, firstFailureSectionY, firstFailureSectionZ,
                 firstFailureSliceMask, firstFailureEditCount, firstFailureCode, firstFailureIndex,
                 firstFailureDeterministic,
@@ -317,17 +328,25 @@ public final class PartialRemeshExperimentTelemetry {
         return currentEpisodeId == 0L && (!completedExact || !deterministic);
     }
 
+    private static boolean shouldFallbackUnselectedTruth(int failureCode, boolean deterministic) {
+        return deterministic && failureCode == PartialRemeshShadowResult.FAILURE_UNSELECTED_CHANGED;
+    }
+
     private static boolean selfTest() {
         long[] fixture = { 5, 1, 4, 2, 3 };
         Distribution d = distribution(fixture, fixture.length);
         int allReasons = FALLBACK_GLOBAL_LIFECYCLE | FALLBACK_PROVENANCE | FALLBACK_MULTI_SECTION
-                | FALLBACK_HALO_OR_BOUNDARY | FALLBACK_ALL_SLICES | FALLBACK_PENDING_EPISODE | FALLBACK_NOT_LIVE;
+                | FALLBACK_HALO_OR_BOUNDARY | FALLBACK_ALL_SLICES | FALLBACK_PENDING_EPISODE | FALLBACK_NOT_LIVE
+                | FALLBACK_UNSELECTED_TRUTH_CHANGED;
         return d.p50 == 3L && d.p95 == 5L && d.p99 == 5L && d.max == 5L
-                && allReasons == ALL_FALLBACK_REASONS && Integer.bitCount(allReasons) == 7
+                && allReasons == ALL_FALLBACK_REASONS && Integer.bitCount(allReasons) == 8
                 && shouldRetainFirstFailure(0L, false, true)
                 && shouldRetainFirstFailure(0L, true, false)
                 && !shouldRetainFirstFailure(1L, false, true)
                 && !shouldRetainFirstFailure(0L, true, true)
+                && shouldFallbackUnselectedTruth(PartialRemeshShadowResult.FAILURE_UNSELECTED_CHANGED, true)
+                && !shouldFallbackUnselectedTruth(PartialRemeshShadowResult.FAILURE_UNSELECTED_CHANGED, false)
+                && !shouldFallbackUnselectedTruth(PartialRemeshShadowResult.FAILURE_REFERENCE_VISIBILITY, true)
                 && PartialRemeshSliceTruth.METADATA_BYTES_PER_SECTION <= 1024;
     }
 }
