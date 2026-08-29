@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./gradlew compileClientJava --no-daemon
+          gradle compileClientJava --no-daemon
           JAR="$(find "$HOME/.gradle/caches" -type f \( -name '*minecraft*26.2*client*.jar' -o -name '*minecraft-26.2-client*.jar' \) | head -n 1)"
           if [ -z "$JAR" ]; then
             JAR="$(find "$HOME/.gradle/caches" -type f -name '*.jar' | while read -r f; do if jar tf "$f" 2>/dev/null | grep -q '^net/minecraft/client/multiplayer/ClientLevel.class$'; then echo "$f"; break; fi; done)"
