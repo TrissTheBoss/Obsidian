@@ -62,13 +62,18 @@ final class RepeatAwareTransportEvidence {
         long cancelledPrefixMultiFace = repeatAwareUvMultiFace - sourceMultiFace;
         long cancelledPrefixRepresentable = repeatAwareUvRepresentable - sourceRepresentable;
         long cancelledPrefixSafe = repeatAwareUvFourVertexSafe - sourceFourVertexSafe;
+        boolean residualRequiresCancellation = cancelledPrefixBuilds > 0L
+                || (cancelledPrefixMultiFace == 0L
+                    && cancelledPrefixRepresentable == 0L
+                    && cancelledPrefixSafe == 0L);
         boolean cancellationAccountingExact = cancelledPrefixBuilds >= 0L
                 && cancelledPrefixBuilds <= workers.cancelledJobs()
                 && cancelledPrefixMultiFace >= 0L
                 && cancelledPrefixRepresentable >= 0L
                 && cancelledPrefixSafe >= 0L
                 && cancelledPrefixRepresentable <= cancelledPrefixMultiFace
-                && cancelledPrefixSafe <= cancelledPrefixRepresentable;
+                && cancelledPrefixSafe <= cancelledPrefixRepresentable
+                && residualRequiresCancellation;
 
         boolean ready = priorGateReady
                 && builds > 0L
