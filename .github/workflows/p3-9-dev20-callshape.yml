@@ -1,0 +1,45 @@
+name: P3.9 dev20 exact call-shape probe
+
+on:
+  push:
+    branches: [phase3/partial-remeshing]
+    paths:
+      - '.github/workflows/p3-9-dev20-callshape.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: phase3/partial-remeshing
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Set up Gradle 9.5.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+      - name: Resolve exact Minecraft 26.2 client and inspect dirty call shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew compileClientJava --no-daemon
+          JAR="$(find "$HOME/.gradle/caches" -type f \( -name '*minecraft*26.2*client*.jar' -o -name '*minecraft-26.2-client*.jar' \) | head -n 1)"
+          if [ -z "$JAR" ]; then
+            JAR="$(find "$HOME/.gradle/caches" -type f -name '*.jar' | while read -r f; do if jar tf "$f" 2>/dev/null | grep -q '^net/minecraft/client/multiplayer/ClientLevel.class$'; then echo "$f"; break; fi; done)"
+          fi
+          test -n "$JAR"
+          echo "MINECRAFT_CLIENT_JAR=$JAR"
+          echo '=== ClientLevel setBlocksDirty ==='
+          javap -classpath "$JAR" -c -p net.minecraft.client.multiplayer.ClientLevel | sed -n '/setBlocksDirty(/,/^  [a-zA-Z].*(/p'
+          echo '=== LevelExtractor setSectionDirty ==='
+          javap -classpath "$JAR" -c -p net.minecraft.client.renderer.extract.LevelExtractor | sed -n '/setSectionDirty(/,/^  [a-zA-Z].*(/p'
+          echo '=== ClientLevel references to setSectionDirty / levelRenderer / levelExtractor ==='
+          javap -classpath "$JAR" -c -p net.minecraft.client.multiplayer.ClientLevel | grep -n -C 8 -E 'setSectionDirty|LevelExtractor|levelRenderer' || true
