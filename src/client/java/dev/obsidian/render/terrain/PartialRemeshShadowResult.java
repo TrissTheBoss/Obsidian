@@ -1,5 +1,7 @@
 package dev.obsidian.render.terrain;
 
+import net.minecraft.core.Direction;
+
 import java.util.Arrays;
 
 /**
@@ -9,6 +11,7 @@ import java.util.Arrays;
  * never creates or mutates GPU state.
  */
 public final class PartialRemeshShadowResult {
+    private static final Direction[] DIRECTIONS = Direction.values();
     public static final int FAILURE_NONE = 0;
     public static final int FAILURE_UNSELECTED_CHANGED = 1;
     public static final int FAILURE_REFERENCE_VISIBILITY = 2;
@@ -116,7 +119,7 @@ public final class PartialRemeshShadowResult {
             if (request == null || currentTruth == null || baked == null || reference == null
                     || visibility == null || rectangles == null || renderKeys == null
                     || candidates == null || transport == null || production == null || scratch == null) {
-                throw new NullPointerException("dev16 shadow inputs");
+                throw new NullPointerException("dev17 shadow inputs");
             }
             scratch.begin(baked.quadCount());
             for (int slice = 0; slice < PartialRemeshDirtyProvenance.SLICE_COUNT; slice++) {
@@ -242,7 +245,7 @@ public final class PartialRemeshShadowResult {
                         if ((fy >>> 2) != slice) continue;
                         int source = renderKeys.sourceQuad(fx, fy, fz, direction);
                         if (source < 0 || sourceSlice(baked, source) != slice
-                                || baked.direction(source) != (byte) direction
+                                || binaryDirection(baked.direction(source)) != direction
                                 || !renderKeys.renderEquivalent(seedX, seedY, seedZ, fx, fy, fz, direction, baked)
                                 || baked.layer(source) != baked.layer(representative)) {
                             fail(FAILURE_MERGED_IDENTITY, candidate);
@@ -298,6 +301,18 @@ public final class PartialRemeshShadowResult {
 
     private static int sourceSlice(SectionBakedQuadSnapshot baked, int source) {
         return ((baked.sourceBlock(source) >>> 4) & 0xF) >>> 2;
+    }
+    private static int binaryDirection(byte directionOrdinal) {
+        int ordinal = Byte.toUnsignedInt(directionOrdinal);
+        if (ordinal >= DIRECTIONS.length) return -1;
+        return switch (DIRECTIONS[ordinal]) {
+            case WEST -> BinarySectionVisibility.WEST;
+            case EAST -> BinarySectionVisibility.EAST;
+            case DOWN -> BinarySectionVisibility.DOWN;
+            case UP -> BinarySectionVisibility.UP;
+            case NORTH -> BinarySectionVisibility.NORTH;
+            case SOUTH -> BinarySectionVisibility.SOUTH;
+        };
     }
     private static boolean selected(int mask, int slice) { return (mask & (1 << slice)) != 0; }
     private static int packFace(int x, int y, int z, int direction) {
@@ -391,6 +406,12 @@ public final class PartialRemeshShadowResult {
                 && permanentReferenceContractSatisfied(true, true, false)
                 && !permanentReferenceContractSatisfied(true, false, false)
                 && !permanentReferenceContractSatisfied(false, true, true)
+                && binaryDirection((byte) Direction.WEST.ordinal()) == BinarySectionVisibility.WEST
+                && binaryDirection((byte) Direction.EAST.ordinal()) == BinarySectionVisibility.EAST
+                && binaryDirection((byte) Direction.DOWN.ordinal()) == BinarySectionVisibility.DOWN
+                && binaryDirection((byte) Direction.UP.ordinal()) == BinarySectionVisibility.UP
+                && binaryDirection((byte) Direction.NORTH.ordinal()) == BinarySectionVisibility.NORTH
+                && binaryDirection((byte) Direction.SOUTH.ordinal()) == BinarySectionVisibility.SOUTH
                 && "optimized-without-reference".equals(failureName(FAILURE_OPTIMIZED_WITHOUT_REFERENCE));
     }
 
