@@ -320,3 +320,15 @@ Copy this section and replace placeholders. Do not edit previous entries.
 **Evidence:** `ai/attempts/A-0153-phase3-p3.7-dev14-runtime-promotion.md`; canonical dev14 SHA-256 `9d79b1de179768d5b872178564f708b42dab0d9cc8e99a0dd8f80bf10336bc39`.  
 **Next action:** Require exact synchronized evidence-head CI, merge P3.7 `[no-release]`, then activate/freeze P3.8 benchmarks before implementation.
 
+---
+
+## A-0154 - P3.8 dev15 meshing benchmark contract freeze
+
+**Date:** 2026-08-29  
+**Objective:** Freeze the first P3.8 representative full-section meshing benchmark slice before source changes.  
+**Action:** Inspected existing production worker timing/pressure/scratch telemetry and defined a bounded percentile/window contract for queue wait, full-ticket execution, workload identity, output bytes, scratch/GC/utilization evidence and representative lifecycle exercise.  
+**Result:** `SUCCESS` / `PLAN FROZEN`.  
+**Actual effect:** P3.8 dev15 is constrained to measurement-only instrumentation over the real production path; no numerical pass threshold is invented before baseline capture, all P3.7 correctness/lifetime gates remain mandatory, and P3.9 partial remeshing is explicitly excluded.  
+**Evidence:** `ai/attempts/A-0154-phase3-p3.8-meshing-benchmark-contract.md`.  
+**Next action:** Implement bounded dev15 telemetry, exact package CI, then run the representative benchmark contract.
+
