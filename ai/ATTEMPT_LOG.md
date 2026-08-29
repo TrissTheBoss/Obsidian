@@ -371,4 +371,36 @@ Copy this section and replace placeholders. Do not edit previous entries.
 **Result:** `SUCCESS` for implementation/package; reference runtime required.
 **Evidence:** `ai/attempts/A-0163-phase3-p3.9-dev17-diagnostic-correction-package.md`; exact validation head `bce641ff08353035d6012fb5c5f5d8c06918da41`, Build `33274284466`, artifact `9721025599`; canonical dev17 JAR 495,236 bytes, SHA-256 `4f8d58251f29742afbc67d95e33a884ea72849fe099a225b154af19616ef7904`.
 **Next action:** Run the exact dev17 JAR through the unchanged A-0159 workload; use the new diagnostics for any remaining correctness/admission failure rather than retuning thresholds.
+---
 
+## A-0164 - P3.9 dev17 reference runtime partial
+
+**Date:** 2026-08-29
+**Objective:** Evaluate the exact canonical dev17 diagnostic/correction package against unchanged A-0159.
+**Action:** Reference runtime exercised localized edits, F3+T, real recenter and normal shutdown.
+**Result:** `PARTIAL`.
+**Actual effect:** Dev17 closed correctness at 19/19 exact with zero correctness, unselected-change or determinism failures; all inherited and lifetime gates remained green. Evidence volume remained short at 19/32 localized, 14/16 one-slice, 5/8 two-slice and 0/1 coalesced. Fallback diagnostics showed provenance=0, multi-section=0, halo/boundary=7, pending=9 and not-LIVE=19. CPU thresholds passed; projected upload remained 1000/1000 permille but cannot formally reject the strategy before frozen evidence volume closes.
+**Evidence:** `ai/attempts/A-0164-phase3-p3.9-dev17-reference-runtime-partial.md`.
+**Lesson:** Do not rerun unchanged dev17; correct the shadow episode state machine so exact same-section edits can survive pending/non-LIVE rebuild intervals.
+
+---
+
+## A-0165 - P3.9 dev18 pending-coalescing contract freeze
+
+**Date:** 2026-08-29
+**Objective:** Freeze the smallest correction justified by A-0164 before source changes.
+**Action:** Allow only exact same-section localized dirty provenance to widen one pending immutable request across rebuild generations while preserving original pre-edit fingerprints; keep global/ambiguous/cross-section/halo/all-slice fallback behavior and every A-0159 threshold unchanged.
+**Result:** `SUCCESS` / `PLAN FROZEN`.
+**Evidence:** `ai/attempts/A-0165-phase3-p3.9-dev18-pending-coalescing-contract.md`.
+**Next action:** Implement exactly the frozen correction, package in hosted CI, then run the unchanged reference workload.
+
+---
+
+## A-0166 - P3.9 dev18 pending-coalescing implementation and package
+
+**Date:** 2026-08-29
+**Objective:** Produce the exact dev18 runtime package without changing production rendering or frozen A-0159 thresholds.
+**Action:** Added immutable pending request coalescing with original-fingerprint retention, exact mask/edit union, all-four/overflow rejection and final result id+mask matching; production paths and benefit accounting remain unchanged.
+**Result:** `SUCCESS` for implementation/package; reference runtime required.
+**Evidence:** `ai/attempts/A-0166-phase3-p3.9-dev18-pending-coalescing-package.md`; exact validation head `cfff336b1cb8ab18214d48af3521f65c4182acb3`, Build `33275004099`, artifact `9721228593`; canonical dev18 JAR 496,542 bytes, SHA-256 `cb3065a172489f197ee3f3b988fe3f202a8079ee6bafb87516f24d65d7fdf8a1`.
+**Next action:** Run the exact dev18 package through unchanged A-0159. If evidence volume closes and upload P50/P95 remains above 600/800 permille, reject/redesign the fixed four-slice strategy rather than retuning thresholds.
