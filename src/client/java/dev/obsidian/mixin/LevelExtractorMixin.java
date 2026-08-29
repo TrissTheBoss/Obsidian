@@ -1,5 +1,6 @@
 package dev.obsidian.mixin;
 
+import dev.obsidian.render.terrain.PartialRemeshLightUpdatePreservation;
 import dev.obsidian.render.terrain.PartialRemeshSectionDirtyOriginDiagnostics;
 import dev.obsidian.render.terrain.PartialRemeshSingleSectionCallerDiagnostics;
 import dev.obsidian.render.terrain.SectionLifecycleEvents;
@@ -100,6 +101,8 @@ public abstract class LevelExtractorMixin {
                     origin, sectionX, sectionY, sectionZ, dirtyFromPlayer);
             if (origin == PartialRemeshSectionDirtyOriginDiagnostics.ORIGIN_SINGLE_SECTION) {
                 PartialRemeshSingleSectionCallerDiagnostics.observeRelevantSingleSection(
+                        sectionX, sectionY, sectionZ);
+                PartialRemeshLightUpdatePreservation.observeRelevantSingleSection(
                         sectionX, sectionY, sectionZ);
             }
         }
