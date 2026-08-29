@@ -21,18 +21,14 @@ Last updated: 2026-08-29
 - Implementation/package checkpoint: A-0151.
 - First runtime: A-0152 PARTIAL only because required scene recenter was not exercised.
 - Successful reference-runtime closure: A-0153.
-- **Active milestone: P3.8 — Meshing benchmarks.**
-- Active branch: `phase3/meshing-benchmarks`.
-- Frozen first P3.8 slice: **A-0154 / planned `0.3.0-phase3-dev15`**.
-- Dev15 implementation: **IMPLEMENTED; exact hosted package CI GREEN.**
-- Dev15 implementation review checkpoint: **A-0155**.
-- Dev15 package/runtime handoff: **A-0156**.
-- First dev15 reference benchmark runtime: **A-0157 PARTIAL only because the measured window had `benchmarkResourceReloadDelta=0`; no source/package defect.**
-- Successful dev15 reference benchmark closure: **A-0158 SUCCESS / P3.8 PROMOTION-READY**; `meshingBenchmarkEvidenceReady=true` with measured resource reload, recenter, ordinary rebuild, concurrent worker pressure, coherent bounded percentiles and clean lifetime closure.
-- Exact package validation head: `e6f4b81903ddcdcb859d70a1a01c002a3f550e12`; Build workflow `33270995728` SUCCESS.
+- **P3.8 — Meshing benchmarks: COMPLETE through `0.3.0-phase3-dev15`.**
+- Frozen P3.8 contract: **A-0154**; implementation review A-0155; package/runtime handoff A-0156; first runtime A-0157 PARTIAL only for missing measured reload; successful reference baseline A-0158.
 - Canonical dev15 JAR: `Obsidian-0.3.0-phase3-dev15.jar`, 456,609 bytes, SHA-256 `eaad8132665e5f662ac30f5e71abbaff3d604f010e09ffd7aa82379c79a9ed65`.
-- Draft P3.8 PR: **#51**; runtime contract is closed by A-0158, exact synchronized promotion-head CI remains before merge.
-- P3.9 partial remeshing remains out of scope until P3.8 promotion merges and P3.9 is frozen in a new immutable attempt.
+- Exact package-validation head `e6f4b81903ddcdcb859d70a1a01c002a3f550e12` passed Build `33270995728`.
+- Exact synchronized P3.8 promotion head `144875e71069f7377a97c78947883592e5c88913` passed Build `33271895037`.
+- Draft PR #51 was closed only because the connected ready-for-review mutation failed on obsolete `Repository.fullDatabaseId`; non-draft same-head PR #52 merged `[no-release]` as `49385aedff74f2382fcd9a9bb44e59cf559e63c4`.
+- **Active milestone: P3.9 — Partial remeshing (EXPERIMENTAL).**
+- P3.9 source work remains blocked until a new immutable contract freeze is recorded from synchronized P3.8-complete `main`.
 - Public release intent: keep the existing public checkpoint; internal milestone merges use `[no-release]`.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
 
@@ -304,9 +300,9 @@ A-0153 contained actual merged candidates/covered faces and exercised initial RE
 
 Future differential regressions must not weaken the independent/captured oracle. Preserve the deterministic fixture, record a new immutable attempt, classify the exact disagreement and make only the narrow correction.
 
-P3.7 closure remains authoritative. P3.9 partial remeshing remains out of scope while P3.8 is active.
+P3.7 closure remains authoritative. P3.8 is now complete; P3.9 may activate only under a new immutable experimental contract freeze.
 
-## ACTIVE: P3.8 — Meshing benchmarks
+## P3.8 — Meshing benchmarks — COMPLETE
 
 A-0154 freezes the first P3.8 slice as a non-render-changing measurement baseline for the actual full-section production worker path. Planned version: `0.3.0-phase3-dev15`.
 
@@ -349,7 +345,7 @@ The exact same canonical dev15 JAR from A-0156 was rerun after A-0157. This time
 - inherited P3.7 differential proof `308/308` deterministic with real merged coverage and zero missing/duplicate/optimized-without-reference/real mismatches;
 - workers/staging/arena/resources clean; process exit code `0`.
 
-This is the first trustworthy P3.8 reference baseline. No numerical threshold is retrofitted after seeing it. P3.8 may merge once the synchronized promotion head passes hosted Java 25 / Gradle 9.5.1 Build.
+This is the first trustworthy P3.8 reference baseline. No numerical threshold is retrofitted after seeing it. Exact synchronized promotion head `144875e71069f7377a97c78947883592e5c88913` passed hosted Build `33271895037`; non-draft same-head PR #52 merged `[no-release]` as `49385aedff74f2382fcd9a9bb44e59cf559e63c4`. P3.8 is COMPLETE.
 
 ## Durable foundation that remains authoritative
 
@@ -366,7 +362,7 @@ This is the first trustworthy P3.8 reference baseline. No numerical threshold is
 
 ## Immediate next action
 
-A-0158 closes the frozen P3.8 runtime contract on the exact same canonical dev15 JAR. Require hosted Java 25 / Gradle 9.5.1 Build on the exact synchronized P3.8 promotion head, merge PR #51 `[no-release]` without source/runtime change, then synchronize `main` to P3.8 COMPLETE / P3.9 ACTIVE. After main synchronization, freeze P3.9 partial-remeshing in a new immutable attempt before any P3.9 source change.
+P3.8 is merged and COMPLETE. From the exact synchronized P3.8-complete `main`, create the P3.9 experimental branch and freeze partial-remeshing in a new immutable attempt before any source change. The experiment must prove benefit against the recorded A-0158 full-section baseline while preserving every inherited correctness/lifetime gate and explicitly accounting for metadata, GPU-allocation and fragmentation complexity.
 
 Do not implement P3.9 before its contract freeze.
 

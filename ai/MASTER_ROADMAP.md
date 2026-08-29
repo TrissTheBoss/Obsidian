@@ -326,13 +326,13 @@ Run reference and optimized meshers on representative snapshots; expand greedy r
 
 A-0153 closes the frozen A-0150 dev14 runtime contract on the reference RX 6800 XT Vulkan path. The permanent differential proof reconstructed `165,638` frozen source quads across `238` installed records with `238/238` deterministic audits, real merged coverage (`4,964` candidates / `11,332` expanded source faces), exact material/direction/geometry/UV/ARGB/light matches, zero missing/duplicate/optimized-without-reference/real-mismatch counts, `238/238` fixture self-tests, five scene recenters with READY afterward, clean bounded lifetime and exit code 0. No renderer-semantic change or new visual verdict was required. Exact evidence head `a63dce386cbee215007f127e7ba801dc3218eb91` passed hosted Build workflow `33265069030`; promotion PR #50 merged `[no-release]` as `e1e0c583160bd2a36a2fd42a969bf35e5697591b`. P3.7 is complete.
 
-#### P3.8 — Meshing benchmarks — ACTIVE
+#### P3.8 — Meshing benchmarks — COMPLETE
 
-Track snapshot-to-job latency, P50/P95/P99/max mesh CPU time, input cells, exposed reference faces, greedy rectangles/quads, reduction ratio, vertex/index bytes, scratch high-water, allocations/GC, cancellations/stale jobs and worker utilization.
+A-0158 closes the frozen A-0154 full-section production-mesher baseline on `0.3.0-phase3-dev15`: 305 coherent measured samples with zero collector overflow, queue P50/P95/P99/max `25.7 / 50.5 / 80.0 / 3,683.9 us`, full-ticket execution P50/P95/P99/max `1.001 / 2.664 / 4.432 / 14.408 ms`, real merged workload, measured reload/recenter/rebuild/worker pressure, portable GC/scratch evidence, every inherited P3.7 gate green and clean lifetime. No numerical threshold was retrofitted after measurement. Exact promotion head `144875e71069f7377a97c78947883592e5c88913` passed Build `33271895037`; PR #52 merged `[no-release]` as `49385aedff74f2382fcd9a9bb44e59cf559e63c4`.
 
-#### P3.9 — Partial remeshing — EXPERIMENTAL
+#### P3.9 — Partial remeshing — ACTIVE / EXPERIMENTAL
 
-Only after full-section greedy meshing is stable and measured. Partial slice/subregion rebuilds must prove enough benefit to justify metadata/fragmentation complexity.
+Only after full-section greedy meshing is stable and measured. Partial slice/subregion rebuilds must prove enough benefit against the recorded A-0158 full-section baseline to justify metadata, scheduling, GPU-allocation and fragmentation complexity. A new immutable contract freeze is mandatory before source changes; fallback to the proven full-section path remains authoritative until the experiment closes.
 
 Phase 3 exits only when the greedy mesher is default for supported terrain, permanent differential correctness passes, the worker system remains bounded/cancellation-safe, hot paths avoid routine allocation and throughput supports large-scale scene testing.
 
@@ -497,6 +497,15 @@ Newer durable decisions override stale roadmap text until synchronized. Always p
 ---
 
 ## 16. Roadmap revision log
+
+### 2026-08-29 — P3.8 completion and P3.9 activation
+
+- A-0158 closed the frozen A-0154 dev15 benchmark contract on the exact same canonical package after A-0157 was partial only for missing measured F3+T;
+- recorded the first trustworthy full-section baseline with 305/305 retained samples, zero overflow, measured queue/execution distributions, real merged workload, reload/recenter/rebuild pressure, GC/scratch evidence, inherited P3.7 exactness and clean lifetime;
+- exact synchronized P3.8 promotion head `144875e71069f7377a97c78947883592e5c88913` passed hosted Build `33271895037`;
+- draft PR #51 was superseded only because the ready-for-review connector mutation still references invalid `Repository.fullDatabaseId`; non-draft same-head PR #52 merged `[no-release]` as `49385aedff74f2382fcd9a9bb44e59cf559e63c4`;
+- marked P3.8 COMPLETE and activated P3.9 as an EXPERIMENTAL partial-remeshing milestone;
+- require a new immutable P3.9 contract freeze before source changes and retain the full-section path as the fallback/control.
 
 ### 2026-08-29 — P3.5 completion and P3.6 activation
 
