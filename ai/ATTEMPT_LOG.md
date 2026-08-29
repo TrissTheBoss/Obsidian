@@ -463,3 +463,60 @@ Copy this section and replace placeholders. Do not edit previous entries.
 **Result:** `SUCCESS` for implementation/package; short reference runtime required.
 **Evidence:** `ai/attempts/A-0175-phase3-p3.9-dev20-origin-tracer-package.md`; exact implementation `ffbe60535607a242ef6b2c03c8c44066e69a63ac`, tree `9131bd8d1edf5440ae8a52817b820b17866fa2e4`, Build `33277303655` SUCCESS, artifact `9721898429`; canonical JAR 511,074 bytes, SHA-256 `690b24cd6bb34e47b3b85159eda365da3e1f76f95d41b51f0b1298fc093ed2f3`.
 **Next action:** Short dev20 runtime: ~6 ordinary safe-interior edits, ~3 Y-boundary edits, one same-section burst, F3+T, one recenter, normal exit; inspect the three final dev20 origin/correlation lines.
+
+---
+
+## A-0176 - dev20 section-dirty origin runtime
+
+**Date:** 2026-08-30
+**Objective:** Identify the exact outer section-dirty origin paired with dev19 missing/empty provenance fallbacks.
+**Action:** Ran canonical dev20 caller-origin diagnostic on the reference Windows 11 / RX 6800 XT Vulkan system.
+**Result:** `SUCCESS` for diagnostic objective; P3.9 remains experimental.
+**Evidence:** `ai/attempts/A-0176-phase3-p3.9-dev20-origin-runtime.md`; provenance fallbacks `21/21` missing/empty and all `21/21` outer `SINGLE_SECTION` only; exact/range/neighbor/mixed/unclassified involvement zero; first event `(58,4,-4)`, dirtyFromPlayer false, SCANNING, center known, pending exact episode present. Inherited P3.5-P3.8/lifetime gates green; P3.7 `194/194`, zero real mismatches, exit `0`.
+**Lesson:** Do not preserve generic SINGLE_SECTION yet; caller semantics must be inspected first.
+**Next action:** Inspect exact Minecraft 26.2 callers of public `LevelExtractor.setSectionDirty(III)`.
+
+---
+
+## A-0177 - dev21 public single-section caller contract
+
+**Date:** 2026-08-30
+**Objective:** Freeze fail-closed exact caller inspection before any P3.9 admission correction.
+**Action:** Froze hosted exact-bytecode Stage 1 and prohibited generic SINGLE_SECTION preservation.
+**Result:** `SUCCESS` / `PLAN FROZEN`.
+**Evidence:** `ai/attempts/A-0177-phase3-p3.9-dev21-single-section-caller-contract.md`.
+**Next action:** Enumerate exact MC26.2 public single-section callers and their semantics.
+
+---
+
+## A-0178 - dev21 exact public single-section caller result
+
+**Date:** 2026-08-30
+**Objective:** Determine whether dev20 SINGLE_SECTION fallbacks can be safely treated as derivatives of exact edits.
+**Action:** Inspected exact Minecraft 26.2 client bytecode on hosted Java 25 / Gradle 9.5.1.
+**Result:** `SUCCESS` for Stage 1; behavior correction not yet authorized.
+**Evidence:** `ai/attempts/A-0178-phase3-p3.9-dev21-single-section-caller-result.md`; runs `33277863920` and `33277944526` SUCCESS. External callers are `ClientChunkCache.onLightUpdate`, one supplied section, and `ClientPacketListener.handleChunksBiomes`, a broad 3x3 chunk-neighborhood across full section-Y.
+**Lesson:** Generic SINGLE_SECTION preservation is unsafe because biome invalidation shares the sink.
+**Next action:** Distinguish LIGHT_UPDATE versus BIOME_PACKET at runtime on the actual provenance fallback drains.
+
+---
+
+## A-0179 - dev21 caller-specific tracer contract
+
+**Date:** 2026-08-30
+**Objective:** Freeze bounded caller-specific correlation without changing the existing fallback decision.
+**Action:** Froze `LIGHT_UPDATE`, `BIOME_PACKET`, and `OTHER_SINGLE_SECTION` caller scopes plus per-drain/fallback correlation.
+**Result:** `SUCCESS` / `PLAN FROZEN`.
+**Evidence:** `ai/attempts/A-0179-phase3-p3.9-dev21-caller-specific-tracer-contract.md`.
+**Next action:** Package dev21 and run one short diagnostic workload.
+
+---
+
+## A-0180 - dev21 caller-specific tracer implementation/package
+
+**Date:** 2026-08-30
+**Objective:** Produce the exact dev21 caller-specific diagnostic while preserving all A-0159 behavior and thresholds.
+**Action:** Added bounded caller scopes/correlation, wired only after accepted lifecycle relevance and outer SINGLE_SECTION classification, and built on hosted Java 25 / Gradle 9.5.1.
+**Result:** `SUCCESS` for implementation/package; short reference runtime required.
+**Evidence:** `ai/attempts/A-0180-phase3-p3.9-dev21-caller-specific-tracer-package.md`; exact implementation `28d14510991eddd05fb68eed2cb806b63a4ff0eb`, tree `31ba14ce0256090a0055236126afe649e5f3bd84`, Build `33278257773` SUCCESS, artifact `9722180208`; canonical JAR 518,959 bytes, SHA-256 `9b0e103de085c3f35fac3a3c245f8577c362df1e7c2925bb21c96c107fd7621a`.
+**Next action:** Short dev21 runtime. If all provenance fallbacks are still outer SINGLE_SECTION and caller correlation is LIGHT_UPDATE only, freeze a separate exact-section light-update preservation correction; otherwise redesign/capture the independent cause.
