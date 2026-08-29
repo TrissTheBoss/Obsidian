@@ -6,6 +6,9 @@ import dev.obsidian.render.terrain.CanonicalFaceRenderKeys;
 import dev.obsidian.render.terrain.DifferentialCorrectnessProof;
 import dev.obsidian.render.terrain.GreedySectionRectangles;
 import dev.obsidian.render.terrain.OrdinaryQuadEmissionSafety;
+import dev.obsidian.render.terrain.PartialRemeshShadowRequest;
+import dev.obsidian.render.terrain.PartialRemeshShadowResult;
+import dev.obsidian.render.terrain.PartialRemeshSliceTruth;
 import dev.obsidian.render.terrain.ReferenceFaceMesh;
 import dev.obsidian.render.terrain.RenderMergeCandidates;
 import dev.obsidian.render.terrain.RepeatAwareGreedyMesh;
@@ -61,6 +64,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private final SectionSnapshot snapshot;
         private final ReferenceFaceMesh referenceMesh;
         private final SectionBakedQuadSnapshot bakedSnapshot;
+        private final PartialRemeshShadowRequest partialRemeshRequest;
         private final long enqueueNs;
 
         private volatile TicketState state = TicketState.QUEUED;
@@ -75,6 +79,10 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private volatile TJunctionTopologyProof tJunctionTopologyProof;
         private volatile DifferentialCorrectnessProof differentialCorrectnessProof;
         private volatile BakedSectionMesh mesh;
+        private volatile PartialRemeshSliceTruth partialRemeshSliceTruth;
+        private volatile PartialRemeshShadowResult partialRemeshShadowResult;
+        private volatile boolean partialRemeshShadowDeterministic = true;
+        private volatile long productionExecutionNs;
         private volatile Throwable failure;
         private volatile long startNs;
         private volatile long endNs;
@@ -87,7 +95,8 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 int priority,
                 SectionSnapshot snapshot,
                 ReferenceFaceMesh referenceMesh,
-                SectionBakedQuadSnapshot bakedSnapshot) {
+                SectionBakedQuadSnapshot bakedSnapshot,
+                PartialRemeshShadowRequest partialRemeshRequest) {
             this.id = id;
             this.generation = generation;
             this.eventSequence = eventSequence;
@@ -95,6 +104,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
             this.snapshot = snapshot;
             this.referenceMesh = referenceMesh;
             this.bakedSnapshot = bakedSnapshot;
+            this.partialRemeshRequest = partialRemeshRequest;
             this.enqueueNs = System.nanoTime();
         }
 
@@ -120,6 +130,10 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         public TJunctionTopologyProof tJunctionTopologyProof() { return tJunctionTopologyProof; }
         public DifferentialCorrectnessProof differentialCorrectnessProof() { return differentialCorrectnessProof; }
         public BakedSectionMesh mesh() { return mesh; }
+        public PartialRemeshSliceTruth partialRemeshSliceTruth() { return partialRemeshSliceTruth; }
+        public PartialRemeshShadowResult partialRemeshShadowResult() { return partialRemeshShadowResult; }
+        public boolean partialRemeshShadowDeterministic() { return partialRemeshShadowDeterministic; }
+        public long productionExecutionNs() { return productionExecutionNs; }
         public Throwable failure() { return failure; }
         public long queueWaitNs() { return startNs == 0L ? 0L : Math.max(0L, startNs - enqueueNs); }
         public long executionNs() { return endNs == 0L || startNs == 0L ? 0L : Math.max(0L, endNs - startNs); }
@@ -193,6 +207,10 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private final TJunctionTopologyProof.BuildScratch tJunctionTopologyScratch = new TJunctionTopologyProof.BuildScratch();
         private final DifferentialCorrectnessProof.BuildScratch differentialCorrectnessScratch =
                 new DifferentialCorrectnessProof.BuildScratch();
+        private final PartialRemeshSliceTruth.BuildScratch partialSliceTruthScratch =
+                new PartialRemeshSliceTruth.BuildScratch();
+        private final PartialRemeshShadowResult.BuildScratch partialShadowScratch =
+                new PartialRemeshShadowResult.BuildScratch();
         private long completedLocalBuilds;
         private long lastFingerprint;
 
@@ -499,6 +517,30 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     return;
                 }
 
+                // Freeze the matched full-production control before any dev16 shadow work.
+                ticket.productionExecutionNs = Math.max(0L, System.nanoTime() - ticket.startNs);
+                PartialRemeshSliceTruth firstSliceTruth = PartialRemeshSliceTruth.build(
+                        ticket.bakedSnapshot, ticket.referenceMesh, partialSliceTruthScratch);
+                PartialRemeshSliceTruth secondSliceTruth = PartialRemeshSliceTruth.build(
+                        ticket.bakedSnapshot, ticket.referenceMesh, partialSliceTruthScratch);
+                if (!firstSliceTruth.contentEquals(secondSliceTruth)) {
+                    throw new IllegalStateException("P3.9 dev16 per-slice truth was nondeterministic");
+                }
+                PartialRemeshShadowResult firstShadow = null;
+                boolean shadowDeterministic = true;
+                if (ticket.partialRemeshRequest != null) {
+                    firstShadow = PartialRemeshShadowResult.build(
+                            ticket.partialRemeshRequest, firstSliceTruth, ticket.bakedSnapshot, ticket.referenceMesh,
+                            firstVisibility, firstRectangles, firstRenderKeys, firstMergeCandidates,
+                            firstRepeatAwareTransport, firstGreedy, partialShadowScratch);
+                    PartialRemeshShadowResult secondShadow = PartialRemeshShadowResult.build(
+                            ticket.partialRemeshRequest, secondSliceTruth, ticket.bakedSnapshot, ticket.referenceMesh,
+                            firstVisibility, firstRectangles, firstRenderKeys, firstMergeCandidates,
+                            firstRepeatAwareTransport, firstGreedy, partialShadowScratch);
+                    shadowDeterministic = firstShadow.contentEquals(secondShadow);
+                    if (!shadowDeterministic) firstShadow = firstShadow.withDeterministic(false);
+                }
+
                 boolean audit = completedLocalBuilds == 0L
                         || (completedLocalBuilds % DETERMINISM_AUDIT_INTERVAL) == 0L;
                 if (audit) {
@@ -603,6 +645,9 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 ticket.tJunctionTopologyProof = firstTJunctionTopology;
                 ticket.differentialCorrectnessProof = firstDifferential;
                 ticket.mesh = first;
+                ticket.partialRemeshSliceTruth = firstSliceTruth;
+                ticket.partialRemeshShadowResult = firstShadow;
+                ticket.partialRemeshShadowDeterministic = shadowDeterministic;
                 ticket.endNs = System.nanoTime();
                 ticket.state = TicketState.COMPLETED;
                 completedLocalBuilds++;
@@ -887,6 +932,27 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         return enqueue(chosen, generation, eventSequence, priority, snapshot, referenceMesh, bakedSnapshot);
     }
 
+    public Ticket submit(
+            long generation,
+            long eventSequence,
+            int priority,
+            SectionSnapshot snapshot,
+            ReferenceFaceMesh referenceMesh,
+            SectionBakedQuadSnapshot bakedSnapshot,
+            PartialRemeshShadowRequest partialRemeshRequest) {
+        if (closed) throw new IllegalStateException("Section mesh worker pool is closed");
+        validateJob(priority, snapshot, referenceMesh, bakedSnapshot);
+        int start = Math.floorMod(submitCursor.getAndIncrement(), workers.length);
+        int chosen = -1;
+        int chosenDepth = Integer.MAX_VALUE;
+        for (int i = 0; i < workers.length; i++) {
+            int index = (start + i) % workers.length;
+            int depth = workers[index].queue.size();
+            if (depth < chosenDepth) { chosen = index; chosenDepth = depth; }
+        }
+        return enqueue(chosen, generation, eventSequence, priority, snapshot, referenceMesh, bakedSnapshot, partialRemeshRequest);
+    }
+
     Ticket submitPinnedForValidation(
             int workerIndex,
             long generation,
@@ -930,9 +996,21 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
             SectionSnapshot snapshot,
             ReferenceFaceMesh referenceMesh,
             SectionBakedQuadSnapshot bakedSnapshot) {
+        return enqueue(workerIndex, generation, eventSequence, priority, snapshot, referenceMesh, bakedSnapshot, null);
+    }
+
+    private Ticket enqueue(
+            int workerIndex,
+            long generation,
+            long eventSequence,
+            int priority,
+            SectionSnapshot snapshot,
+            ReferenceFaceMesh referenceMesh,
+            SectionBakedQuadSnapshot bakedSnapshot,
+            PartialRemeshShadowRequest partialRemeshRequest) {
         Ticket ticket = new Ticket(
                 nextTicketId.getAndIncrement(), generation, eventSequence, priority,
-                snapshot, referenceMesh, bakedSnapshot);
+                snapshot, referenceMesh, bakedSnapshot, partialRemeshRequest);
         if (!workers[workerIndex].queue.offer(ticket)) {
             queueFullRejections.incrementAndGet();
             queueFullByPriority.incrementAndGet(priority);

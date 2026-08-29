@@ -124,6 +124,8 @@ public final class SectionLifecycleEvents {
                 fixedAnchorChunkZ = sectionZ;
             }
         }
+        PartialRemeshDirtyProvenance.bindTrackedScene(
+                rendererTargetKnown, sectionX, sectionY, sectionZ);
     }
 
     /** Called from the exact vanilla LevelExtractor dirty sink. */
@@ -167,6 +169,7 @@ public final class SectionLifecycleEvents {
         worldChangeEvents++;
         targetKnown = false;
         fixedAnchorKnown = false;
+        PartialRemeshDirtyProvenance.bindTrackedScene(false, 0, 0, 0);
     }
 
     public static synchronized void resourceReloaded() {

@@ -80,6 +80,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     private final int requestedSectionX;
     private final int requestedSectionY;
     private final int requestedSectionZ;
+    private final PartialRemeshShadowRequest partialRemeshRequest;
 
     private RenderPipeline passthroughSolidPipeline;
     private RenderPipeline passthroughCutoutPipeline;
@@ -97,6 +98,11 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     private RepeatAwareGreedyMesh drawableMesh;
     private TJunctionTopologyProof tJunctionTopologyProof;
     private DifferentialCorrectnessProof differentialCorrectnessProof;
+    private PartialRemeshSliceTruth partialRemeshSliceTruth;
+    private PartialRemeshShadowResult partialRemeshShadowResult;
+    private boolean partialRemeshShadowDeterministic = true;
+    private long partialRemeshControlExecutionNs;
+    private long partialRemeshControlUploadBytes;
 
     private long passthroughVertexHandle = DeviceGeometryArena.INVALID_HANDLE;
     private long mergedVertexHandle = DeviceGeometryArena.INVALID_HANDLE;
@@ -154,7 +160,8 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
             long buildEventSequence,
             int sectionX,
             int sectionY,
-            int sectionZ) {
+            int sectionZ,
+            PartialRemeshShadowRequest partialRemeshRequest) {
         RenderSystem.assertOnRenderThread();
         if (workers == null) throw new NullPointerException("workers");
         if (workerPriority < SectionMeshWorkerPool.PRIORITY_HIGH
@@ -172,6 +179,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         this.requestedSectionX = sectionX;
         this.requestedSectionY = sectionY;
         this.requestedSectionZ = sectionZ;
+        this.partialRemeshRequest = partialRemeshRequest;
         if (!device.getDeviceInfo().features().drawIndirect()) {
             throw new IllegalStateException("Phase 3 dev11 requires indexed indirect drawing");
         }
@@ -257,7 +265,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         }
 
         SectionMeshWorkerPool.Ticket ticket = workers.submit(
-                generation, buildEventSequence, workerPriority, captured, firstReference, firstBaked);
+                generation, buildEventSequence, workerPriority, captured, firstReference, firstBaked, partialRemeshRequest);
         if (ticket == null) {
             workerQueueRejections++;
             nextCaptureAttemptNs = nowNs + RETRY_DELAY_NS;
@@ -311,6 +319,10 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
             throw new IllegalStateException("Phase 3 dev13 T-junction proof lost exact emitted-candidate identity");
         }
         RepeatAwareGreedyMesh hybrid = transport.greedyMesh();
+        PartialRemeshSliceTruth sliceTruth = ticket.partialRemeshSliceTruth();
+        if (sliceTruth == null) {
+            throw new IllegalStateException("Completed Phase 3 dev16 worker ticket lost per-slice truth");
+        }
         if (!differentialProof.exact()
                 || differentialProof.sourceSnapshotFingerprint() != snapshot.fingerprint()
                 || differentialProof.sourceReferenceFingerprint() != referenceMesh.fingerprint()
@@ -360,6 +372,11 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         drawableMesh = hybrid;
         tJunctionTopologyProof = tJunctionProof;
         differentialCorrectnessProof = differentialProof;
+        partialRemeshSliceTruth = sliceTruth;
+        partialRemeshShadowResult = ticket.partialRemeshShadowResult();
+        partialRemeshShadowDeterministic = ticket.partialRemeshShadowDeterministic();
+        partialRemeshControlExecutionNs = ticket.productionExecutionNs();
+        partialRemeshControlUploadBytes = hybrid.totalUploadBytes();
         workerTicket = null;
         state = State.READY_TO_INSTALL;
     }
@@ -902,6 +919,11 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     public int sectionX() { return requestedSectionX; }
     public int sectionY() { return requestedSectionY; }
     public int sectionZ() { return requestedSectionZ; }
+    public PartialRemeshSliceTruth partialRemeshSliceTruth() { return partialRemeshSliceTruth; }
+    public PartialRemeshShadowResult partialRemeshShadowResult() { return partialRemeshShadowResult; }
+    public boolean partialRemeshShadowDeterministic() { return partialRemeshShadowDeterministic; }
+    public long partialRemeshControlExecutionNs() { return partialRemeshControlExecutionNs; }
+    public long partialRemeshControlUploadBytes() { return partialRemeshControlUploadBytes; }
     public long vertexBytes() {
         return drawableMesh == null ? 0L : (long) drawableMesh.passthroughVertexBytes() + drawableMesh.mergedVertexBytes();
     }

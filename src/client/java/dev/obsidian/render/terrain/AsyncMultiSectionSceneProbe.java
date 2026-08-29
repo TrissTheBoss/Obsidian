@@ -33,6 +33,14 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     public enum State { WAITING_WORLD, SCANNING, BUILDING, LIVE, RETIRING, FAILED, CLOSED }
     private enum Eligibility { PENDING, ELIGIBLE, SKIPPED }
 
+    private static final class PendingPartialEpisode {
+        final int sectionX, sectionY, sectionZ;
+        final PartialRemeshShadowRequest request;
+        PendingPartialEpisode(int sectionX, int sectionY, int sectionZ, PartialRemeshShadowRequest request) {
+            this.sectionX = sectionX; this.sectionY = sectionY; this.sectionZ = sectionZ; this.request = request;
+        }
+    }
+
     private static final class SceneRecord {
         int sectionX;
         int sectionY;
@@ -62,6 +70,11 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     private final SceneRecord[] records = new SceneRecord[RECORD_CAPACITY];
     private final BorderHaloCorrectnessProof.BuildScratch borderProofScratch =
             new BorderHaloCorrectnessProof.BuildScratch();
+    private final PartialRemeshExperimentTelemetry partialRemeshTelemetry = new PartialRemeshExperimentTelemetry();
+    private final PartialRemeshDirtyProvenance.Drain partialDirtyDrain = new PartialRemeshDirtyProvenance.Drain();
+    private boolean partialRemeshWindowArmed;
+    private long nextPartialEpisodeId = 1L;
+    private PendingPartialEpisode pendingPartialEpisode;
 
     private State state = State.WAITING_WORLD;
     private boolean hardFailure;
@@ -202,6 +215,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         if (reasons == 0) return;
 
         observedReasonMask |= reasons;
+        preparePartialRemeshEpisode(reasons);
         int relevantEvents = lifecycleCursor.lastRelevantEventCount();
         if (relevantEvents > 1) coalescedEvents += relevantEvents - 1L;
         invalidationBatches++;
@@ -319,6 +333,10 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         centerSectionY = newCenter.sectionY();
         centerSectionZ = newCenter.sectionZ();
         cameraRecenterEvents++;
+        if (partialRemeshWindowArmed) {
+            partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_GLOBAL_LIFECYCLE);
+            pendingPartialEpisode = null;
+        }
         SectionLifecycleEvents.bindTrackedScene(true, centerSectionX, centerSectionY, centerSectionZ);
         invalidateScene(SectionLifecycleEvents.REASON_SCENE_RECENTER, frameSerial, true);
         return true;
@@ -449,7 +467,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
             record.probe = new WorkerBackedSectionLifecycleProbe(
                     device, staging, arena, deferredReleases, workers, priority,
                     sceneGeneration, buildEventSequence,
-                    record.sectionX, record.sectionY, record.sectionZ);
+                    record.sectionX, record.sectionY, record.sectionZ, partialRequestFor(record));
             record.probe.afterWorldRender(renderer, frameSerial);
             observeRecordState(record, frameSerial);
             admissions++;
@@ -615,6 +633,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 return;
             }
 
+            observePartialRemeshResult(record, probe);
             record.installObserved = true;
             recordInstallCount++;
             LOG.log(System.Logger.Level.INFO,
@@ -781,6 +800,92 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 || a.classification(ax, ay, az) != b.classification(bx, by, bz)) {
             throw new IllegalStateException("P3.5 independently captured shared-border cells disagree");
         }
+    }
+
+    private void preparePartialRemeshEpisode(int reasons) {
+        if (!partialRemeshWindowArmed) return;
+        PartialRemeshDirtyProvenance.drainInto(partialDirtyDrain);
+        if (pendingPartialEpisode != null) {
+            partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_PENDING_EPISODE);
+            pendingPartialEpisode = null;
+        }
+        if (reasons != SectionLifecycleEvents.REASON_SECTION_DIRTY) {
+            partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_GLOBAL_LIFECYCLE);
+            return;
+        }
+        if (state != State.LIVE) {
+            partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_NOT_LIVE);
+            return;
+        }
+        if (partialDirtyDrain.fallbackFlags() != 0 || partialDirtyDrain.count() == 0) {
+            partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_PROVENANCE);
+            return;
+        }
+        if (partialDirtyDrain.count() != 1) {
+            partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_MULTI_SECTION);
+            return;
+        }
+        int sx = partialDirtyDrain.sectionX(0), sy = partialDirtyDrain.sectionY(0), sz = partialDirtyDrain.sectionZ(0);
+        if (sy != centerSectionY || Math.abs(sx - centerSectionX) > 1 || Math.abs(sz - centerSectionZ) > 1
+                || (partialDirtyDrain.flags(0) & PartialRemeshDirtyProvenance.FLAG_XZ_BOUNDARY) != 0) {
+            partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_HALO_OR_BOUNDARY);
+            return;
+        }
+        int mask = partialDirtyDrain.sliceMask(0);
+        if (mask == 0 || mask == PartialRemeshDirtyProvenance.ALL_SLICES_MASK) {
+            partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_ALL_SLICES);
+            return;
+        }
+        SceneRecord record = findRecord(sx, sy, sz);
+        PartialRemeshSliceTruth previous = record == null || record.probe == null ? null : record.probe.partialRemeshSliceTruth();
+        if (record == null || !record.installObserved || record.probe.state() != WorkerBackedSectionLifecycleProbe.State.LIVE
+                || previous == null) {
+            partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_NOT_LIVE);
+            return;
+        }
+        PartialRemeshShadowRequest request = new PartialRemeshShadowRequest(
+                nextPartialEpisodeId++, mask, partialDirtyDrain.editCount(0), previous);
+        pendingPartialEpisode = new PendingPartialEpisode(sx, sy, sz, request);
+        partialRemeshTelemetry.recordAdmission();
+    }
+
+    private SceneRecord findRecord(int sx, int sy, int sz) {
+        for (SceneRecord record : records) {
+            if (record.sectionX == sx && record.sectionY == sy && record.sectionZ == sz) return record;
+        }
+        return null;
+    }
+
+    private PartialRemeshShadowRequest partialRequestFor(SceneRecord record) {
+        PendingPartialEpisode pending = pendingPartialEpisode;
+        return pending != null && pending.sectionX == record.sectionX && pending.sectionY == record.sectionY
+                && pending.sectionZ == record.sectionZ ? pending.request : null;
+    }
+
+    private void observePartialRemeshResult(SceneRecord record, WorkerBackedSectionLifecycleProbe probe) {
+        PendingPartialEpisode pending = pendingPartialEpisode;
+        if (!partialRemeshWindowArmed || pending == null
+                || pending.sectionX != record.sectionX || pending.sectionY != record.sectionY || pending.sectionZ != record.sectionZ) return;
+        PartialRemeshShadowResult result = probe.partialRemeshShadowResult();
+        if (result == null || result.episodeId() != pending.request.episodeId()) {
+            partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_PENDING_EPISODE);
+        } else {
+            partialRemeshTelemetry.recordCompleted(pending.request, result, probe.partialRemeshControlExecutionNs(),
+                    probe.partialRemeshControlUploadBytes(), probe.partialRemeshShadowDeterministic());
+        }
+        pendingPartialEpisode = null;
+    }
+
+    public void beginPartialRemeshExperimentWindow() {
+        RenderSystem.assertOnRenderThread();
+        partialRemeshTelemetry.begin();
+        partialRemeshWindowArmed = true;
+        pendingPartialEpisode = null;
+        PartialRemeshDirtyProvenance.drainInto(partialDirtyDrain);
+    }
+
+    public PartialRemeshExperimentTelemetry.Snapshot partialRemeshExperimentSnapshot() {
+        return partialRemeshTelemetry.snapshot();
     }
 
     private void invalidateScene(int reasons, long frameSerial, boolean recenter) {
