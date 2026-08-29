@@ -27,6 +27,7 @@ Last updated: 2026-08-29
 - Dev15 implementation: **IMPLEMENTED; exact hosted package CI GREEN.**
 - Dev15 implementation review checkpoint: **A-0155**.
 - Dev15 package/runtime handoff: **A-0156**.
+- First dev15 reference benchmark runtime: **A-0157 PARTIAL only because the measured window had `benchmarkResourceReloadDelta=0`; no source/package defect.**
 - Exact package validation head: `e6f4b81903ddcdcb859d70a1a01c002a3f550e12`; Build workflow `33270995728` SUCCESS.
 - Canonical dev15 JAR: `Obsidian-0.3.0-phase3-dev15.jar`, 456,609 bytes, SHA-256 `eaad8132665e5f662ac30f5e71abbaff3d604f010e09ffd7aa82379c79a9ed65`.
 - Draft P3.8 PR: **#51**; reference benchmark runtime still required before promotion.
@@ -344,7 +345,7 @@ A valid but slower-than-desired baseline is still valid P3.8 evidence; future op
 
 ## Immediate next action
 
-A-0156 records exact hosted dev15 package authority. Run the canonical direct dev15 JAR through the frozen representative benchmark exercise: wait for settled measured-window arm, perform multiple ordinary rebuilds with READY recovery, F3+T with READY recovery, actual scene recenter with READY recovery, create bounded concurrent worker pressure, wait for the benchmark gate when possible, exit normally, and return the complete log. Do not promote P3.8 from package CI alone.
+A-0157 records the first dev15 runtime as PARTIAL with coherent benchmark/correctness/lifetime evidence and exactly one missing frozen exercise: `benchmarkResourceReloadDelta=0`. Rerun the exact same canonical dev15 JAR; after the measured-window arm line, perform F3+T and wait for READY, then also include a small ordinary rebuild, at least one real scene recenter, bounded worker pressure, and normal exit. Require `meshingBenchmarkEvidenceReady=true`; do not change code or waive A-0154.
 
 Do not implement P3.9 during P3.8.
 
