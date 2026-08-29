@@ -320,3 +320,18 @@ Copy this section and replace placeholders. Do not edit previous entries.
 **Evidence:** `ai/attempts/A-0153-phase3-p3.7-dev14-runtime-promotion.md`; canonical dev14 SHA-256 `9d79b1de179768d5b872178564f708b42dab0d9cc8e99a0dd8f80bf10336bc39`.  
 **Next action:** Require exact synchronized evidence-head CI, merge P3.7 `[no-release]`, then activate/freeze P3.8 benchmarks before implementation.
 
+---
+
+## A-0154 - P3.8 dev15 meshing benchmark contract freeze
+
+**Date:** 2026-08-29  
+**Objective:** Freeze the first P3.8 representative full-section meshing benchmark slice before source changes.  
+**Action:** Inspected existing production worker timing/pressure/scratch telemetry and defined a bounded percentile/window contract for queue wait, full-ticket execution, workload identity, output bytes, scratch/GC/utilization evidence and representative lifecycle exercise.  
+**Result:** `SUCCESS` / `PLAN FROZEN`.  
+**Actual effect:** P3.8 dev15 is constrained to measurement-only instrumentation over the real production path; no numerical pass threshold is invented before baseline capture, all P3.7 correctness/lifetime gates remain mandatory, and P3.9 partial remeshing is explicitly excluded.  
+**Evidence:** `ai/attempts/A-0154-phase3-p3.8-meshing-benchmark-contract.md`.  
+**Next action:** Implement bounded dev15 telemetry, exact package CI, then run the representative benchmark contract.
+- **A-0155** — P3.8 dev15 benchmark implementation review: measurement-only full-section worker instrumentation implemented under frozen A-0154; fixed primitive percentile window, workload/output identity, GC/scratch/pressure evidence and layered runtime gate added; hosted package CI and reference runtime remain pending. See `ai/attempts/A-0155-phase3-p3.8-dev15-implementation-review.md`.
+- **A-0156** — P3.8 dev15 package/runtime handoff: exact validation head `e6f4b81903ddcdcb859d70a1a01c002a3f550e12` passed hosted Build `33270995728`; canonical direct dev15 JAR is 456,609 bytes, SHA-256 `eaad8132665e5f662ac30f5e71abbaff3d604f010e09ffd7aa82379c79a9ed65`; reference benchmark runtime remains required and PR #51 stays draft. See `ai/attempts/A-0156-phase3-p3.8-dev15-package-runtime-handoff.md`.
+- **A-0157** — P3.8 dev15 first reference benchmark runtime PARTIAL: bounded collector/accounting, percentiles, real merged workload, ordinary rebuilds, seven recenters, concurrent pressure, inherited P3.7 correctness and clean lifetime all passed, but `benchmarkResourceReloadDelta=0`, so `meshingBenchmarkEvidenceReady=false` correctly blocked promotion. No source/package defect; rerun the exact same dev15 JAR with F3+T after the measured-window arm and READY recovery. See `ai/attempts/A-0157-phase3-p3.8-dev15-runtime-partial-resource-reload.md`.
+- **A-0158** — P3.8 dev15 reference benchmark runtime promotion: exact same canonical dev15 JAR closes frozen A-0154 with `meshingBenchmarkEvidenceReady=true`; 305/305 retained samples with zero overflow, measured F3+T reload delta 1, recenter delta 2, real merged workload, queue/execution percentiles, worker pressure/GC evidence, inherited P3.7 exactness, clean lifetime and exit 0. P3.8 is promotion-ready; exact synchronized-head CI and merge remain. See `ai/attempts/A-0158-phase3-p3.8-dev15-runtime-promotion.md`.

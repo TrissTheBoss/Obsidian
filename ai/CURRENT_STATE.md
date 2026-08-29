@@ -22,7 +22,17 @@ Last updated: 2026-08-29
 - First runtime: A-0152 PARTIAL only because required scene recenter was not exercised.
 - Successful reference-runtime closure: A-0153.
 - **Active milestone: P3.8 — Meshing benchmarks.**
-- P3.9 partial remeshing remains out of scope until P3.8 is measured and closed.
+- Active branch: `phase3/meshing-benchmarks`.
+- Frozen first P3.8 slice: **A-0154 / planned `0.3.0-phase3-dev15`**.
+- Dev15 implementation: **IMPLEMENTED; exact hosted package CI GREEN.**
+- Dev15 implementation review checkpoint: **A-0155**.
+- Dev15 package/runtime handoff: **A-0156**.
+- First dev15 reference benchmark runtime: **A-0157 PARTIAL only because the measured window had `benchmarkResourceReloadDelta=0`; no source/package defect.**
+- Successful dev15 reference benchmark closure: **A-0158 SUCCESS / P3.8 PROMOTION-READY**; `meshingBenchmarkEvidenceReady=true` with measured resource reload, recenter, ordinary rebuild, concurrent worker pressure, coherent bounded percentiles and clean lifetime closure.
+- Exact package validation head: `e6f4b81903ddcdcb859d70a1a01c002a3f550e12`; Build workflow `33270995728` SUCCESS.
+- Canonical dev15 JAR: `Obsidian-0.3.0-phase3-dev15.jar`, 456,609 bytes, SHA-256 `eaad8132665e5f662ac30f5e71abbaff3d604f010e09ffd7aa82379c79a9ed65`.
+- Draft P3.8 PR: **#51**; runtime contract is closed by A-0158, exact synchronized promotion-head CI remains before merge.
+- P3.9 partial remeshing remains out of scope until P3.8 promotion merges and P3.9 is frozen in a new immutable attempt.
 - Public release intent: keep the existing public checkpoint; internal milestone merges use `[no-release]`.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
 
@@ -294,7 +304,52 @@ A-0153 contained actual merged candidates/covered faces and exercised initial RE
 
 Future differential regressions must not weaken the independent/captured oracle. Preserve the deterministic fixture, record a new immutable attempt, classify the exact disagreement and make only the narrow correction.
 
-P3.8 meshing benchmarks and P3.9 partial remeshing remain out of scope.
+P3.7 closure remains authoritative. P3.9 partial remeshing remains out of scope while P3.8 is active.
+
+## ACTIVE: P3.8 — Meshing benchmarks
+
+A-0154 freezes the first P3.8 slice as a non-render-changing measurement baseline for the actual full-section production worker path. Planned version: `0.3.0-phase3-dev15`.
+
+Source truth before implementation:
+
+- `SectionMeshWorkerPool.Ticket` already records enqueue/start/end timestamps and exposes queue wait plus full execution time;
+- the pool already retains totals/maxima for queue wait/execution, per-stage build time, output bytes, queue pressure, priority, steals/cancellations and reusable scratch high-water;
+- the missing baseline capability is bounded distribution/percentile evidence plus explicit workload/window identity, not a second benchmark-only mesher;
+- P3.7 differential correctness remains part of the measured production cost and must stay green during benchmarking.
+
+Frozen dev15 requirements:
+
+- bounded primitive P50/P95/P99/max queue-wait and full-ticket execution telemetry;
+- labeled warm-up versus measured benchmark windows armed only after settled READY;
+- representative ordinary rebuild, resource reload and real scene-recenter/traversal activity;
+- workload identity including source quads/reference faces/rectangles/merge candidates/passthrough+merged identities/faces saved/output vertex+index bytes;
+- scratch high-water, GC deltas where portable, worker utilization/queue pressure and exact retained/overflow sample accounting;
+- deterministic synthetic collector self-test without injecting fake runtime evidence;
+- every inherited gate through P3.7 remains mandatory;
+- no performance pass/fail threshold is invented before the first trustworthy baseline exists;
+- no P3.9 partial remeshing, merge-policy tuning, worker-count tuning, graphics change or benchmark-only simplification.
+
+A valid but slower-than-desired baseline is still valid P3.8 evidence; future optimization targets must be derived from recorded measurements rather than changing the workload after seeing results.
+
+### A-0158 reference benchmark closure — SUCCESS / PROMOTION-READY
+
+The exact same canonical dev15 JAR from A-0156 was rerun after A-0157. This time the measured window included the missing F3+T/resource-reload exercise and the complete frozen A-0154 runtime contract closed:
+
+- `meshingBenchmarkEvidenceReady=true`;
+- benchmark duration about `47.121 s`;
+- completed / retained / overflow samples `305 / 305 / 0`;
+- queue wait P50/P95/P99/max `25.7 / 50.5 / 80.0 / 3,683.9 us`;
+- full production-ticket execution mean/P50/P95/P99/max `1.313 / 1.001 / 2.664 / 4.432 / 14.408 ms`;
+- measured workload source quads/reference faces `178,238 / 71,606`;
+- merge candidates `43,239`, merged identities `3,305`, merged covered source faces `7,310`, faces saved `4,005`;
+- output quads `174,233`, vertex/index bytes `19,937,136 / 4,181,592`;
+- max queued/running jobs `1 / 2`, measured worker queue rejections `0`;
+- measured READY/core-dirty/resource-reload/recenter deltas `32 / 1,929 / 1 / 2`;
+- JVM GC count/time deltas `24 / 278 ms`; exact allocation bytes remain intentionally `not-portably-measured`;
+- inherited P3.7 differential proof `308/308` deterministic with real merged coverage and zero missing/duplicate/optimized-without-reference/real mismatches;
+- workers/staging/arena/resources clean; process exit code `0`.
+
+This is the first trustworthy P3.8 reference baseline. No numerical threshold is retrofitted after seeing it. P3.8 may merge once the synchronized promotion head passes hosted Java 25 / Gradle 9.5.1 Build.
 
 ## Durable foundation that remains authoritative
 
@@ -311,9 +366,9 @@ P3.8 meshing benchmarks and P3.9 partial remeshing remain out of scope.
 
 ## Immediate next action
 
-Create the P3.8 feature branch from this synchronized `main`, then freeze the meshing-benchmark/representative-workload contract in a new immutable attempt before any implementation change. The benchmark slice must measure real worker meshing cost and tail percentiles under representative immutable snapshots/workload churn without consuming P3.9 partial-remeshing scope.
+A-0158 closes the frozen P3.8 runtime contract on the exact same canonical dev15 JAR. Require hosted Java 25 / Gradle 9.5.1 Build on the exact synchronized P3.8 promotion head, merge PR #51 `[no-release]` without source/runtime change, then synchronize `main` to P3.8 COMPLETE / P3.9 ACTIVE. After main synchronization, freeze P3.9 partial-remeshing in a new immutable attempt before any P3.9 source change.
 
-Do not implement P3.9 during P3.8.
+Do not implement P3.9 before its contract freeze.
 
 ## Continuity order
 
