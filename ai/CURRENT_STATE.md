@@ -15,12 +15,14 @@ Last updated: 2026-08-29
 - P3.6 contract: A-0147.
 - P3.6 package checkpoint: A-0148.
 - P3.6 reference runtime + targeted visual PASS: A-0149.
-- **Active milestone: P3.7 — Differential correctness framework.**
-- Active branch: `phase3/differential-correctness`.
-- Active draft PR: **#49**.
-- Frozen first P3.7 slice: A-0150.
-- Current implementation/package checkpoint: **A-0151 / `0.3.0-phase3-dev14`**.
-- Reference runtime differential gate: **REQUIRED before promotion**.
+- **P3.7 — Differential correctness framework: PROMOTION-READY through `0.3.0-phase3-dev14`.**
+- Promotion branch: `phase3/differential-correctness`.
+- Promotion PR: **#49** (keep draft only until exact synchronized evidence-head CI passes).
+- Frozen P3.7 contract: A-0150.
+- Implementation/package checkpoint: A-0151.
+- First runtime: A-0152 PARTIAL only because required scene recenter was not exercised.
+- Successful reference-runtime closure: **A-0153**.
+- **Next milestone after merge: P3.8 — Meshing benchmarks.**
 - Public release intent: keep the existing public checkpoint; internal milestone merges use `[no-release]`.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
 
@@ -176,7 +178,7 @@ Do not add global edge splitting or otherwise weaken greedy meshing based only o
 
 Class-A roadmap synchronization commit `4bff1cb4c1b1a31b2bae5c70a1a79e440cb91609` recorded P3.6 COMPLETE / P3.7 ACTIVE. Final fully synchronized promotion head `3e2a6c751ad0a77a87f2e60e4de9b80757dc75fc` passed hosted Build workflow `33263393349`: Java 25 / Gradle 9.5.1 build SUCCESS, artifact upload SUCCESS, release SKIPPED. Draft PR #47 was closed as superseded only because the connected ready-for-review mutation is known broken; non-draft PR #48 promoted the exact same validated head and merged `[no-release]` as `602c53abb76dff0e27cf314abc308ff5b7ac0cae`.
 
-## ACTIVE: P3.7 — Differential correctness framework
+## P3.7 — Differential correctness framework — PROMOTION-READY
 
 A-0150 freezes `0.3.0-phase3-dev14` as the first bounded differential-correctness slice. The optimized output is the system under test; it never becomes its own oracle.
 
@@ -230,9 +232,39 @@ Implemented proof contract:
 
 Dev14 remains explicitly non-render-changing: no greedy eligibility, suppression/replacement policy, emitted positions, vertex/index formats, shaders, pipelines, atlas/lightmap behavior, draw classes, native graphics scope or resource-lifetime semantics changed. No new human visual verdict is required unless runtime discovers an accidental renderer-semantic change.
 
-### Required dev14 reference runtime gate
+### A-0152 first reference runtime — PARTIAL, no code defect
 
-P3.7 is **not promotion-ready** until the reference run closes the frozen A-0150 contract.
+The first dev14 reference run passed the complete automated differential/lifetime gate but correctly remained PARTIAL because `cameraRecenterEvents=0` and `scene-recenter` was absent. A-0150 required actual section-boundary/recenter movement followed by READY, so no waiver was taken and no source/package change was made.
+
+### A-0153 reference runtime closure — SUCCESS
+
+The exact same canonical dev14 JAR was rerun and closes the complete frozen contract:
+
+- all inherited gates through P3.6 plus `differentialCorrectnessEvidenceReady=true`;
+- proof records/determinism `238 / 238`;
+- reference faces `79,754`, mapped/unmapped/ambiguous `59,933 / 0 / 19,821`;
+- source baked quads `165,638`;
+- passthrough identities `154,306`;
+- real merged candidates / expanded merged source faces `4,964 / 11,332`;
+- material/direction/canonical-geometry checks exact `11,332 / 11,332` each;
+- UV/ARGB/light checks exact `45,328 / 45,328` each;
+- missing/duplicate/optimized-without-reference/real-mismatch all `0`;
+- fixture self-tests `238 / 238`;
+- `cameraRecenterEvents=5` and `scene-recenter` observed, with READY after recenter activity;
+- resource reload events `2` and ordinary dirty/rebuild activity present;
+- scene workers `244 / 244`, no cancellation/failure/rejection/join failure;
+- unsafe stale installs and dropped lifecycle evidence `0`;
+- staging `22,315,152 / 22,315,152` bytes reclaimed;
+- arena allocations/retired/reclaimed `714 / 714 / 714`, used bytes `0`;
+- resources retired/released `238 / 238`, pending `0`;
+- process exit code `0`;
+- differential geometry/shader/pipeline change flags remain `false`.
+
+No new visual verdict was required because dev14 changes no renderer semantics. A-0153 authorizes P3.7 promotion; exact synchronized evidence-head CI and merge remain administrative gates before `COMPLETE` is recorded on `main`.
+
+### Required dev14 reference runtime gate — CLOSED by A-0153
+
+A-0153 satisfies the frozen A-0150 contract. The required final evidence included:
 
 Required final evidence includes every prior P3.6 gate plus:
 
@@ -258,9 +290,9 @@ Required final evidence includes every prior P3.6 gate plus:
 - clean worker/staging/arena/resources;
 - normal process exit code `0`.
 
-The run must contain actual merged candidates/covered faces. Exercise initial READY, an ordinary block break/place rebuild and READY, F3+T/resource reload and READY, section-boundary movement/recenter and READY, then exit normally.
+A-0153 contained actual merged candidates/covered faces and exercised initial READY, ordinary block rebuild/READY, F3+T/resource reload/READY, section-boundary scene recenter/READY, then normal exit.
 
-If a real mismatch appears, do not weaken the independent/captured oracle or reinterpret the promotion gate. Preserve the deterministic fixture, record a new immutable attempt, classify the exact disagreement and make only the narrow correction.
+Future differential regressions must not weaken the independent/captured oracle. Preserve the deterministic fixture, record a new immutable attempt, classify the exact disagreement and make only the narrow correction.
 
 P3.8 meshing benchmarks and P3.9 partial remeshing remain out of scope.
 
@@ -279,9 +311,9 @@ P3.8 meshing benchmarks and P3.9 partial remeshing remain out of scope.
 
 ## Immediate next action
 
-Run the canonical `Obsidian-0.3.0-phase3-dev14.jar` on the reference Windows 11 / RX 6800 XT Vulkan system and complete the frozen A-0150 runtime exercise. Return the complete log. No new visual verdict is required unless an unexpected visual/rendering change is observed.
+Require hosted Java 25 / Gradle 9.5.1 Build success on the exact synchronized P3.7 evidence head, then promote and merge PR #49 `[no-release]` without source/evidence drift. After merge, synchronize `main` to P3.7 COMPLETE / P3.8 ACTIVE, create the P3.8 feature branch from that synchronized `main`, and freeze the meshing-benchmark/representative-workload contract in a new immutable attempt before implementation.
 
-Keep PR #49 draft and P3.7 active until the automated reference-runtime evidence closes. Do not start P3.8 or P3.9.
+Do not consume P3.9 partial-remeshing scope during P3.8.
 
 ## Continuity order
 

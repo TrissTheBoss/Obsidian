@@ -294,3 +294,29 @@ Copy this section and replace placeholders. Do not edit previous entries.
 **Why:** The design uses exact 26.2 public completion/resource APIs and keeps the normal frame path nonblocking. It deliberately treats frame serials as bookkeeping only.  
 **Side effects / lessons:** The validation probe still adds one extra submission total, only to prove lifetime semantics. `DeferredReleaseQueue` currently assumes one ordered submission domain; if Obsidian later owns multiple Vulkan queues, use separate completion domains or a generalized retirement model.  
 **Next action:** User should test `0.1.0-phase1-dev2` on the reference Vulkan machine. Do not merge PR #4 until the log proves one retirement is released after fence completion, a world can be entered, and normal shutdown reports zero pending retirements.
+
+---
+
+## A-0152 - P3.7 dev14 reference runtime PARTIAL: recenter exercise missing
+
+**Date:** 2026-08-29  
+**Objective:** Evaluate the first dev14 reference runtime against the complete A-0150 contract.  
+**Action:** Ran the canonical dev14 package through the differential/lifetime gate and requested lifecycle exercise.  
+**Result:** `PARTIAL`.  
+**Actual effect:** Automated differential/lifetime evidence passed exactly, but `cameraRecenterEvents=0` and `scene-recenter` was absent, so the frozen boundary/recenter exercise was not closed.  
+**Evidence:** `ai/attempts/A-0152-phase3-p3.7-dev14-runtime-partial-recenter.md`.  
+**Next action:** Rerun the exact same package with real scene recenter and READY afterward; do not change code or waive the contract.
+
+
+---
+
+## A-0153 - P3.7 dev14 reference runtime promotion
+
+**Date:** 2026-08-29  
+**Objective:** Close the remaining P3.7 runtime obligation with the exact same dev14 package.  
+**Action:** Re-ran dev14 through ordinary rebuild, resource reload and real async scene recenter activity, then exited normally.  
+**Result:** `SUCCESS`.  
+**Actual effect:** `differentialCorrectnessEvidenceReady=true`; `238/238` deterministic installed proofs; real merged coverage; exact material/direction/geometry/UV/ARGB/light comparisons; zero coverage/reference/mismatch defects; five scene recenters with READY afterward; clean worker/staging/arena/resource lifetime; exit code 0.  
+**Evidence:** `ai/attempts/A-0153-phase3-p3.7-dev14-runtime-promotion.md`; canonical dev14 SHA-256 `9d79b1de179768d5b872178564f708b42dab0d9cc8e99a0dd8f80bf10336bc39`.  
+**Next action:** Require exact synchronized evidence-head CI, merge P3.7 `[no-release]`, then activate/freeze P3.8 benchmarks before implementation.
+

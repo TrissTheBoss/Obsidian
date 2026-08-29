@@ -320,11 +320,13 @@ Validated as `0.3.0-phase3-dev13`; A-0149 closes the frozen A-0147 contract on t
 
 The targeted visual gate armed only after proven strict junctions existed in drawn LIVE sections. The explicit human verdict was PASS: visually everything looked fine, with no reported cracks, pinholes, flickering seams, double/z-fighting edges or camera-motion-dependent gaps. Therefore no baseline T-junction mitigation is required on the proven reference path. D-0024 remains authoritative: retain the cross-vendor/larger-scale revisit hook and prefer targeted mitigation/selective splitting only if future evidence demonstrates an artifact; do not globally weaken greedy meshing based on theoretical risk alone.
 
-#### P3.7 — Differential correctness framework — ACTIVE
+#### P3.7 — Differential correctness framework — PROMOTION-READY
 
 Run reference and optimized meshers on representative snapshots; expand greedy rectangles conceptually to covered faces; compare coverage/material/light/AO truth; preserve failing fixtures. Optimized output never becomes its own oracle.
 
-#### P3.8 — Meshing benchmarks — PLANNED
+A-0153 closes the frozen A-0150 dev14 runtime contract on the reference RX 6800 XT Vulkan path. The permanent differential proof reconstructed `165,638` frozen source quads across `238` installed records with `238/238` deterministic audits, real merged coverage (`4,964` candidates / `11,332` expanded source faces), exact material/direction/geometry/UV/ARGB/light matches, zero missing/duplicate/optimized-without-reference/real-mismatch counts, `238/238` fixture self-tests, five scene recenters with READY afterward, clean bounded lifetime and exit code 0. No renderer-semantic change or new visual verdict was required. Exact evidence-head CI and merge are the remaining administrative promotion steps.
+
+#### P3.8 — Meshing benchmarks — NEXT
 
 Track snapshot-to-job latency, P50/P95/P99/max mesh CPU time, input cells, exposed reference faces, greedy rectangles/quads, reduction ratio, vertex/index bytes, scratch high-water, allocations/GC, cancellations/stale jobs and worker utilization.
 
@@ -388,7 +390,7 @@ Configuration/UI polish, presets/migration, crash diagnostics, benchmark export,
 - [COMPLETE canary] Repeat-aware render-correct greedy GPU emission.
 - [COMPLETE] Border/halo visibility, light/AO and rebuild-invalidation correctness.
 - [COMPLETE] Evidence-driven T-junction topology/raster policy.
-- [ACTIVE] Differential correctness framework against the permanent independent reference oracle.
+- [PROMOTION-READY] Differential correctness framework against the permanent independent reference oracle.
 - [PLANNED] Full production opaque/cutout terrain replacement.
 - [COMPLETE foundation] Supported lighting/AO/tint/material/UV capture truth.
 - [PLANNED] Fluids/translucent terrain.
