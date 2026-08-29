@@ -37,9 +37,15 @@ jobs:
           fi
           test -n "$JAR"
           echo "MINECRAFT_CLIENT_JAR=$JAR"
-          echo '=== ClientLevel setBlocksDirty ==='
-          javap -classpath "$JAR" -c -p net.minecraft.client.multiplayer.ClientLevel | sed -n '/setBlocksDirty(/,/^  [a-zA-Z].*(/p'
-          echo '=== LevelExtractor setSectionDirty ==='
-          javap -classpath "$JAR" -c -p net.minecraft.client.renderer.extract.LevelExtractor | sed -n '/setSectionDirty(/,/^  [a-zA-Z].*(/p'
-          echo '=== ClientLevel references to setSectionDirty / levelRenderer / levelExtractor ==='
-          javap -classpath "$JAR" -c -p net.minecraft.client.multiplayer.ClientLevel | grep -n -C 8 -E 'setSectionDirty|LevelExtractor|levelRenderer' || true
+          javap -classpath "$JAR" -c -p net.minecraft.client.multiplayer.ClientLevel > /tmp/clientlevel.txt
+          javap -classpath "$JAR" -c -p net.minecraft.client.renderer.extract.LevelExtractor > /tmp/levelextractor.txt
+          echo '=== ClientLevel setBlocksDirty and section dirty delegates ==='
+          grep -n -A 80 -E '^  public void setBlocksDirty|^  public void setSectionDirtyWithNeighbors|^  public void setSectionRangeDirty' /tmp/clientlevel.txt || true
+          echo '=== LevelExtractor setBlockDirty ==='
+          grep -n -A 180 -E '^  public void setBlockDirty|^  private void setBlockDirty' /tmp/levelextractor.txt || true
+          echo '=== LevelExtractor setSectionDirty methods ==='
+          grep -n -A 140 -E '^  public void setSectionDirty|^  private void setSectionDirty' /tmp/levelextractor.txt || true
+          echo '=== LevelExtractor section range / neighbor dirty ==='
+          grep -n -A 160 -E '^  public void setSectionDirtyWithNeighbors|^  public void setSectionRangeDirty|^  private void setSectionRangeDirty' /tmp/levelextractor.txt || true
+          echo '=== Calls into setSectionDirty from LevelExtractor ==='
+          grep -n -C 12 -E 'Method setSectionDirty:|Method setSectionDirtyWithNeighbors:' /tmp/levelextractor.txt || true
