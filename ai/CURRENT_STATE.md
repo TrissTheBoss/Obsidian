@@ -12,7 +12,9 @@ Last updated: 2026-08-29
 - P3.5 promotion merge: PR #46, `[no-release]` commit `1f34b3e4819b4eaa3a8fa474b09570a2e049b15a`.
 - **Active milestone: P3.6 — T-junction policy.**
 - Active branch: `phase3/t-junction-policy`.
-- Frozen first P3.6 slice: A-0147, planned version `0.3.0-phase3-dev13`.
+- Active draft PR: **#47**.
+- Frozen P3.6 contract: A-0147.
+- Current implementation/package checkpoint: **A-0148 / `0.3.0-phase3-dev13`**.
 - Public release intent: keep the existing public checkpoint; internal milestone merges use `[no-release]`.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
 
@@ -28,7 +30,7 @@ Canonical corrected dev12.1 package:
 - SHA-256 `2a11b6aff62f671e53b48b37db73f38c6e8ba2749294e2fa946267aec533a13b`
 - workflow `33261260933`: Java 25 / Gradle 9.5.1 build SUCCESS, artifact upload SUCCESS, release SKIPPED
 
-A-0146 records corrected reference runtime SUCCESS on Windows 11 / RX 6800 XT / Vulkan / Java 25.0.1 / Minecraft 26.2:
+A-0146 corrected reference runtime SUCCESS on Windows 11 / RX 6800 XT / Vulkan / Java 25.0.1 / Minecraft 26.2:
 
 - every inherited gate through `repeatAwareGreedyEmissionEvidenceReady=true` true;
 - `borderHaloCorrectnessEvidenceReady=true`;
@@ -43,13 +45,9 @@ A-0146 records corrected reference runtime SUCCESS on Windows 11 / RX 6800 XT / 
 - border generalized baked quads `46,913`, exact frozen light/color samples `187,652`;
 - rendered-core / halo-only / horizontal-halo / vertical-halo dirty events `963 / 588 / 578 / 334`;
 - resource reloads `2`, recenters `2`, READY transitions `28`, rebuilds `27`, dropped lifecycle events `0`;
-- workers submitted/started/completed/cancelled `248/248/248/0`, queue-full/failure/join failure `0/0/0`;
+- workers submitted/started/completed/cancelled `248/248/248/0`;
 - unchanged dev11 greedy installed records `248`, draws `43,083`, indirect calls `172,332 / 172,332`;
-- workers/staging/arena/resources clean;
-- staging submitted/reclaimed `24,900,504 / 24,900,504`;
-- arena allocations/retired/reclaimed `744/744/744`, used bytes `0`;
-- resources retired/released `248/248`, pending `0`;
-- process exit code `0`.
+- workers/staging/arena/resources clean; process exit code `0`.
 
 The user reported everything looked visually fine. This is supporting evidence only because P3.5 changed no emitted geometry/shader/pipeline semantics.
 
@@ -61,7 +59,7 @@ Historical fixed-anchor Phase 2 flags remain irrelevant: A-0101 permanently clos
 
 A-0147 freezes dev13 as a **non-geometry-changing evidence slice**. It must determine whether a mitigation is justified before altering greedy topology.
 
-Current source truth:
+Source truth retained by the contract:
 
 - actual merged quads are `RepeatAwareGreedyMesh` dev10-safe render-correct candidates, not raw P3.3 topology rectangles;
 - merged candidate positions derive from integer section-local `plane/u/v/width/height` values;
@@ -70,37 +68,53 @@ Current source truth:
 - the repeat-aware vertex shader applies `Position + ModelOffset` through the existing model-view/projection path and adds no independent geometry snapping/warping;
 - dev11/P3.5 visual observations found no cracks on the reference RX 6800 XT, but they did not prove that inspected frames contained known strict T-junctions.
 
-### Frozen dev13 contract
+### A-0148 implementation/package checkpoint
 
-Implement a bounded immutable worker-side T-junction topology proof over the **actual emitted merged candidate set**. Detect strict coplanar same-facing merged/merged T-junctions where an endpoint of one emitted edge lies strictly inside another emitted edge.
+Dev13 implementation head `1504c87c3ed42dc4b4c49a1cdbdb61c4b5d8c6fc` passed the normal pull-request Build workflow `33262626441` against the exact Minecraft 26.2 dependency set.
 
-For every detected junction prove exact integer identities, without epsilon comparison:
+Package artifact:
 
-- same direction and fixed face plane;
-- terminating point lies strictly inside the long edge, not at a shared corner;
-- coordinates are integer section-local lattice positions before the common directional `1/512` offset;
-- candidate edge bounds stay in legal `0..16` section-local edge coordinates;
-- generalized/passthrough-only geometry is not falsely classified.
+- artifact id `9717691386`
+- wrapper `obsidian-5ccc041bcabe45408c9051749aa75ea9c7dde9d2`
+- wrapper size `611,209` bytes
+- wrapper digest `sha256:2654a9e94b5b183ed3ff302f758ab566e3b4ee09a72ed3bcf58c9a7c30185067`
+- direct JAR `Obsidian-0.3.0-phase3-dev13.jar`
+- direct JAR size **419,659 bytes**
+- direct JAR SHA-256 **`44f7d9bec8979ddad8eb741b7024ed7ff1cb921d70cb6baff98e2a147956adc7`**
+- sources JAR size `217,731` bytes
+- sources SHA-256 `013aa35a35b349ef00aaedbb117c0de9ab5031788b6f5ca7d995fe486d59ea8b`
 
-Use reusable worker-local primitive scratch; do not introduce allocation-heavy pairwise object graphs.
+Implemented evidence path:
 
-Retain/extend transform evidence proving LIVE records use camera-relative section origins before float conversion, adjacent section origins preserve exact 16-block integer identity, transforms remain finite, and detected-junction sections use the same draw path.
+- `TJunctionTopologyProof` consumes the actual dev10 transport/emitted candidate identities;
+- fixed primitive 6-direction × 16-plane × 17×17 lattice scratch detects strict merged/merged endpoint-on-edge intersections exactly, with no epsilon comparisons;
+- bounds, direction/plane and integer-lattice identities are explicit;
+- each completed worker builds the proof twice and requires deterministic `contentEquals` before publication;
+- cancellation is checked around the new pure sidecar stage;
+- stale/cancelled output cannot become scene evidence;
+- scene aggregation happens only after generation-safe LIVE install;
+- a junction-bearing LIVE record must also execute the existing camera-relative draw transform before the runtime gate can arm;
+- no geometry, candidate eligibility, suppression/replacement, vertex/index format, shader, pipeline, atlas/lightmap, draw-class, native graphics, staging, arena, resource lifetime or ownership semantics changed.
 
-The dev13 final gate (e.g. `tJunctionPolicyEvidenceReady=true`) requires all prior P3.5 gates plus:
+Class-A roadmap synchronization is complete: `MASTER_ROADMAP.md` marks P3.5 COMPLETE, P3.6 ACTIVE, records A-0147/dev13 direction, and leaves P3.7+ ordering unchanged.
 
-- topology proof builds > 0;
+### Dev13 runtime gate
+
+The final gate is `tJunctionPolicyEvidenceReady=true` and requires every prior P3.5/dev11 gate plus:
+
+- installed topology proof records > 0 and equal installed records;
+- proof determinism exact;
 - emitted merged candidates > 0;
-- **strict detected T-junctions > 0** on the tested scene;
-- all plane/lattice/bounds identities exact;
-- determinism audits pass;
-- camera-relative transform proof passes;
-- explicit no-geometry/shader/pipeline-change evidence remains true;
+- strict edge-interior lattice points > 0;
+- **strict detected T-junction points > 0**;
+- all plane/lattice/bounds checks match exactly;
+- camera-relative transform evidence on LIVE drawn records;
+- at least one junction-bearing record reaches the real transform/draw path;
+- explicit geometry/shader/pipeline change flags remain false;
 - `workerWorldReadsAfterCapture=0`;
-- zero unsafe stale installs;
+- zero unsafe stale installs and dropped lifecycle events;
 - clean worker/staging/arena/resources;
-- process exit code `0`.
-
-Do not modify candidate eligibility, source suppression, merged/passthrough vertex positions, vertex/index formats, shaders, pipelines, atlas/lightmap behavior, draw classes, native Vulkan graphics scope, ownership, or lifetime in dev13.
+- normal process exit code `0`.
 
 ### P3.6 runtime decision rule
 
@@ -127,7 +141,7 @@ P3.7 differential correctness remains separate and must not be consumed here.
 
 ## Immediate next action
 
-Implement the A-0147 dev13 topology/transform evidence on `phase3/t-junction-policy`, integrate it into the worker/scene/final coordinator evidence chain without changing geometry, bump the development version to `0.3.0-phase3-dev13`, then obtain exact hosted CI/package evidence before runtime validation.
+Wait only on the normal hosted Build triggered by this synchronized continuity head. If green, use the exact direct `Obsidian-0.3.0-phase3-dev13.jar` runtime package on the reference machine and follow the targeted P3.6 exercise. Keep PR #47 draft until automated runtime evidence and the explicit targeted visual verdict close.
 
 ## Continuity order
 
