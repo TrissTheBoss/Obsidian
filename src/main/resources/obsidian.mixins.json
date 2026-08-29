@@ -4,14 +4,18 @@
   "package": "dev.obsidian.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
+    "AsyncMultiSectionSceneProbeDiagnosticMixin",
     "ClientLevelMixin",
     "CommandEncoderAccessor",
+    "FrameCoordinatorDiagnosticMixin",
     "GameRendererMixin",
     "GpuDeviceAccessor",
     "LevelExtractorMixin",
     "MinecraftBootstrapMixin",
     "MinecraftFrameMixin",
-    "ModelManagerMixin"
+    "ModelManagerMixin",
+    "PartialRemeshDirtyProvenanceDiagnosticMixin",
+    "PartialRemeshExperimentTelemetryDiagnosticMixin"
   ],
   "injectors": {
     "defaultRequire": 1
