@@ -232,6 +232,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
             ticket.state = TicketState.RUNNING;
             ticket.startNs = System.nanoTime();
             runningJobs.incrementAndGet();
+            benchmarkTelemetry.observePressure(ticket.enqueueNs, totalQueuedJobs(), runningJobs.get());
             startedJobs.incrementAndGet();
             startedByPriority.incrementAndGet(ticket.priority);
             long queueWait = ticket.queueWaitNs();
@@ -442,6 +443,8 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 BakedSectionMesh first = BakedSectionMesh.build(
                         ticket.snapshot, ticket.bakedSnapshot, buildScratch);
                 recordScratchUse(buildScratch);
+                totalBakedMeshBuildNs.addAndGet(first.buildTimeNs());
+                updateMax(maxBakedMeshBuildNs, first.buildTimeNs());
                 if (ticket.cancellationRequested || closed) {
                     cancelTicket(ticket);
                     return;
@@ -450,6 +453,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 // P3.6 dev13 is deliberately the last pure worker-side sidecar.
                 // Build it twice before publication so every completed ticket carries
                 // transactionally deterministic T-junction evidence.
+                long tJunctionPairStartNs = System.nanoTime();
                 TJunctionTopologyProof firstTJunctionTopology = TJunctionTopologyProof.build(
                         firstMergeCandidates, firstRepeatAwareTransport, tJunctionTopologyScratch);
                 TJunctionTopologyProof secondTJunctionTopology = TJunctionTopologyProof.build(
@@ -457,6 +461,9 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 if (!firstTJunctionTopology.contentEquals(secondTJunctionTopology)) {
                     throw new IllegalStateException("Worker-produced T-junction topology proof was nondeterministic");
                 }
+                long tJunctionPairNs = Math.max(0L, System.nanoTime() - tJunctionPairStartNs);
+                totalTJunctionProofPairNs.addAndGet(tJunctionPairNs);
+                updateMax(maxTJunctionProofPairNs, tJunctionPairNs);
                 if (ticket.cancellationRequested || closed) {
                     cancelTicket(ticket);
                     return;
@@ -466,6 +473,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 // The optimized mesh is the system under test; independent/captured
                 // source truth is passed immutably through the ticket.
                 RepeatAwareGreedyMesh firstGreedy = firstRepeatAwareTransport.greedyMesh();
+                long differentialPairStartNs = System.nanoTime();
                 DifferentialCorrectnessProof firstDifferential = DifferentialCorrectnessProof.build(
                         ticket.snapshot, ticket.referenceMesh, ticket.bakedSnapshot, first,
                         firstVisibility, firstRenderKeys, firstMergeCandidates,
@@ -483,6 +491,9 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                             "P3.7 differential correctness mismatch: "
                                     + firstDifferential.firstMismatch().describe());
                 }
+                long differentialPairNs = Math.max(0L, System.nanoTime() - differentialPairStartNs);
+                totalDifferentialProofPairNs.addAndGet(differentialPairNs);
+                updateMax(maxDifferentialProofPairNs, differentialPairNs);
                 if (ticket.cancellationRequested || closed) {
                     cancelTicket(ticket);
                     return;
@@ -605,6 +616,15 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 long executionNs = ticket.executionNs();
                 totalExecutionNs.addAndGet(executionNs);
                 updateMax(maxExecutionNs, executionNs);
+                benchmarkTelemetry.recordCompleted(
+                        ticket.enqueueNs, ticket.priority, ticket.stolen, queueWait, executionNs,
+                        ticket.bakedSnapshot.quadCount(), ticket.referenceMesh.faceCount(),
+                        firstRectangles.rectangleCount(), firstRectangles.coveredFaceCount(),
+                        firstMergeCandidates.candidateCount(), firstGreedy.passthroughQuadCount(),
+                        firstGreedy.mergedQuadCount(), firstRepeatAwareTransport.coveredFaces(),
+                        firstGreedy.facesSaved(), firstGreedy.hybridQuadCount(),
+                        (long) firstGreedy.passthroughVertexBytes() + firstGreedy.mergedVertexBytes(),
+                        firstGreedy.indexBytes());
             } catch (Throwable t) {
                 ticket.failure = t;
                 ticket.endNs = System.nanoTime();
@@ -624,6 +644,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLong nextTicketId = new AtomicLong(1L);
     private final AtomicInteger submitCursor = new AtomicInteger();
     private final AtomicInteger runningJobs = new AtomicInteger();
+    private final MeshingBenchmarkTelemetry benchmarkTelemetry = new MeshingBenchmarkTelemetry();
 
     private final AtomicLong submittedJobs = new AtomicLong();
     private final AtomicLong queueFullRejections = new AtomicLong();
@@ -637,6 +658,12 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private final AtomicLong maxQueueWaitNs = new AtomicLong();
     private final AtomicLong totalExecutionNs = new AtomicLong();
     private final AtomicLong maxExecutionNs = new AtomicLong();
+    private final AtomicLong totalBakedMeshBuildNs = new AtomicLong();
+    private final AtomicLong maxBakedMeshBuildNs = new AtomicLong();
+    private final AtomicLong totalTJunctionProofPairNs = new AtomicLong();
+    private final AtomicLong maxTJunctionProofPairNs = new AtomicLong();
+    private final AtomicLong totalDifferentialProofPairNs = new AtomicLong();
+    private final AtomicLong maxDifferentialProofPairNs = new AtomicLong();
     private final AtomicLong maxObservedQueueDepth = new AtomicLong();
     private final AtomicLong totalOutputQuads = new AtomicLong();
     private final AtomicLong totalOutputVertexBytes = new AtomicLong();
@@ -914,6 +941,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         submittedJobs.incrementAndGet();
         submittedByPriority.incrementAndGet(priority);
         updateMax(maxObservedQueueDepth, totalQueuedJobs());
+        benchmarkTelemetry.observePressure(ticket.enqueueNs, totalQueuedJobs(), runningJobs.get());
         synchronized (signal) { signal.notifyAll(); }
         return ticket;
     }
@@ -1062,6 +1090,15 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     public long maxQueueWaitNs() { return maxQueueWaitNs.get(); }
     public long totalExecutionNs() { return totalExecutionNs.get(); }
     public long maxExecutionNs() { return maxExecutionNs.get(); }
+    public long totalBakedMeshBuildNs() { return totalBakedMeshBuildNs.get(); }
+    public long maxBakedMeshBuildNs() { return maxBakedMeshBuildNs.get(); }
+    public long totalTJunctionProofPairNs() { return totalTJunctionProofPairNs.get(); }
+    public long maxTJunctionProofPairNs() { return maxTJunctionProofPairNs.get(); }
+    public long totalDifferentialProofPairNs() { return totalDifferentialProofPairNs.get(); }
+    public long maxDifferentialProofPairNs() { return maxDifferentialProofPairNs.get(); }
+    public long beginBenchmarkWindow() { return benchmarkTelemetry.begin(); }
+    public MeshingBenchmarkTelemetry.Snapshot benchmarkSnapshot() { return benchmarkTelemetry.snapshot(); }
+    public boolean benchmarkCollectorSelfTestPassed() { return MeshingBenchmarkTelemetry.selfTest(); }
     public long maxObservedQueueDepth() { return maxObservedQueueDepth.get(); }
     public long totalOutputQuads() { return totalOutputQuads.get(); }
     public long totalOutputVertexBytes() { return totalOutputVertexBytes.get(); }

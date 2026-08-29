@@ -254,10 +254,11 @@ public final class MeshingBenchmarkTelemetry {
     }
 
     public synchronized Snapshot snapshot() {
-        return snapshotAt(System.nanoTime(), gcCollections(), gcTimeMs());
+        return snapshotAt(System.nanoTime(), gcCollections(), gcTimeMs(), true);
     }
 
-    private synchronized Snapshot snapshotAt(long nowNs, long gcCollections, long gcTimeMs) {
+    private synchronized Snapshot snapshotAt(
+            long nowNs, long gcCollections, long gcTimeMs, boolean includeSelfTest) {
         long start = startNs;
         boolean armed = start != 0L;
         int currentRetained = retained;
@@ -304,7 +305,7 @@ public final class MeshingBenchmarkTelemetry {
                 outputIndexBytes,
                 armed ? Math.max(0L, gcCollections - gcCollectionsAtStart) : 0L,
                 armed ? Math.max(0L, gcTimeMs - gcTimeMsAtStart) : 0L,
-                selfTest());
+                includeSelfTest ? selfTest() : true);
     }
 
     private static Distribution distributionForPriority(
@@ -372,12 +373,12 @@ public final class MeshingBenchmarkTelemetry {
     public static boolean selfTest() {
         MeshingBenchmarkTelemetry fixture = new MeshingBenchmarkTelemetry(8);
         fixture.beginAt(100L, 0L, 0L);
-        Snapshot empty = fixture.snapshotAt(101L, 0L, 0L);
+        Snapshot empty = fixture.snapshotAt(101L, 0L, 0L, false);
         if (!empty.percentileAccountingCoherent() || empty.completedSamples() != 0L) return false;
 
         fixture.recordCompleted(100L, 0, false, 7L, 11L,
                 1L, 1L, 1L, 1L, 1L, 1L, 1L, 1L, 0L, 2L, 3L, 4L);
-        Snapshot singleton = fixture.snapshotAt(102L, 0L, 0L);
+        Snapshot singleton = fixture.snapshotAt(102L, 0L, 0L, false);
         if (singleton.queueWait().p50Ns() != 7L
                 || singleton.queueWait().p95Ns() != 7L
                 || singleton.execution().p99Ns() != 11L
@@ -388,7 +389,7 @@ public final class MeshingBenchmarkTelemetry {
             fixture.recordCompleted(200L, i % PRIORITY_COUNT, (i & 1) == 0,
                     i, i * 10L, 1L, 1L, 1L, 1L, 1L, 1L, 1L, 1L, 0L, 2L, 3L, 4L);
         }
-        Snapshot ordered = fixture.snapshotAt(210L, 0L, 0L);
+        Snapshot ordered = fixture.snapshotAt(210L, 0L, 0L, false);
         if (ordered.queueWait().p50Ns() != 3L
                 || ordered.queueWait().p95Ns() != 5L
                 || ordered.queueWait().p99Ns() != 5L
@@ -401,7 +402,7 @@ public final class MeshingBenchmarkTelemetry {
             wrapped.recordCompleted(300L, 0, false, i, i,
                     1L, 1L, 1L, 1L, 1L, 1L, 1L, 1L, 0L, 2L, 3L, 4L);
         }
-        Snapshot wrap = wrapped.snapshotAt(310L, 0L, 0L);
+        Snapshot wrap = wrapped.snapshotAt(310L, 0L, 0L, false);
         if (wrap.queueWait().observed() != 6L
                 || wrap.queueWait().retained() != 4
                 || wrap.queueWait().overflow() != 2L
@@ -410,7 +411,7 @@ public final class MeshingBenchmarkTelemetry {
                 || !wrap.percentileAccountingCoherent()) return false;
 
         wrapped.beginAt(400L, 0L, 0L);
-        Snapshot reset = wrapped.snapshotAt(401L, 0L, 0L);
+        Snapshot reset = wrapped.snapshotAt(401L, 0L, 0L, false);
         return reset.completedSamples() == 0L
                 && reset.queueWait().retained() == 0
                 && reset.execution().retained() == 0

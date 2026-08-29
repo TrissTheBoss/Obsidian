@@ -3,6 +3,7 @@ package dev.obsidian.render.frame;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.obsidian.render.memory.DeviceGeometryArena;
+import dev.obsidian.render.mesh.MeshingBenchmarkTelemetry;
 import dev.obsidian.render.mesh.SectionMeshWorkerPool;
 import dev.obsidian.render.resource.DeferredReleaseQueue;
 import dev.obsidian.render.terrain.AsyncMultiSectionSceneProbe;
@@ -13,7 +14,7 @@ import dev.obsidian.render.terrain.SectionLifecycleEvents;
 import dev.obsidian.render.upload.StagingUploadArena;
 import net.minecraft.client.renderer.GameRenderer;
 
-/** Render-thread lifecycle root for active Phase 3 P3.7 dev14 differential correctness evidence. */
+/** Render-thread lifecycle root for active Phase 3 P3.8 dev15 meshing benchmark evidence. */
 public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
     private static final int VALIDATION_STAGING_BYTES = 4 * 1024 * 1024;
@@ -34,6 +35,18 @@ public final class FrameCoordinator implements AutoCloseable {
     private boolean firstFrameLogged;
     private boolean visualDelayLogged;
     private boolean runtimeInstructionsLogged;
+    private boolean benchmarkWindowArmed;
+    private boolean benchmarkEvidenceLogged;
+    private boolean meshingBenchmarkEvidenceReady;
+    private long benchmarkStartSceneReadyTransitions;
+    private long benchmarkStartCameraRecenterEvents;
+    private long benchmarkStartRenderedCoreDirtyEvents;
+    private long benchmarkStartResourceReloadEvents;
+    private long benchmarkStartWorkerCompletedJobs;
+    private long benchmarkStartWorkerCancelledJobs;
+    private long benchmarkStartWorkerStolenJobs;
+    private long benchmarkStartWorkerQueueRejections;
+    private long benchmarkStartSceneStaleDiscards;
     private boolean fixedAnchorReturnSceneReady;
     private boolean hardFailure;
     private boolean closed;
@@ -45,10 +58,10 @@ public final class FrameCoordinator implements AutoCloseable {
         try {
             workers = new SectionMeshWorkerPool(SectionMeshWorkerPool.defaultWorkerCount());
             staging = new StagingUploadArena(
-                    device, () -> "Obsidian Phase 3 dev14 bounded scene staging ring",
+                    device, () -> "Obsidian Phase 3 dev15 bounded scene staging ring",
                     VALIDATION_STAGING_BYTES);
             arena = new DeviceGeometryArena(
-                    device, () -> "Obsidian Phase 3 dev14 scene device geometry arena",
+                    device, () -> "Obsidian Phase 3 dev15 scene device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
             sceneProbe = new AsyncMultiSectionSceneProbe(device, staging, arena, deferredReleases, workers);
         } catch (RuntimeException e) {
@@ -58,7 +71,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (arena != null) try { arena.close(); } catch (RuntimeException ignored) { }
             try { deferredReleases.close(); } catch (RuntimeException ignored) { }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev14 P3.7 initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 3 dev15 P3.8 initialization failed; Minecraft will continue for diagnosis.", e);
             hardFailure = true;
         }
         meshWorkers = workers;
@@ -78,13 +91,13 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev14 P3.7 frame coordinator active. contextSlots=" + frameContexts.size()
+                    "Phase 3 dev15 P3.8 frame coordinator active. contextSlots=" + frameContexts.size()
                             + ", cpuTimingCapacity=" + cpuFrameTimings.capacity()
                             + ", meshWorkers=" + (meshWorkers == null ? 0 : meshWorkers.workerCount())
                             + ", meshQueueCapacity=" + (meshWorkers == null ? 0 : meshWorkers.queueCapacity())
                             + ", stagingCapacity=" + (stagingUploads == null ? 0 : stagingUploads.capacityBytes())
                             + ", deviceArenaCapacity=" + (deviceArena == null ? 0L : deviceArena.capacityBytes())
-                            + "; all proven P3.2-P3.6 correctness and dev11 repeat-aware greedy GPU emission remain armed unchanged. P3.7 dev14 adds only a worker-side differential proof that expands the final optimized identity stream back to independent/captured source truth. Dev14 changes no geometry, shader, pipeline, vertex/index format, atlas/lightmap semantics or native graphics behavior.");
+                            + "; all proven P3.2-P3.7 correctness and dev11 repeat-aware greedy GPU emission remain armed unchanged. P3.8 dev15 adds only bounded production-worker benchmark telemetry: fixed primitive samples, workload identity, GC deltas and stage timing composition. Dev15 changes no geometry, shader, pipeline, vertex/index format, atlas/lightmap semantics, scheduling policy, rebuild granularity or native graphics behavior.");
         }
     }
 
@@ -97,7 +110,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (!visualDelayLogged) {
                 visualDelayLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev14 P3.7 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
+                        "Phase 3 dev15 P3.8 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
             }
             return;
         }
@@ -108,10 +121,27 @@ public final class FrameCoordinator implements AutoCloseable {
                 return;
             }
         }
-        if (!runtimeInstructionsLogged && sceneProbe != null && sceneProbe.differentialCorrectnessEvidenceReady()) {
+        if (!benchmarkWindowArmed
+                && sceneProbe != null
+                && sceneProbe.state() == AsyncMultiSectionSceneProbe.State.LIVE
+                && sceneProbe.differentialCorrectnessEvidenceReady()
+                && meshWorkers.outstandingJobs() == 0) {
+            benchmarkWindowArmed = true;
             runtimeInstructionsLogged = true;
+            SectionLifecycleEvents.Cursor cursor = sceneProbe.lifecycleCursor();
+            benchmarkStartSceneReadyTransitions = sceneProbe.sceneReadyTransitions();
+            benchmarkStartCameraRecenterEvents = sceneProbe.cameraRecenterEvents();
+            benchmarkStartRenderedCoreDirtyEvents = cursor.renderedCoreDirtyEvents();
+            benchmarkStartResourceReloadEvents = cursor.resourceReloadEvents();
+            benchmarkStartWorkerCompletedJobs = meshWorkers.completedJobs();
+            benchmarkStartWorkerCancelledJobs = meshWorkers.cancelledJobs();
+            benchmarkStartWorkerStolenJobs = meshWorkers.stolenJobs();
+            benchmarkStartWorkerQueueRejections = meshWorkers.queueFullRejections();
+            benchmarkStartSceneStaleDiscards = sceneProbe.staleWorkerResultDiscards();
+            long benchmarkStartNs = meshWorkers.beginBenchmarkWindow();
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev14 P3.7 differential correctness gate is armed. Automated source-truth reconstruction is exact on installed LIVE records. Exercise an ordinary block break/place rebuild and let READY return, perform F3+T and let READY return, cross/recenter a section boundary, then exit normally. No new human visual verdict is required because dev14 changes no emitted geometry, shaders, pipelines, atlas/lightmap behavior or draw semantics. Promotion requires differentialCorrectnessEvidenceReady=true plus all inherited gates and clean lifetime.");
+                    "Phase 3 dev15 P3.8 measured benchmark window armed after settled READY at ns={0}. The window records only completed production full-section jobs enqueued after this point. Exercise multiple ordinary block break/place rebuilds with READY recovery, perform F3+T and let READY return, traverse far enough for a real scene-recenter and READY return, include a short bounded edit/traversal burst so concurrent worker pressure is observed, then exit normally. No new visual verdict is required because dev15 changes no rendering semantics.",
+                    benchmarkStartNs);
         }
     }
 
@@ -136,7 +166,63 @@ public final class FrameCoordinator implements AutoCloseable {
                     && sceneProbe.state() == AsyncMultiSectionSceneProbe.State.LIVE) {
                 fixedAnchorReturnSceneReady = true;
             }
+            evaluateMeshingBenchmarkEvidenceIfSettled();
         }
+    }
+
+    private void evaluateMeshingBenchmarkEvidenceIfSettled() {
+        if (!benchmarkWindowArmed || benchmarkEvidenceLogged || hardFailure
+                || sceneProbe == null || meshWorkers == null
+                || sceneProbe.state() != AsyncMultiSectionSceneProbe.State.LIVE
+                || meshWorkers.outstandingJobs() != 0) return;
+        SectionLifecycleEvents.Cursor cursor = sceneProbe.lifecycleCursor();
+        long readyDelta = sceneProbe.sceneReadyTransitions() - benchmarkStartSceneReadyTransitions;
+        long dirtyDelta = cursor.renderedCoreDirtyEvents() - benchmarkStartRenderedCoreDirtyEvents;
+        long reloadDelta = cursor.resourceReloadEvents() - benchmarkStartResourceReloadEvents;
+        long recenterDelta = sceneProbe.cameraRecenterEvents() - benchmarkStartCameraRecenterEvents;
+        if (readyDelta < 3L || dirtyDelta < 2L || reloadDelta < 1L || recenterDelta < 1L) return;
+        MeshingBenchmarkTelemetry.Snapshot snapshot = meshWorkers.benchmarkSnapshot();
+        if (!sceneProbe.differentialCorrectnessEvidenceReady()
+                || !benchmarkSnapshotReady(snapshot)
+                || (snapshot.maxRunningJobs() < 2 && snapshot.maxQueuedJobs() == 0)) return;
+        meshingBenchmarkEvidenceReady = true;
+        benchmarkEvidenceLogged = true;
+        LOG.log(System.Logger.Level.INFO,
+                "Phase 3 dev15 P3.8 benchmark gate armed: meshingBenchmarkEvidenceReady=true, samples={0}, durationMs={1}, queueWaitNs[p50/p95/p99/max]={2}/{3}/{4}/{5}, executionNs[p50/p95/p99/max]={6}/{7}/{8}/{9}, sourceQuads={10}, referenceFaces={11}, mergedIdentities={12}, mergedCoveredFaces={13}, outputBytes={14}, workerBusyPermille={15}, gcCollections={16}, gcTimeMs={17}, readyDelta={18}, coreDirtyDelta={19}, reloadDelta={20}, recenterDelta={21}.",
+                snapshot.completedSamples(), snapshot.durationNs() / 1_000_000L,
+                snapshot.queueWait().p50Ns(), snapshot.queueWait().p95Ns(), snapshot.queueWait().p99Ns(), snapshot.queueWait().maxNs(),
+                snapshot.execution().p50Ns(), snapshot.execution().p95Ns(), snapshot.execution().p99Ns(), snapshot.execution().maxNs(),
+                snapshot.sourceBakedQuads(), snapshot.independentReferenceFaces(), snapshot.mergedIdentities(),
+                snapshot.mergedCoveredSourceFaces(), snapshot.outputBytes(), snapshot.workerBusyPermille(meshWorkers.workerCount()),
+                snapshot.gcCollectionDelta(), snapshot.gcTimeDeltaMs(), readyDelta, dirtyDelta, reloadDelta, recenterDelta);
+    }
+
+    private boolean benchmarkSnapshotReady(MeshingBenchmarkTelemetry.Snapshot snapshot) {
+        return snapshot != null
+                && snapshot.armed()
+                && snapshot.durationNs() > 0L
+                && snapshot.completedSamples() > 0L
+                && snapshot.percentileAccountingCoherent()
+                && snapshot.collectorSelfTestPassed()
+                && snapshot.sourceBakedQuads() > 0L
+                && snapshot.independentReferenceFaces() > 0L
+                && snapshot.topologyRectangles() > 0L
+                && snapshot.topologyCoveredFaces() > 0L
+                && snapshot.renderMergeCandidates() > 0L
+                && snapshot.passthroughIdentities() > 0L
+                && snapshot.mergedIdentities() > 0L
+                && snapshot.mergedCoveredSourceFaces() > 0L
+                && snapshot.outputVertexBytes() > 0L
+                && snapshot.outputIndexBytes() > 0L
+                && meshWorkers.workerCount() > 0
+                && meshWorkers.maxScratchQuads() > 0L
+                && meshWorkers.maxVisibilityScratchRows() > 0L
+                && meshWorkers.maxRectangleScratchRectangles() > 0L
+                && meshWorkers.maxRenderKeyScratchEligibleFaces() > 0L
+                && meshWorkers.maxMergeCandidateScratchCandidates() > 0L
+                && meshWorkers.maxEmissionSafetyScratchCandidates() > 0L
+                && meshWorkers.maxRepeatAwareUvScratchDescriptors() > 0L
+                && meshWorkers.maxRepeatAwareTransportScratchRecords() > 0L;
     }
 
     public long frameIndex() { return frameIndex; }
@@ -309,6 +395,8 @@ public final class FrameCoordinator implements AutoCloseable {
         }
 
         if (meshWorkers != null) meshWorkers.close();
+        MeshingBenchmarkTelemetry.Snapshot benchmarkSnapshot =
+                meshWorkers == null ? null : meshWorkers.benchmarkSnapshot();
         if (stagingUploads != null) stagingUploads.close();
         if (deviceArena != null) deviceArena.close();
         deferredReleases.close();
@@ -326,6 +414,15 @@ public final class FrameCoordinator implements AutoCloseable {
         long worldChangeEvents = lifecycleCursor == null ? 0L : lifecycleCursor.worldChangeEvents();
         long resourceReloadEvents = lifecycleCursor == null ? 0L : lifecycleCursor.resourceReloadEvents();
         long droppedLifecycleEvents = lifecycleCursor == null ? 0L : lifecycleCursor.droppedEvents();
+        long benchmarkReadyDelta = sceneReadyTransitions - benchmarkStartSceneReadyTransitions;
+        long benchmarkDirtyDelta = renderedCoreDirtyEvents - benchmarkStartRenderedCoreDirtyEvents;
+        long benchmarkReloadDelta = resourceReloadEvents - benchmarkStartResourceReloadEvents;
+        long benchmarkRecenterDelta = cameraRecenterEvents - benchmarkStartCameraRecenterEvents;
+        long benchmarkWorkerCompletedDelta = meshWorkers == null ? 0L : meshWorkers.completedJobs() - benchmarkStartWorkerCompletedJobs;
+        long benchmarkWorkerCancelledDelta = meshWorkers == null ? 0L : meshWorkers.cancelledJobs() - benchmarkStartWorkerCancelledJobs;
+        long benchmarkWorkerStolenDelta = meshWorkers == null ? 0L : meshWorkers.stolenJobs() - benchmarkStartWorkerStolenJobs;
+        long benchmarkWorkerQueueRejectionDelta = meshWorkers == null ? 0L : meshWorkers.queueFullRejections() - benchmarkStartWorkerQueueRejections;
+        long benchmarkSceneStaleDiscardDelta = sceneWorkerStaleDiscards - benchmarkStartSceneStaleDiscards;
 
         boolean workersClean = meshWorkers != null
                 && meshWorkers.queueFullRejections() == 0L
@@ -655,6 +752,20 @@ public final class FrameCoordinator implements AutoCloseable {
                 && droppedLifecycleEvents == 0L
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
+        boolean benchmarkLifecycleReady = benchmarkWindowArmed
+                && benchmarkReadyDelta >= 3L
+                && benchmarkDirtyDelta >= 2L
+                && benchmarkReloadDelta >= 1L
+                && benchmarkRecenterDelta >= 1L;
+        boolean benchmarkSnapshotEvidenceReady = benchmarkSnapshotReady(benchmarkSnapshot)
+                && benchmarkSnapshot != null
+                && (benchmarkSnapshot.maxRunningJobs() >= 2 || benchmarkSnapshot.maxQueuedJobs() > 0);
+        meshingBenchmarkEvidenceReady = differentialCorrectnessEvidenceReady
+                && benchmarkLifecycleReady
+                && benchmarkSnapshotEvidenceReady
+                && benchmarkWorkerQueueRejectionDelta == 0L
+                && workersClean && stagingClean && arenaClean && resourcesClean;
+
         boolean phase2ChunkLifecycleEvidenceReady = phase3GateReady
                 && fixedAnchorChunkUnloadEvents > 0L
                 && fixedAnchorChunkLoadEvents > 0L
@@ -663,8 +774,8 @@ public final class FrameCoordinator implements AutoCloseable {
                 && unsafeStaleSceneInstalls == 0L
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
-        StringBuilder out = new StringBuilder(23552);
-        out.append("Phase 3 dev14 P3.7 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
+        StringBuilder out = new StringBuilder(28672);
+        out.append("Phase 3 dev15 P3.8 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
                 .append("phase3GateReady=").append(phase3GateReady)
                 .append(", schedulerEvidenceReady=").append(schedulerEvidenceReady)
                 .append(", binaryVisibilityEvidenceReady=").append(binaryVisibilityEvidenceReady)
@@ -678,6 +789,7 @@ public final class FrameCoordinator implements AutoCloseable {
                 .append(", borderHaloCorrectnessEvidenceReady=").append(borderHaloCorrectnessEvidenceReady)
                 .append(", tJunctionPolicyEvidenceReady=").append(tJunctionPolicyEvidenceReady)
                 .append(", differentialCorrectnessEvidenceReady=").append(differentialCorrectnessEvidenceReady)
+                .append(", meshingBenchmarkEvidenceReady=").append(meshingBenchmarkEvidenceReady)
                 .append(", phase2ChunkLifecycleEvidenceReady=").append(phase2ChunkLifecycleEvidenceReady)
                 .append(", fixedAnchorReturnSceneReady=").append(fixedAnchorReturnSceneReady)
                 .append(", productionWorkerIntegrationReady=").append(productionWorkerIntegrationReady)
@@ -703,6 +815,67 @@ public final class FrameCoordinator implements AutoCloseable {
                 .append(", workerMaxQueueWaitNs=").append(meshWorkers == null ? 0L : meshWorkers.maxQueueWaitNs())
                 .append(", workerTotalExecutionNs=").append(meshWorkers == null ? 0L : meshWorkers.totalExecutionNs())
                 .append(", workerMaxExecutionNs=").append(meshWorkers == null ? 0L : meshWorkers.maxExecutionNs())
+                .append(", bakedMeshTotalBuildNs=").append(meshWorkers == null ? 0L : meshWorkers.totalBakedMeshBuildNs())
+                .append(", bakedMeshMaxBuildNs=").append(meshWorkers == null ? 0L : meshWorkers.maxBakedMeshBuildNs())
+                .append(", tJunctionProofPairTotalNs=").append(meshWorkers == null ? 0L : meshWorkers.totalTJunctionProofPairNs())
+                .append(", tJunctionProofPairMaxNs=").append(meshWorkers == null ? 0L : meshWorkers.maxTJunctionProofPairNs())
+                .append(", differentialProofPairTotalNs=").append(meshWorkers == null ? 0L : meshWorkers.totalDifferentialProofPairNs())
+                .append(", differentialProofPairMaxNs=").append(meshWorkers == null ? 0L : meshWorkers.maxDifferentialProofPairNs())
+                .append(", benchmarkWindowArmed=").append(benchmarkWindowArmed)
+                .append(", benchmarkCollectorSelfTest=").append(benchmarkSnapshot != null && benchmarkSnapshot.collectorSelfTestPassed())
+                .append(", benchmarkDurationNs=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.durationNs())
+                .append(", benchmarkCompletedSamples=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.completedSamples())
+                .append(", benchmarkRetainedSamples=").append(benchmarkSnapshot == null ? 0 : benchmarkSnapshot.execution().retained())
+                .append(", benchmarkOverflowSamples=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.execution().overflow())
+                .append(", benchmarkQueueP50Ns=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.queueWait().p50Ns())
+                .append(", benchmarkQueueP95Ns=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.queueWait().p95Ns())
+                .append(", benchmarkQueueP99Ns=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.queueWait().p99Ns())
+                .append(", benchmarkQueueMaxNs=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.queueWait().maxNs())
+                .append(", benchmarkExecutionMeanNs=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.execution().meanNs())
+                .append(", benchmarkExecutionP50Ns=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.execution().p50Ns())
+                .append(", benchmarkExecutionP95Ns=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.execution().p95Ns())
+                .append(", benchmarkExecutionP99Ns=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.execution().p99Ns())
+                .append(", benchmarkExecutionMaxNs=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.execution().maxNs())
+                .append(", benchmarkHighCompleted=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.highCompleted())
+                .append(", benchmarkNormalCompleted=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.normalCompleted())
+                .append(", benchmarkLowCompleted=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.lowCompleted())
+                .append(", benchmarkHighQueueP99Ns=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.highQueueWait().p99Ns())
+                .append(", benchmarkNormalQueueP99Ns=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.normalQueueWait().p99Ns())
+                .append(", benchmarkLowQueueP99Ns=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.lowQueueWait().p99Ns())
+                .append(", benchmarkSourceBakedQuads=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.sourceBakedQuads())
+                .append(", benchmarkReferenceFaces=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.independentReferenceFaces())
+                .append(", benchmarkTopologyRectangles=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.topologyRectangles())
+                .append(", benchmarkTopologyCoveredFaces=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.topologyCoveredFaces())
+                .append(", benchmarkMergeCandidates=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.renderMergeCandidates())
+                .append(", benchmarkPassthroughIdentities=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.passthroughIdentities())
+                .append(", benchmarkMergedIdentities=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.mergedIdentities())
+                .append(", benchmarkMergedCoveredFaces=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.mergedCoveredSourceFaces())
+                .append(", benchmarkFacesSaved=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.facesSaved())
+                .append(", benchmarkReductionPermille=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.reductionPermille())
+                .append(", benchmarkOutputQuads=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.outputQuads())
+                .append(", benchmarkOutputVertexBytes=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.outputVertexBytes())
+                .append(", benchmarkOutputIndexBytes=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.outputIndexBytes())
+                .append(", benchmarkMaxQueuedJobs=").append(benchmarkSnapshot == null ? 0 : benchmarkSnapshot.maxQueuedJobs())
+                .append(", benchmarkMaxRunningJobs=").append(benchmarkSnapshot == null ? 0 : benchmarkSnapshot.maxRunningJobs())
+                .append(", benchmarkStolenCompleted=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.stolenCompleted())
+                .append(", benchmarkWorkerBusyPermille=").append(benchmarkSnapshot == null || meshWorkers == null ? 0L : benchmarkSnapshot.workerBusyPermille(meshWorkers.workerCount()))
+                .append(", benchmarkGcCollectionDelta=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.gcCollectionDelta())
+                .append(", benchmarkGcTimeDeltaMs=").append(benchmarkSnapshot == null ? 0L : benchmarkSnapshot.gcTimeDeltaMs())
+                .append(", benchmarkReadyDelta=").append(benchmarkReadyDelta)
+                .append(", benchmarkCoreDirtyDelta=").append(benchmarkDirtyDelta)
+                .append(", benchmarkResourceReloadDelta=").append(benchmarkReloadDelta)
+                .append(", benchmarkRecenterDelta=").append(benchmarkRecenterDelta)
+                .append(", benchmarkWorkerCompletedDelta=").append(benchmarkWorkerCompletedDelta)
+                .append(", benchmarkWorkerCancelledDelta=").append(benchmarkWorkerCancelledDelta)
+                .append(", benchmarkWorkerStolenDelta=").append(benchmarkWorkerStolenDelta)
+                .append(", benchmarkWorkerQueueRejectionDelta=").append(benchmarkWorkerQueueRejectionDelta)
+                .append(", benchmarkSceneStaleDiscardDelta=").append(benchmarkSceneStaleDiscardDelta)
+                .append(", benchmarkAllocationBytes=not-portably-measured")
+                .append(", javaVersion=").append(System.getProperty("java.version"))
+                .append(", os=").append(System.getProperty("os.name")).append(' ').append(System.getProperty("os.version"))
+                .append(", logicalProcessors=").append(Runtime.getRuntime().availableProcessors())
+                .append(", minecraftVersion=26.2, fabricLoaderVersion=0.19.3, obsidianVersion=0.3.0-phase3-dev15")
+                .append(", renderDistance=not-captured, simulationDistance=not-captured")
                 .append(", workerHighSubmitted=").append(workerHighSubmitted)
                 .append(", workerNormalSubmitted=").append(workerNormalSubmitted)
                 .append(", workerLowSubmitted=").append(workerLowSubmitted)
