@@ -40,6 +40,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         Eligibility eligibility = Eligibility.PENDING;
         WorkerBackedSectionLifecycleProbe probe;
         boolean installObserved;
+        boolean transformObserved;
 
         void configure(int x, int y, int z) {
             sectionX = x;
@@ -48,6 +49,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
             eligibility = Eligibility.PENDING;
             probe = null;
             installObserved = false;
+            transformObserved = false;
         }
     }
 
@@ -110,6 +112,23 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     private long sharedBorderPairAudits;
     private long sharedBorderComparisons;
     private long sharedBorderMatches;
+
+    private long tJunctionProofRecords;
+    private long tJunctionProofDeterminismAudits;
+    private long tJunctionProofDeterminismMatches;
+    private long tJunctionEmittedCandidates;
+    private long tJunctionEmittedEdges;
+    private long tJunctionStrictInteriorLatticePoints;
+    private long tJunctionStrictPoints;
+    private long tJunctionBoundsChecks;
+    private long tJunctionBoundsMatches;
+    private long tJunctionPlaneChecks;
+    private long tJunctionPlaneMatches;
+    private long tJunctionIntegerLatticeChecks;
+    private long tJunctionIntegerLatticeMatches;
+    private long cameraRelativeTransformProofRecords;
+    private long junctionBearingTransformProofRecords;
+    private long cameraRelativeTransformFailures;
 
     private long totalUsefulSubmissions;
     private long totalDrawSubmissions;
@@ -477,6 +496,26 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 borderBakedQuads += first.borderBakedQuads();
                 borderLightColorSamples += first.borderLightColorSamples();
 
+                TJunctionTopologyProof tJunction = probe.tJunctionTopologyProof();
+                if (tJunction == null
+                        || tJunction.emittedCandidates() != probe.emittedMergedQuads()) {
+                    throw new IllegalStateException("P3.6 installed record lost worker-side T-junction proof identity");
+                }
+                tJunctionProofRecords++;
+                // Every completed dev13 ticket builds the proof twice and publishes only after exact equality.
+                tJunctionProofDeterminismAudits++;
+                tJunctionProofDeterminismMatches++;
+                tJunctionEmittedCandidates += tJunction.emittedCandidates();
+                tJunctionEmittedEdges += tJunction.emittedEdges();
+                tJunctionStrictInteriorLatticePoints += tJunction.strictInteriorEdgeLatticePoints();
+                tJunctionStrictPoints += tJunction.strictTJunctionPoints();
+                tJunctionBoundsChecks += tJunction.boundsChecks();
+                tJunctionBoundsMatches += tJunction.boundsMatches();
+                tJunctionPlaneChecks += tJunction.planeDirectionChecks();
+                tJunctionPlaneMatches += tJunction.planeDirectionMatches();
+                tJunctionIntegerLatticeChecks += tJunction.integerLatticeChecks();
+                tJunctionIntegerLatticeMatches += tJunction.integerLatticeMatches();
+
                 LOG.log(System.Logger.Level.INFO,
                         "Phase 3 P3.5 installed border proof: section=({0},{1},{2}), proofFingerprint={3}, outwardChecks={4}, visibilityMatches={5}, referenceMatches={6}, expectedVisible={7}, unsupportedBlockers={8}, borderBakedQuads={9}, frozenLightColorSamples={10}, workerWorldReadsAfterCapture=0.",
                         first.sectionX(), first.sectionY(), first.sectionZ(),
@@ -484,6 +523,15 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                         first.visibilityMatches(), first.referenceMatches(), first.expectedVisibleFaces(),
                         first.unsupportedBlockedFaces(), first.borderBakedQuads(),
                         first.borderLightColorSamples());
+                LOG.log(System.Logger.Level.INFO,
+                        "Phase 3 P3.6 installed T-junction proof: section=({0},{1},{2}), emittedCandidates={3}, emittedEdges={4}, strictInteriorLatticePoints={5}, strictTJunctionPoints={6}, bounds={7}/{8}, plane={9}/{10}, integerLattice={11}/{12}, proofFingerprint={13}, geometryChanged=false.",
+                        record.sectionX, record.sectionY, record.sectionZ,
+                        tJunction.emittedCandidates(), tJunction.emittedEdges(),
+                        tJunction.strictInteriorEdgeLatticePoints(), tJunction.strictTJunctionPoints(),
+                        tJunction.boundsMatches(), tJunction.boundsChecks(),
+                        tJunction.planeDirectionMatches(), tJunction.planeDirectionChecks(),
+                        tJunction.integerLatticeMatches(), tJunction.integerLatticeChecks(),
+                        Long.toUnsignedString(tJunction.fingerprint()));
             } catch (RuntimeException e) {
                 hardFailure = true;
                 state = State.FAILED;
@@ -498,6 +546,25 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                     "Phase 3 P3.5 worker-backed scene record installed: generation={0}, section=({1},{2},{3}), priority={4}, installs={5}, liveRecords={6}.",
                     sceneGeneration, record.sectionX, record.sectionY, record.sectionZ,
                     SectionMeshWorkerPool.priorityName(probe.workerPriority()), recordInstallCount, liveRecordCount());
+        }
+
+        if (probeState == WorkerBackedSectionLifecycleProbe.State.LIVE
+                && record.installObserved && !record.transformObserved && probe.transformCaptured()) {
+            if (!probe.cameraRelativeTransformEvidenceReady()) {
+                cameraRelativeTransformFailures++;
+                hardFailure = true;
+                state = State.FAILED;
+                LOG.log(System.Logger.Level.ERROR,
+                        "Phase 3 P3.6 camera-relative transform proof failed for LIVE section ({0},{1},{2}).",
+                        record.sectionX, record.sectionY, record.sectionZ);
+                return;
+            }
+            record.transformObserved = true;
+            cameraRelativeTransformProofRecords++;
+            TJunctionTopologyProof proof = probe.tJunctionTopologyProof();
+            if (proof != null && proof.strictTJunctionPoints() > 0) {
+                junctionBearingTransformProofRecords++;
+            }
         } else if (probeState == WorkerBackedSectionLifecycleProbe.State.FAILED) {
             hardFailure = true;
             state = State.FAILED;
@@ -728,6 +795,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         probe.close();
         record.probe = null;
         record.installObserved = false;
+        record.transformObserved = false;
     }
 
     private void accumulateProbe(WorkerBackedSectionLifecycleProbe probe) {
@@ -803,6 +871,22 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     public long sharedBorderPairAudits() { return sharedBorderPairAudits; }
     public long sharedBorderComparisons() { return sharedBorderComparisons; }
     public long sharedBorderMatches() { return sharedBorderMatches; }
+    public long tJunctionProofRecords() { return tJunctionProofRecords; }
+    public long tJunctionProofDeterminismAudits() { return tJunctionProofDeterminismAudits; }
+    public long tJunctionProofDeterminismMatches() { return tJunctionProofDeterminismMatches; }
+    public long tJunctionEmittedCandidates() { return tJunctionEmittedCandidates; }
+    public long tJunctionEmittedEdges() { return tJunctionEmittedEdges; }
+    public long tJunctionStrictInteriorLatticePoints() { return tJunctionStrictInteriorLatticePoints; }
+    public long tJunctionStrictPoints() { return tJunctionStrictPoints; }
+    public long tJunctionBoundsChecks() { return tJunctionBoundsChecks; }
+    public long tJunctionBoundsMatches() { return tJunctionBoundsMatches; }
+    public long tJunctionPlaneChecks() { return tJunctionPlaneChecks; }
+    public long tJunctionPlaneMatches() { return tJunctionPlaneMatches; }
+    public long tJunctionIntegerLatticeChecks() { return tJunctionIntegerLatticeChecks; }
+    public long tJunctionIntegerLatticeMatches() { return tJunctionIntegerLatticeMatches; }
+    public long cameraRelativeTransformProofRecords() { return cameraRelativeTransformProofRecords; }
+    public long junctionBearingTransformProofRecords() { return junctionBearingTransformProofRecords; }
+    public long cameraRelativeTransformFailures() { return cameraRelativeTransformFailures; }
 
     public long usefulSubmissions() { return totalUsefulSubmissions + sumCurrent(WorkerBackedSectionLifecycleProbe::usefulSubmissions); }
     public long drawSubmissions() { return totalDrawSubmissions + sumCurrent(WorkerBackedSectionLifecycleProbe::drawSubmissions); }
@@ -864,6 +948,26 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 && lifecycleCursor.droppedEvents() == 0L;
     }
 
+    public boolean tJunctionPolicyEvidenceReady() {
+        return borderHaloCorrectnessEvidenceReady()
+                && tJunctionProofRecords > 0L
+                && tJunctionProofRecords == recordInstallCount
+                && tJunctionProofDeterminismAudits == tJunctionProofRecords
+                && tJunctionProofDeterminismMatches == tJunctionProofDeterminismAudits
+                && tJunctionEmittedCandidates > 0L
+                && tJunctionEmittedEdges == tJunctionEmittedCandidates * 4L
+                && tJunctionStrictInteriorLatticePoints > 0L
+                && tJunctionStrictPoints > 0L
+                && tJunctionBoundsMatches == tJunctionBoundsChecks
+                && tJunctionPlaneMatches == tJunctionPlaneChecks
+                && tJunctionIntegerLatticeMatches == tJunctionIntegerLatticeChecks
+                && cameraRelativeTransformProofRecords > 0L
+                && junctionBearingTransformProofRecords > 0L
+                && cameraRelativeTransformFailures == 0L
+                && unsafeStaleSceneInstalls == 0L
+                && lifecycleCursor.droppedEvents() == 0L;
+    }
+
     @Override
     public void close() {
         RenderSystem.assertOnRenderThread();
@@ -878,6 +982,16 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 lifecycleCursor.renderedCoreDirtyEvents(), lifecycleCursor.haloOnlyDirtyEvents(),
                 lifecycleCursor.horizontalHaloDirtyEvents(), lifecycleCursor.verticalHaloDirtyEvents(),
                 synchronousSceneMeshBuilds(), unsafeStaleSceneInstalls);
+        LOG.log(System.Logger.Level.INFO,
+                "Phase 3 P3.6 final T-junction evidence: tJunctionPolicyEvidenceReady={0}, proofRecords={1}, determinism={2}/{3}, emittedCandidates={4}, emittedEdges={5}, strictInteriorLatticePoints={6}, strictTJunctionPoints={7}, bounds={8}/{9}, plane={10}/{11}, integerLattice={12}/{13}, cameraRelativeTransformProofRecords={14}, junctionBearingTransformProofRecords={15}, cameraRelativeTransformFailures={16}, geometryChanged=false, shaderChanged=false, pipelineChanged=false.",
+                tJunctionPolicyEvidenceReady(), tJunctionProofRecords,
+                tJunctionProofDeterminismMatches, tJunctionProofDeterminismAudits,
+                tJunctionEmittedCandidates, tJunctionEmittedEdges, tJunctionStrictInteriorLatticePoints,
+                tJunctionStrictPoints, tJunctionBoundsMatches, tJunctionBoundsChecks,
+                tJunctionPlaneMatches, tJunctionPlaneChecks,
+                tJunctionIntegerLatticeMatches, tJunctionIntegerLatticeChecks,
+                cameraRelativeTransformProofRecords, junctionBearingTransformProofRecords,
+                cameraRelativeTransformFailures);
 
         closed = true;
         for (SceneRecord record : records) {

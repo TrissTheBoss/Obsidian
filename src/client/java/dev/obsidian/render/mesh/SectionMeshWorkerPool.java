@@ -11,6 +11,7 @@ import dev.obsidian.render.terrain.RepeatAwareTransportProof;
 import dev.obsidian.render.terrain.RepeatAwareUvDescriptors;
 import dev.obsidian.render.terrain.SectionBakedQuadSnapshot;
 import dev.obsidian.render.terrain.SectionSnapshot;
+import dev.obsidian.render.terrain.TJunctionTopologyProof;
 
 import java.util.ArrayDeque;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -68,6 +69,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private volatile OrdinaryQuadEmissionSafety emissionSafety;
         private volatile RepeatAwareUvDescriptors repeatAwareUv;
         private volatile RepeatAwareTransportProof repeatAwareTransport;
+        private volatile TJunctionTopologyProof tJunctionTopologyProof;
         private volatile BakedSectionMesh mesh;
         private volatile Throwable failure;
         private volatile long startNs;
@@ -109,6 +111,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         public OrdinaryQuadEmissionSafety emissionSafety() { return emissionSafety; }
         public RepeatAwareUvDescriptors repeatAwareUv() { return repeatAwareUv; }
         public RepeatAwareTransportProof repeatAwareTransport() { return repeatAwareTransport; }
+        public TJunctionTopologyProof tJunctionTopologyProof() { return tJunctionTopologyProof; }
         public BakedSectionMesh mesh() { return mesh; }
         public Throwable failure() { return failure; }
         public long queueWaitNs() { return startNs == 0L ? 0L : Math.max(0L, startNs - enqueueNs); }
@@ -180,6 +183,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private final OrdinaryQuadEmissionSafety.BuildScratch emissionSafetyScratch = new OrdinaryQuadEmissionSafety.BuildScratch();
         private final RepeatAwareUvDescriptors.BuildScratch repeatAwareUvScratch = new RepeatAwareUvDescriptors.BuildScratch();
         private final RepeatAwareTransportProof.BuildScratch repeatAwareTransportScratch = new RepeatAwareTransportProof.BuildScratch();
+        private final TJunctionTopologyProof.BuildScratch tJunctionTopologyScratch = new TJunctionTopologyProof.BuildScratch();
         private long completedLocalBuilds;
         private long lastFingerprint;
 
@@ -434,6 +438,21 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     return;
                 }
 
+                // P3.6 dev13 is deliberately the last pure worker-side sidecar.
+                // Build it twice before publication so every completed ticket carries
+                // transactionally deterministic T-junction evidence.
+                TJunctionTopologyProof firstTJunctionTopology = TJunctionTopologyProof.build(
+                        firstMergeCandidates, firstRepeatAwareTransport, tJunctionTopologyScratch);
+                TJunctionTopologyProof secondTJunctionTopology = TJunctionTopologyProof.build(
+                        firstMergeCandidates, firstRepeatAwareTransport, tJunctionTopologyScratch);
+                if (!firstTJunctionTopology.contentEquals(secondTJunctionTopology)) {
+                    throw new IllegalStateException("Worker-produced T-junction topology proof was nondeterministic");
+                }
+                if (ticket.cancellationRequested || closed) {
+                    cancelTicket(ticket);
+                    return;
+                }
+
                 boolean audit = completedLocalBuilds == 0L
                         || (completedLocalBuilds % DETERMINISM_AUDIT_INTERVAL) == 0L;
                 if (audit) {
@@ -535,6 +554,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 ticket.emissionSafety = firstEmissionSafety;
                 ticket.repeatAwareUv = firstRepeatAwareUv;
                 ticket.repeatAwareTransport = firstRepeatAwareTransport;
+                ticket.tJunctionTopologyProof = firstTJunctionTopology;
                 ticket.mesh = first;
                 ticket.endNs = System.nanoTime();
                 ticket.state = TicketState.COMPLETED;

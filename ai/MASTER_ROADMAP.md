@@ -308,17 +308,19 @@ Reference dev11 runtime (A-0140):
 
 The dev11 visual PASS closes the concrete P3.4 canary raster obligation on the tested Vulkan reference hardware. It does not falsely complete P3.6's broader T-junction policy. The runtime diagnostic `renderCorrectMergeKeyComplete=false` remains a narrower implementation diagnostic; P3.4 roadmap completion means the frozen dev6-dev11 chain satisfied its required merge/emission correctness and canary validation, not that every future terrain/render class is greedily mergeable.
 
-#### P3.5 — Border/halo correctness — ACTIVE
+#### P3.5 — Border/halo correctness — COMPLETE
 
-Validate face visibility, light/AO and rebuild invalidation across section boundaries with no worker-thread live-world reads.
+Validated as corrected `0.3.0-phase3-dev12.1`; promotion PR #46 merge `1f34b3e4819b4eaa3a8fa474b09570a2e049b15a`.
 
-P3.5 must begin by freezing an exact correctness/runtime contract against current snapshot/halo capture, cross-section visibility, supported light/AO semantics, neighbor dirty propagation, generation identity, worker inputs and the already-proven dev11 hybrid emission path. Existing greedy eligibility may remain equal or narrow when border proof is insufficient; it must never widen correctness assumptions silently.
+A-0146 closed the frozen A-0142 contract on the reference RX 6800 XT Vulkan system: all inherited gates through dev11 remained true, `borderHaloCorrectnessEvidenceReady=true`, 248 installed deterministic proofs produced `380,928 / 380,928 / 380,928` outward/binary/reference matches, shared-border comparison was `167,936 / 167,936`, halo-only and vertical dirty dependencies were exercised, worker world reads remained zero, stale installs remained zero, lifetime closed cleanly and process exit was 0. A-0145's cancellation-aware exact residual accounting remains the durable correction for legitimate stage-boundary cancellation.
 
-#### P3.6 — T-junction policy — PLANNED
+#### P3.6 — T-junction policy — COMPLETE
 
-Default to greedy topology unless real Vulkan hardware shows cracks. Prefer stable positions and targeted mitigation/splitting over globally abandoning greedy meshing. P3.4 emission work identified and exercised its immediate raster obligations without declaring this broader policy complete.
+Validated as `0.3.0-phase3-dev13`; A-0149 closes the frozen A-0147 contract on the reference RX 6800 XT Vulkan path. Dev13 proved the actual dev10-safe/dev11-emitted merged topology contains real strict coplanar same-facing T-junctions while changing no geometry, shader or pipeline behavior. Final evidence recorded 329 deterministic installed proofs, 7,391 emitted merged candidates, 29,564 exact candidate edges, 3,231 strict T-junction points, exact bounds/plane/integer-lattice matches, 329 camera-relative transform proofs and 283 junction-bearing transform proofs with zero transform failures. All inherited gates through P3.5/dev11 remained green, worker world reads after capture remained zero, unsafe stale installs remained zero, lifetime closed cleanly and process exit was 0.
 
-#### P3.7 — Differential correctness framework — PLANNED
+The targeted visual gate armed only after proven strict junctions existed in drawn LIVE sections. The explicit human verdict was PASS: visually everything looked fine, with no reported cracks, pinholes, flickering seams, double/z-fighting edges or camera-motion-dependent gaps. Therefore no baseline T-junction mitigation is required on the proven reference path. D-0024 remains authoritative: retain the cross-vendor/larger-scale revisit hook and prefer targeted mitigation/selective splitting only if future evidence demonstrates an artifact; do not globally weaken greedy meshing based on theoretical risk alone.
+
+#### P3.7 — Differential correctness framework — ACTIVE
 
 Run reference and optimized meshers on representative snapshots; expand greedy rectangles conceptually to covered faces; compare coverage/material/light/AO truth; preserve failing fixtures. Optimized output never becomes its own oracle.
 
@@ -384,7 +386,9 @@ Configuration/UI polish, presets/migration, crash diagnostics, benchmark export,
 - [COMPLETE foundation] Repeat-aware UV descriptor / representability proof.
 - [COMPLETE foundation] Repeat-aware transport/sampling proof.
 - [COMPLETE canary] Repeat-aware render-correct greedy GPU emission.
-- [ACTIVE] Border/halo visibility, light/AO and rebuild-invalidation correctness.
+- [COMPLETE] Border/halo visibility, light/AO and rebuild-invalidation correctness.
+- [COMPLETE] Evidence-driven T-junction topology/raster policy.
+- [ACTIVE] Differential correctness framework against the permanent independent reference oracle.
 - [PLANNED] Full production opaque/cutout terrain replacement.
 - [COMPLETE foundation] Supported lighting/AO/tint/material/UV capture truth.
 - [PLANNED] Fluids/translucent terrain.
@@ -492,6 +496,18 @@ Newer durable decisions override stale roadmap text until synchronized. Always p
 
 ## 16. Roadmap revision log
 
+### 2026-08-29 — P3.5 completion and P3.6 activation
+
+- A-0146 closed corrected dev12.1 P3.5 runtime with every frozen gate true, exact border/reference/shared-border agreement, halo-only + vertical dependency exercise, clean lifetime and process exit 0;
+- exact synchronized P3.5 evidence head passed workflow `33262044878`;
+- draft PR #45 was superseded only because the connected ready-for-review mutation still uses invalid `Repository.fullDatabaseId`; non-draft PR #46 promoted the exact same green head as `[no-release]` merge `1f34b3e4819b4eaa3a8fa474b09570a2e049b15a`;
+- marked P3.5 COMPLETE;
+- A-0147 activated P3.6 and froze dev13 as a non-geometry-changing proof of actual emitted strict T-junction topology plus camera-relative transform evidence before deciding whether mitigation is justified;
+- A-0148 integrated/package-validated the dev13 proof path without geometry changes;
+- A-0149 proved 3,231 real strict T-junction points, exact topology/transform identities, clean runtime/lifetime closure and an explicit targeted visual PASS on the reference RX 6800 XT Vulkan path;
+- completed P3.6 with no baseline mitigation required on the proven path and retained the D-0024 cross-vendor/scale revisit hook;
+- activated P3.7 differential correctness while leaving P3.8+ order unchanged.
+
 ### 2026-08-29 — P3.4 dev11 completion and P3.5 activation
 
 - completed the geometry-changing dev11 repeat-aware greedy GPU emission canary from exact evidence head `66c38250426cd6d35629fda088ade768420dee0f`;
@@ -563,8 +579,10 @@ Created the canonical master roadmap and formal governance model.
 - P3.2: COMPLETE through `0.3.0-phase3-dev4`, PR #36.
 - P3.3: COMPLETE through `0.3.0-phase3-dev5`, PR #37.
 - **P3.4: COMPLETE through `0.3.0-phase3-dev11`, promotion PR #44.**
-- **P3.5: ACTIVE — border/halo correctness.**
-- P3.6-P3.9 remain PLANNED/EXPERIMENTAL as marked.
+- **P3.5: COMPLETE through corrected `0.3.0-phase3-dev12.1`, promotion PR #46.**
+- **P3.6: COMPLETE through `0.3.0-phase3-dev13`; A-0149 proves no baseline mitigation required on the reference path.**
+- **P3.7: ACTIVE — differential correctness framework.**
+- P3.8 remains PLANNED and P3.9 remains EXPERIMENTAL.
 - Phases 4-12 retain their planned order/scope.
 
 Always verify live details in `ai/CURRENT_STATE.md` before acting because active milestone state changes more frequently than the long-range plan.

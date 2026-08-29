@@ -95,6 +95,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     private SectionBakedQuadSnapshot bakedSnapshot;
     private BakedSectionMesh oracleMesh;
     private RepeatAwareGreedyMesh drawableMesh;
+    private TJunctionTopologyProof tJunctionTopologyProof;
 
     private long passthroughVertexHandle = DeviceGeometryArena.INVALID_HANDLE;
     private long mergedVertexHandle = DeviceGeometryArena.INVALID_HANDLE;
@@ -296,8 +297,15 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         workerJobsCompleted++;
         BakedSectionMesh exact = ticket.mesh();
         RepeatAwareTransportProof transport = ticket.repeatAwareTransport();
-        if (exact == null || transport == null) {
-            throw new IllegalStateException("Completed Phase 3 dev11 worker ticket published incomplete proof/mesh output");
+        TJunctionTopologyProof tJunctionProof = ticket.tJunctionTopologyProof();
+        RenderMergeCandidates mergeCandidates = ticket.mergeCandidates();
+        if (exact == null || transport == null || tJunctionProof == null || mergeCandidates == null) {
+            throw new IllegalStateException("Completed Phase 3 dev13 worker ticket published incomplete proof/mesh output");
+        }
+        if (tJunctionProof.sourceCandidateFingerprint() != mergeCandidates.fingerprint()
+                || tJunctionProof.sourceTransportFingerprint() != transport.fingerprint()
+                || tJunctionProof.emittedCandidates() != transport.recordCount()) {
+            throw new IllegalStateException("Phase 3 dev13 T-junction proof lost exact emitted-candidate identity");
         }
         RepeatAwareGreedyMesh hybrid = transport.greedyMesh();
         if (ticket.generation() != generation
@@ -335,6 +343,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
 
         oracleMesh = exact;
         drawableMesh = hybrid;
+        tJunctionTopologyProof = tJunctionProof;
         workerTicket = null;
         state = State.READY_TO_INSTALL;
     }
@@ -880,7 +889,20 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     }
     public long indexBytes() { return drawableMesh == null ? 0L : drawableMesh.indexBytes(); }
     public long quadCount() { return drawableMesh == null ? 0L : drawableMesh.hybridQuadCount(); }
+    public TJunctionTopologyProof tJunctionTopologyProof() { return tJunctionTopologyProof; }
     public boolean transformCaptured() { return firstTransformCaptured; }
+    public boolean cameraRelativeTransformEvidenceReady() {
+        if (!firstTransformCaptured) return false;
+        double expectedX = requestedSectionX * (double) SectionSnapshot.INTERIOR_SIZE - firstCameraX;
+        double expectedY = requestedSectionY * (double) SectionSnapshot.INTERIOR_SIZE - firstCameraY;
+        double expectedZ = requestedSectionZ * (double) SectionSnapshot.INTERIOR_SIZE - firstCameraZ;
+        return Double.doubleToRawLongBits(expectedX) == Double.doubleToRawLongBits(firstRelativeX)
+                && Double.doubleToRawLongBits(expectedY) == Double.doubleToRawLongBits(firstRelativeY)
+                && Double.doubleToRawLongBits(expectedZ) == Double.doubleToRawLongBits(firstRelativeZ)
+                && Float.isFinite((float) firstRelativeX)
+                && Float.isFinite((float) firstRelativeY)
+                && Float.isFinite((float) firstRelativeZ);
+    }
     public double firstCameraX() { return firstCameraX; }
     public double firstCameraY() { return firstCameraY; }
     public double firstCameraZ() { return firstCameraZ; }
