@@ -776,6 +776,14 @@ public final class RepeatAwareGreedyMesh {
     public int passthroughCutoutFirstLocalIndex() { return passthroughSolidIndexCount(); }
     public int mergedSolidFirstLocalIndex() { return passthroughQuadCount() * INDICES_PER_QUAD; }
     public int mergedCutoutFirstLocalIndex() { return mergedSolidFirstLocalIndex() + mergedSolidIndexCount(); }
+    public int passthroughSourceQuad(int index) {
+        if (index < 0 || index >= passthroughSourceQuads.length) throw new IndexOutOfBoundsException(index);
+        return passthroughSourceQuads[index];
+    }
+    public int mergedCandidateIndex(int index) {
+        if (index < 0 || index >= mergedCandidateIndices.length) throw new IndexOutOfBoundsException(index);
+        return Short.toUnsignedInt(mergedCandidateIndices[index]);
+    }
     public int directionMerged(int direction) { validateDirection(direction); return directionMerged[direction]; }
     public int directionCoveredFaces(int direction) { validateDirection(direction); return directionCovered[direction]; }
     public int directionFacesSaved(int direction) { validateDirection(direction); return directionSaved[direction]; }

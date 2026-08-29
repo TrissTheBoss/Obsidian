@@ -96,6 +96,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     private BakedSectionMesh oracleMesh;
     private RepeatAwareGreedyMesh drawableMesh;
     private TJunctionTopologyProof tJunctionTopologyProof;
+    private DifferentialCorrectnessProof differentialCorrectnessProof;
 
     private long passthroughVertexHandle = DeviceGeometryArena.INVALID_HANDLE;
     private long mergedVertexHandle = DeviceGeometryArena.INVALID_HANDLE;
@@ -256,7 +257,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         }
 
         SectionMeshWorkerPool.Ticket ticket = workers.submit(
-                generation, buildEventSequence, workerPriority, captured, firstBaked);
+                generation, buildEventSequence, workerPriority, captured, firstReference, firstBaked);
         if (ticket == null) {
             workerQueueRejections++;
             nextCaptureAttemptNs = nowNs + RETRY_DELAY_NS;
@@ -298,9 +299,11 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         BakedSectionMesh exact = ticket.mesh();
         RepeatAwareTransportProof transport = ticket.repeatAwareTransport();
         TJunctionTopologyProof tJunctionProof = ticket.tJunctionTopologyProof();
+        DifferentialCorrectnessProof differentialProof = ticket.differentialCorrectnessProof();
         RenderMergeCandidates mergeCandidates = ticket.mergeCandidates();
-        if (exact == null || transport == null || tJunctionProof == null || mergeCandidates == null) {
-            throw new IllegalStateException("Completed Phase 3 dev13 worker ticket published incomplete proof/mesh output");
+        if (exact == null || transport == null || tJunctionProof == null
+                || differentialProof == null || mergeCandidates == null) {
+            throw new IllegalStateException("Completed Phase 3 dev14 worker ticket published incomplete proof/mesh output");
         }
         if (tJunctionProof.sourceCandidateFingerprint() != mergeCandidates.fingerprint()
                 || tJunctionProof.sourceTransportFingerprint() != transport.fingerprint()
@@ -308,6 +311,18 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
             throw new IllegalStateException("Phase 3 dev13 T-junction proof lost exact emitted-candidate identity");
         }
         RepeatAwareGreedyMesh hybrid = transport.greedyMesh();
+        if (!differentialProof.exact()
+                || differentialProof.sourceSnapshotFingerprint() != snapshot.fingerprint()
+                || differentialProof.sourceReferenceFingerprint() != referenceMesh.fingerprint()
+                || differentialProof.sourceBakedFingerprint() != bakedSnapshot.fingerprint()
+                || differentialProof.sourceOracleFingerprint() != exact.fingerprint()
+                || differentialProof.sourceCandidateFingerprint() != mergeCandidates.fingerprint()
+                || differentialProof.sourceTransportFingerprint() != transport.fingerprint()
+                || differentialProof.sourceOptimizedFingerprint() != hybrid.fingerprint()) {
+            throw new IllegalStateException(
+                    "Phase 3 dev14 differential proof lost exact source/optimized identity: "
+                            + differentialProof.firstMismatch().describe());
+        }
         if (ticket.generation() != generation
                 || ticket.eventSequence() != buildEventSequence
                 || SectionLifecycleEvents.latestSequence() != buildEventSequence
@@ -344,13 +359,16 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         oracleMesh = exact;
         drawableMesh = hybrid;
         tJunctionTopologyProof = tJunctionProof;
+        differentialCorrectnessProof = differentialProof;
         workerTicket = null;
         state = State.READY_TO_INSTALL;
     }
 
     private void tryInstallWorkerResult(GameRenderer renderer, long frameSerial) {
-        if (drawableMesh == null || oracleMesh == null || snapshot == null || bakedSnapshot == null || referenceMesh == null) {
-            throw new IllegalStateException("Phase 3 dev11 install-ready record is incomplete");
+        if (drawableMesh == null || oracleMesh == null || snapshot == null || bakedSnapshot == null
+                || referenceMesh == null || differentialCorrectnessProof == null
+                || !differentialCorrectnessProof.exact()) {
+            throw new IllegalStateException("Phase 3 dev14 install-ready record is incomplete or differential-invalid");
         }
         if (SectionLifecycleEvents.latestSequence() != buildEventSequence
                 || SectionMaterialSnapshot.currentResourceEpoch() != bakedSnapshot.resourceEpoch()) {
@@ -890,6 +908,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     public long indexBytes() { return drawableMesh == null ? 0L : drawableMesh.indexBytes(); }
     public long quadCount() { return drawableMesh == null ? 0L : drawableMesh.hybridQuadCount(); }
     public TJunctionTopologyProof tJunctionTopologyProof() { return tJunctionTopologyProof; }
+    public DifferentialCorrectnessProof differentialCorrectnessProof() { return differentialCorrectnessProof; }
     public boolean transformCaptured() { return firstTransformCaptured; }
     public boolean cameraRelativeTransformEvidenceReady() {
         if (!firstTransformCaptured) return false;
