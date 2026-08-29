@@ -53,12 +53,30 @@ final class OrdinaryQuadEmissionSafetyEvidence {
         long reductionPermille = renderKeyEligibleFaces == 0L ? 0L
                 : safeFacesSaved * 1000L / renderKeyEligibleFaces;
 
+        /*
+         * Worker cancellation is checked between pure pipeline stages. A cancelled
+         * ticket may therefore have published merge-candidate telemetry without
+         * ever reaching emission-safety. Those earlier-stage records are valid,
+         * but they are not part of the downstream aggregate. Preserve exact
+         * accounting by treating the aggregate difference as a cancelled prefix,
+         * never by pretending the two global totals are identical.
+         */
+        long mergeBuilds = workers.mergeCandidateBuilds();
+        long cancelledPrefixBuilds = mergeBuilds - builds;
+        long cancelledPrefixCandidates = mergeCandidateCount - candidates;
+        long cancelledPrefixSingletons = mergeCandidateSingletons - singletons;
+        long cancelledPrefixMultiFace = mergeCandidateMultiFace - multiFace;
+        boolean cancellationAccountingExact = cancelledPrefixBuilds >= 0L
+                && cancelledPrefixBuilds <= workers.cancelledJobs()
+                && cancelledPrefixCandidates >= 0L
+                && cancelledPrefixSingletons >= 0L
+                && cancelledPrefixMultiFace >= 0L
+                && cancelledPrefixCandidates == cancelledPrefixSingletons + cancelledPrefixMultiFace;
+
         boolean ready = priorGateReady
                 && builds > 0L
                 && builds >= workerCompletedJobs
-                && candidates == mergeCandidateCount
-                && singletons == mergeCandidateSingletons
-                && multiFace == mergeCandidateMultiFace
+                && cancellationAccountingExact
                 && singletons + multiFace == candidates
                 && colorSafe + colorUnsafe == multiFace
                 && lightSafe + lightUnsafe == multiFace
