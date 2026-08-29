@@ -1,0 +1,34 @@
+name: P3.9 dev16 implementation
+
+on:
+  push:
+    branches: [ phase3/partial-remeshing ]
+    paths:
+      - tools/p3_9_dev16_impl.py
+      - .github/workflows/p3-9-dev16-impl.yml
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase3/partial-remeshing
+          fetch-depth: 0
+      - name: Apply frozen dev16 implementation
+        run: python tools/p3_9_dev16_impl.py
+      - name: Build exact dev16 source
+        run: ./gradlew build
+      - name: Remove temporary helpers
+        run: rm tools/p3_9_dev16_impl.py .github/workflows/p3-9-dev16-impl.yml
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "[no-release] Implement P3.9 dev16 shadow partial remeshing"
+          git push origin HEAD:phase3/partial-remeshing
