@@ -19,72 +19,64 @@ Last updated: 2026-08-30
 - Active branch: `phase3/partial-remeshing`.
 - Frozen parent contract: **A-0159** — shadow-only four fixed Y slices, exact block-local dirty provenance, mandatory full fallback, matched production full-section control, permanent P3.7 correctness, and pre-frozen benefit/complexity thresholds. **Every A-0159 threshold remains unchanged.**
 - Production full-section invalidation/capture/worker mesh/upload/install/draw remains authoritative. Partial-remesh output is never uploaded or drawn. No partial GPU patch exists.
-- Dev16 A-0161 failed one shadow correctness fixture; dev17 corrected the two proven proof defects and A-0164 closed correctness `19/19` but lacked evidence volume.
-- Dev18 pending coalescing closed the pending-state loss. A-0167/A-0168 remained PARTIAL; dominant avoidable loss moved to provenance, with no correctness failures.
-- A-0169/A-0170 introduced dev19 provenance diagnostics.
-- **A-0171 dev19 runtime: diagnostic SUCCESS.** All `40/40` provenance fallbacks were missing/empty; off-render-thread `0`, overflow `0`, other `0`; first fixture was `SCANNING`, center known, pending exact episode present, drain `0/0`. Do not rerun dev19.
-- **A-0172 dev20 causal-correlation plan: FROZEN.**
-- **A-0173 exact Minecraft 26.2 dirty call shape: SUCCESS.** `ClientLevel.setBlocksDirty` -> `LevelExtractor.setBlockDirty`; one render-relevant exact block dirty synchronously emits `27` section-dirty calls. Common `54` batches are two exact callbacks; the later next-frame `+1` is distinct.
-- **A-0174 dev20 outer section-dirty tracer: FROZEN.**
-- **A-0175 dev20 package: SUCCESS.** Canonical dev20 SHA-256 `690b24cd6bb34e47b3b85159eda365da3e1f76f95d41b51f0b1298fc093ed2f3`.
-- **A-0176 dev20 runtime: diagnostic SUCCESS.** Provenance fallback `21/21` missing/empty. All `21/21` were outer `SINGLE_SECTION` only; exact-block/range/neighbor/mixed/no-relevant/unclassified involvement all `0`; accounting coherent. First event `(58,4,-4)`, `dirtyFromPlayer=false`, one lifecycle-relevant event, `SCANNING`, center known, pending exact episode present. P3.5/P3.6/P3.7/P3.8 and lifetime gates remained green; P3.7 `194/194`, zero real mismatches; clean exit `0`. Do not rerun dev20.
-- **A-0177 dev21 exact public-single-section caller contract: FROZEN.** Generic `SINGLE_SECTION` preservation is forbidden until exact caller identity is known.
-- **A-0178 exact Minecraft 26.2 caller result: SUCCESS.** There are two external callers of public `LevelExtractor.setSectionDirty(III)`: `ClientChunkCache.onLightUpdate(LightLayer, SectionPos)` emits one supplied section; `ClientPacketListener.handleChunksBiomes(ClientboundChunksBiomesPacket)` performs a broad 3x3 chunk-neighborhood across the full section-Y range. Therefore generic single-section preservation is unsafe. Exact caller inspection runs `33277863920` and `33277944526` succeeded.
-- **A-0179 dev21 caller-specific tracer contract: FROZEN.** Add bounded `LIGHT_UPDATE`, `BIOME_PACKET`, and `OTHER_SINGLE_SECTION` correlation only; fallback behavior unchanged.
-- **A-0180 dev21 implementation/package: SUCCESS; short reference runtime required.**
+- Dev16 correctness defect was corrected by dev17; dev18 closed pending same-section coalescing but evidence remained partial because provenance/halo losses dominated.
+- Dev19 A-0171 proved the provenance bucket was `40/40` missing/empty, not off-thread or overflow.
+- Dev20 A-0176 proved `21/21` missing/empty fallbacks were outer `SINGLE_SECTION` only.
+- A-0178 exact Minecraft 26.2 bytecode proved public `LevelExtractor.setSectionDirty(III)` is shared by single-section `ClientChunkCache.onLightUpdate(...)` and broad `ClientPacketListener.handleChunksBiomes(...)`, so generic single-section preservation is forbidden.
+- Dev21 A-0181 runtime **closed the caller question**: all `43/43` missing/empty provenance fallbacks remained outer `SINGLE_SECTION` and all `43/43` were `LIGHT_UPDATE` only. Caller totals were `117` relevant, `117` light update, `0` biome, `0` other; mixed/unavailable/cross-thread/overflow all `0`. Permanent P3.7 proof closed `312/312` with zero real mismatches and lifetime shutdown was clean. Do not rerun dev21.
+- **A-0182 dev22 exact-section light-update preservation contract: PLAN FROZEN.** This is the final correction pass for the fixed four-slice experiment before a PASS or formal REJECT/DEFER decision.
+- **A-0183 dev22 implementation/package: SUCCESS; full unchanged A-0159 closure runtime required.**
 
-## Dev21 canonical runtime handoff
+## Dev22 canonical runtime handoff
 
 Implementation/package authority:
 
-- exact implementation head `28d14510991eddd05fb68eed2cb806b63a4ff0eb`
-- tree `31ba14ce0256090a0055236126afe649e5f3bd84`
-- hosted Build `33278257773`: Java 25 / Gradle 9.5.1 SUCCESS; Build SUCCESS; artifact upload SUCCESS; release SKIPPED
-- artifact id `9722180208`
-- wrapper `obsidian-7df0b6a0fdd47b3acfbe4f59516a8e1cee080515`, size `753000` bytes, digest `sha256:7b7e63908025cc5d8609726aacaa5e70996f4faf728831568941e05287d2bc18`
-- canonical JAR `Obsidian-0.3.0-phase3-dev21.jar`
-- size `518959` bytes
-- SHA-256 `9b0e103de085c3f35fac3a3c245f8577c362df1e7c2925bb21c96c107fd7621a`
-- sources JAR `267193` bytes; SHA-256 `50bba4884c7c3ff06038be709bfca37c79336710d3d476b5b049230a57b58269`
+- exact implementation/package head `177081d5b8605439f66d70ffca481c0044e62add`
+- tree `9fadf0e62b7833f7676dc067e7b4cab40ae19805`
+- hosted Build `33279229989`: Java 25 / Gradle 9.5.1 SUCCESS; Build SUCCESS; artifact upload SUCCESS; release SKIPPED
+- artifact id `9722466081`
+- wrapper digest `sha256:d2d9b720562a86d8b3d2972e25d187bb76e8e74732fe282889038d825cc31227`
+- canonical JAR `Obsidian-0.3.0-phase3-dev22.jar`
+- size `524452` bytes
+- SHA-256 `ec0574c7d24a521eed3de13b5c7efc23f54d501c6c8915c597a283f9296a3f27`
+- sources JAR `271008` bytes; SHA-256 `da1499574481812db91ab2df1e5e9b02e3a7619e18ff8abd5013895c420655ad`
 
-Dev21 scope/safety:
+Dev22 correction scope:
 
-- `AsyncMultiSectionSceneProbe.java` admission/fallback logic unchanged;
-- missing/empty provenance still records `FALLBACK_PROVENANCE` and clears pending exactly as dev20;
-- no A-0159 threshold changes;
-- no request/slice/dependency/mesher/worker/upload/staging/arena/shader/pipeline/native Vulkan changes;
-- no P3.7 oracle changes;
-- `LevelExtractorMixin` reports caller identity only after `SectionLifecycleEvents` accepts the event and outer origin is already `SINGLE_SECTION`;
-- caller scopes are exact Minecraft 26.2 `ClientChunkCache.onLightUpdate` and `ClientPacketListener.handleChunksBiomes` methods;
-- diagnostics retain fixed primitive counters, bounded scope stack, per-drain deltas, and one first fixture only;
-- no partial GPU patching.
+- only an **already-pending shadow** partial-remesh episode can be preserved;
+- only after the existing provenance drain reports `count=0` and `flags=0`;
+- every accepted lifecycle event in that interval must be a `ClientChunkCache.onLightUpdate` event;
+- relevant light count must equal lifecycle relevant count and be >0;
+- all relevant light events must identify one identical section exactly equal to the pending episode section;
+- biome/other/mixed/unavailable/wrong-section/multi-section/count-mismatch/cross-thread/overflow cases fail closed to the existing provenance fallback;
+- the pending request is not widened or mutated: episode id, original fingerprints, slice mask and edit count remain unchanged;
+- production full-section invalidation/rebuild continues normally;
+- no A-0159 threshold, slice rule, greedy rule, P3.7 oracle, worker, upload, staging, arena, shader, pipeline, atlas/lightmap or native Vulkan behavior changed;
+- partial GPU patching remains disabled.
 
-Draft P3.9 PR: **#53**, keep DRAFT / DO NOT MERGE.
+Draft P3.9 PR: **#53**, keep DRAFT / DO NOT MERGE until the full closure decision is recorded.
 
-## Exact next action
+## Exact next action — final P3.9 decision run
 
-Run the exact canonical dev21 JAR. This remains a **short diagnostic**, not the 32-episode A-0159 closure run:
+Run the exact canonical dev22 JAR through the full unchanged A-0159 workload. This is **not another short diagnostic**.
 
-1. wait for settled READY and P3.9 arm;
-2. perform about 6 safe-interior ordinary edits with READY recovery;
-3. perform about 3 safe-interior Y-slice-boundary edits;
-4. perform one quick same-section 3-5 edit burst;
-5. perform F3+T and recover READY;
-6. cause one real scene recenter and recover READY;
+Required minimum workload after settled READY / P3.9 arm:
+
+1. >=16 separate safe-interior one-slice edits, allowing READY recovery between episodes;
+2. >=8 separate safe-interior two-slice boundary edits, allowing READY recovery;
+3. >=1 quick same-section coalesced burst;
+4. F3+T and READY recovery to exercise mandatory global fallback;
+5. one real scene recenter and READY recovery to exercise mandatory global fallback;
+6. continue safe-interior localized edits until completed localized episodes >=32;
 7. quit normally and return the complete log.
 
-Decisive lines:
+Frozen conclusion rule:
 
-- `Phase 3 dev21 P3.9 final provenance diagnostics`;
-- existing `Phase 3 dev20 P3.9 final provenance-origin correlation` (outer tracer retained unchanged);
-- `Phase 3 dev21 P3.9 final single-section caller totals`;
-- `Phase 3 dev21 P3.9 first single-section caller fixtures`;
-- `Phase 3 dev21 P3.9 final provenance-caller correlation`.
+- **PASS:** if volume, exactness, complexity, CPU and projected-upload thresholds all close, record P3.9 experimental SUCCESS and move to full production opaque/cutout terrain replacement. Partial GPU patching is not required before moving on.
+- **BENEFIT FAIL at full volume:** formally REJECT/DEFER the fixed four-slice strategy without retuning thresholds and move to full production opaque/cutout terrain replacement.
+- **CORRECTNESS FAIL:** use the first fixture; allow at most one clearly evidence-required safety correction, otherwise REJECT/DEFER P3.9. Do not reopen broad provenance research.
 
-Decision rule after runtime:
-
-- if every provenance fallback remains outer `SINGLE_SECTION` and every caller correlation is `LIGHT_UPDATE` only, freeze a separate correction contract requiring exact pending-section identity plus all A-0177 fail-closed conditions before changing behavior;
-- any `BIOME_PACKET`, `OTHER_SINGLE_SECTION`, mixed, unavailable, scope cross-thread, or scope-overflow evidence blocks that correction and requires redesign/cause capture instead.
+The roadmap dependency remains: real production opaque/cutout terrain replacement comes before Phase 4 large-scale GPU visibility tuning.
 
 ## Public release / handoff policy
 
