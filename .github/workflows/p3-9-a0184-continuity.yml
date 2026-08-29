@@ -1,0 +1,29 @@
+name: P3.9 A-0184 continuity append
+
+on:
+  push:
+    branches: [phase3/partial-remeshing]
+    paths:
+      - '.github/workflows/p3-9-a0184-continuity.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  append:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase3/partial-remeshing
+      - name: Append A-0184
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '' '---' '' '## A-0184 - dev22 reference runtime did not arm' '' '**Date:** 2026-08-30' '**Objective:** Run the canonical dev22 binary through the full frozen A-0159 closure workload.' '**Action:** User ran dev22 on the reference Windows / RX 6800 XT Vulkan system and returned the complete log.' '**Result:** `PARTIAL` — non-decisive; the benchmark/P3.9 window never armed.' '**Evidence:** `ai/attempts/A-0184-phase3-p3.9-dev22-reference-runtime-not-armed.md`; `partialRemeshWindowArmed=false`; completed/observed/retained `0/0/0`; P3.6 had 385/385 deterministic proofs but `strictTJunctionPoints=0` and `junctionBearingTransformProofRecords=0`; all 385 P3.7 proof contents remained exact with zero missing/duplicate/optimized-without-reference/real mismatches; clean lifetime and exit `0`.' '**Why:** FrameCoordinator arms the benchmark/P3.9 window only after `differentialCorrectnessEvidenceReady()`. That readiness inherits the P3.6 requirement for at least one strict T-junction and one junction-bearing transform proof. The selected scene supplied neither witness.' '**Side effects / lessons:** This is scene-selection/gate-population failure, not a dev22 correction failure. No source change, threshold change or new JAR is justified. Do not begin the closure workload until the two P3.9 arming log lines are visible.' '**Next action:** Rerun the same dev22 JAR in a geometrically richer section, establish P3.6 readiness first, wait for both P3.9 arming lines, then perform the full >=32/16/8/coalesced/reload/recenter closure workload. PASS or formal benefit REJECT/DEFER then moves directly to production opaque/cutout terrain replacement.' >> ai/ATTEMPT_LOG.md
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add ai/ATTEMPT_LOG.md
+          git commit -m '[no-release] Append A-0184 continuity'
+          git push origin HEAD:phase3/partial-remeshing
