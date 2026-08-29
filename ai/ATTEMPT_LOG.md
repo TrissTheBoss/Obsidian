@@ -555,3 +555,16 @@ Copy this section and replace placeholders. Do not edit previous entries.
 **Result:** `SUCCESS` for implementation/package; full A-0159 closure runtime required.
 **Evidence:** `ai/attempts/A-0183-phase3-p3.9-dev22-light-update-preservation-package.md`; exact implementation `177081d5b8605439f66d70ffca481c0044e62add`, tree `9fadf0e62b7833f7676dc067e7b4cab40ae19805`, Build `33279229989` SUCCESS, artifact `9722466081`; canonical JAR `524452` bytes, SHA-256 `ec0574c7d24a521eed3de13b5c7efc23f54d501c6c8915c597a283f9296a3f27`.
 **Next action:** Full frozen A-0159 closure run. PASS or formal benefit REJECT/DEFER both move the project to full production opaque/cutout terrain rendering replacement; do not retune thresholds or automatically implement partial GPU patching.
+
+---
+
+## A-0184 - dev22 reference runtime did not arm
+
+**Date:** 2026-08-30
+**Objective:** Run the canonical dev22 binary through the full frozen A-0159 closure workload.
+**Action:** User ran dev22 on the reference Windows / RX 6800 XT Vulkan system and returned the complete log.
+**Result:** `PARTIAL` — non-decisive; the benchmark/P3.9 window never armed.
+**Evidence:** `ai/attempts/A-0184-phase3-p3.9-dev22-reference-runtime-not-armed.md`; `partialRemeshWindowArmed=false`; completed/observed/retained `0/0/0`; P3.6 had 385/385 deterministic proofs but `strictTJunctionPoints=0` and `junctionBearingTransformProofRecords=0`; all 385 P3.7 proof contents remained exact with zero missing/duplicate/optimized-without-reference/real mismatches; clean lifetime and exit `0`.
+**Why:** FrameCoordinator arms the benchmark/P3.9 window only after `differentialCorrectnessEvidenceReady()`. That readiness inherits the P3.6 requirement for at least one strict T-junction and one junction-bearing transform proof. The selected scene supplied neither witness.
+**Side effects / lessons:** This is scene-selection/gate-population failure, not a dev22 correction failure. No source change, threshold change or new JAR is justified. Do not begin the closure workload until the two P3.9 arming log lines are visible.
+**Next action:** Rerun the same dev22 JAR in a geometrically richer section, establish P3.6 readiness first, wait for both P3.9 arming lines, then perform the full >=32/16/8/coalesced/reload/recenter closure workload. PASS or formal benefit REJECT/DEFER then moves directly to production opaque/cutout terrain replacement.
