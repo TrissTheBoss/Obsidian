@@ -3,7 +3,7 @@ package dev.obsidian.render.terrain;
 import java.util.Arrays;
 
 /**
- * P3.9 dev16 shadow-only fixed-slice projection. It consumes the already-built
+ * P3.9 dev17 diagnostic/corrected shadow-only fixed-slice projection. It consumes the already-built
  * production artifacts, splits production merge identities at fixed Y-slice
  * ownership boundaries, proves exact selected source/canonical coverage, and
  * never creates or mutates GPU state.
@@ -17,6 +17,7 @@ public final class PartialRemeshShadowResult {
     public static final int FAILURE_MERGED_IDENTITY = 5;
     public static final int FAILURE_ACCOUNTING = 6;
     public static final int FAILURE_EXCEPTION = 7;
+    public static final int FAILURE_OPTIMIZED_WITHOUT_REFERENCE = 8;
 
     public static final class BuildScratch {
         private final boolean[] seenSource = new boolean[SectionBakedQuadSnapshot.MAX_QUADS];
@@ -139,22 +140,30 @@ public final class PartialRemeshShadowResult {
             }
 
             int selectedReference = 0;
-            int selectedVisibility = 0;
+            for (int face = 0; face < reference.faceCount(); face++) {
+                int packed = reference.packedFace(face);
+                int x = packed & 0xF;
+                int y = (packed >>> 4) & 0xF;
+                int z = (packed >>> 8) & 0xF;
+                int direction = (packed >>> 12) & 0x7;
+                if (!selected(mask, y >>> 2)) continue;
+                selectedReference++;
+                if (!visibility.hasFace(x, y, z, direction)) {
+                    fail(FAILURE_REFERENCE_VISIBILITY, packed);
+                }
+            }
             for (int y = 0; y < 16; y++) {
                 if (!selected(mask, y >>> 2)) continue;
                 for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
                     int bit = ((y * 16) + z) * 16 + x;
                     for (int direction = 0; direction < BinarySectionVisibility.DIRECTION_COUNT; direction++) {
-                        boolean visible = visibility.hasFace(x, y, z, direction);
+                        if (renderKeys.sourceQuad(x, y, z, direction) < 0) continue;
                         boolean ref = (scratch.referenceBits[direction * BinarySectionVisibility.WORDS_PER_DIRECTION + (bit >>> 6)]
                                 & (1L << (bit & 63))) != 0L;
-                        if (visible) selectedVisibility++;
-                        if (ref) selectedReference++;
-                        if (visible != ref) fail(FAILURE_REFERENCE_VISIBILITY, bit | (direction << 12));
+                        if (!ref) fail(FAILURE_OPTIMIZED_WITHOUT_REFERENCE, packFace(x, y, z, direction));
                     }
                 }
             }
-            if (selectedReference != selectedVisibility) fail(FAILURE_REFERENCE_VISIBILITY, -1);
 
             int topologyFragments = 0;
             for (int i = 0; i < rectangles.rectangleCount(); i++) {
@@ -291,6 +300,12 @@ public final class PartialRemeshShadowResult {
         return ((baked.sourceBlock(source) >>> 4) & 0xF) >>> 2;
     }
     private static boolean selected(int mask, int slice) { return (mask & (1 << slice)) != 0; }
+    private static int packFace(int x, int y, int z, int direction) {
+        return x | (y << 4) | (z << 8) | (direction << 12);
+    }
+    private static boolean permanentReferenceContractSatisfied(boolean reference, boolean visible, boolean mapped) {
+        return (!reference || visible) && (!mapped || reference);
+    }
 
     private static int selectedFragments(int direction, int plane, int v, int height, int mask) {
         if (direction == BinarySectionVisibility.DOWN || direction == BinarySectionVisibility.UP) {
@@ -371,7 +386,27 @@ public final class PartialRemeshShadowResult {
                 && allFragments(BinarySectionVisibility.NORTH, 0, 3, 2) == 2
                 && fragmentArea(BinarySectionVisibility.NORTH, 0, 3, 5, 2, 0) == 5
                 && fragmentArea(BinarySectionVisibility.NORTH, 0, 3, 5, 2, 1) == 5
-                && allFragments(BinarySectionVisibility.UP, 7, 0, 16) == 1;
+                && allFragments(BinarySectionVisibility.UP, 7, 0, 16) == 1
+                && permanentReferenceContractSatisfied(false, true, false)
+                && permanentReferenceContractSatisfied(true, true, false)
+                && !permanentReferenceContractSatisfied(true, false, false)
+                && !permanentReferenceContractSatisfied(false, true, true)
+                && "optimized-without-reference".equals(failureName(FAILURE_OPTIMIZED_WITHOUT_REFERENCE));
+    }
+
+    public static String failureName(int code) {
+        return switch (code) {
+            case FAILURE_NONE -> "none";
+            case FAILURE_UNSELECTED_CHANGED -> "unselected-changed";
+            case FAILURE_REFERENCE_VISIBILITY -> "reference-visibility";
+            case FAILURE_SOURCE_DUPLICATE -> "source-duplicate";
+            case FAILURE_SOURCE_MISSING -> "source-missing";
+            case FAILURE_MERGED_IDENTITY -> "merged-identity";
+            case FAILURE_ACCOUNTING -> "accounting";
+            case FAILURE_EXCEPTION -> "exception";
+            case FAILURE_OPTIMIZED_WITHOUT_REFERENCE -> "optimized-without-reference";
+            default -> "unknown-" + code;
+        };
     }
 
     public long episodeId() { return episodeId; }

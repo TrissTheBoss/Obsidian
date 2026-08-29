@@ -870,7 +870,8 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         if (result == null || result.episodeId() != pending.request.episodeId()) {
             partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_PENDING_EPISODE);
         } else {
-            partialRemeshTelemetry.recordCompleted(pending.request, result, probe.partialRemeshControlExecutionNs(),
+            partialRemeshTelemetry.recordCompleted(pending.sectionX, pending.sectionY, pending.sectionZ,
+                    pending.request, result, probe.partialRemeshControlExecutionNs(),
                     probe.partialRemeshControlUploadBytes(), probe.partialRemeshShadowDeterministic());
         }
         pendingPartialEpisode = null;
