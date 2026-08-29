@@ -54,24 +54,27 @@ final class OrdinaryQuadEmissionSafetyEvidence {
                 : safeFacesSaved * 1000L / renderKeyEligibleFaces;
 
         /*
-         * Worker cancellation is checked between pure pipeline stages. A cancelled
-         * ticket may therefore have published merge-candidate telemetry without
-         * ever reaching emission-safety. Those earlier-stage records are valid,
-         * but they are not part of the downstream aggregate. Preserve exact
-         * accounting by treating the aggregate difference as a cancelled prefix,
-         * never by pretending the two global totals are identical.
+         * Cancellation is checked between pure pipeline stages. A cancelled
+         * ticket may have published merge-candidate telemetry without reaching
+         * emission-safety. Prove the aggregate delta is exactly such a cancelled
+         * prefix; when no build was skipped, every cross-stage residual must be 0.
          */
         long mergeBuilds = workers.mergeCandidateBuilds();
         long cancelledPrefixBuilds = mergeBuilds - builds;
         long cancelledPrefixCandidates = mergeCandidateCount - candidates;
         long cancelledPrefixSingletons = mergeCandidateSingletons - singletons;
         long cancelledPrefixMultiFace = mergeCandidateMultiFace - multiFace;
+        boolean residualRequiresCancellation = cancelledPrefixBuilds > 0L
+                || (cancelledPrefixCandidates == 0L
+                    && cancelledPrefixSingletons == 0L
+                    && cancelledPrefixMultiFace == 0L);
         boolean cancellationAccountingExact = cancelledPrefixBuilds >= 0L
                 && cancelledPrefixBuilds <= workers.cancelledJobs()
                 && cancelledPrefixCandidates >= 0L
                 && cancelledPrefixSingletons >= 0L
                 && cancelledPrefixMultiFace >= 0L
-                && cancelledPrefixCandidates == cancelledPrefixSingletons + cancelledPrefixMultiFace;
+                && cancelledPrefixCandidates == cancelledPrefixSingletons + cancelledPrefixMultiFace
+                && residualRequiresCancellation;
 
         boolean ready = priorGateReady
                 && builds > 0L
