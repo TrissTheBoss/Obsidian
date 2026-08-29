@@ -20,7 +20,9 @@ jobs:
           fetch-depth: 0
 
       - name: Synchronize continuity
-        run: python3 tools/p3_9_dev17_continuity.py
+        run: |
+          python3 tools/p3_9_dev17_continuity.py
+          sed -i 's/[[:space:]]\+$//' ai/ATTEMPT_LOG.md
 
       - name: Remove temporary helper files
         run: |
