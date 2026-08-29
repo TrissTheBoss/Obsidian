@@ -28,7 +28,9 @@ Last updated: 2026-08-29
 - Exact synchronized P3.8 promotion head `144875e71069f7377a97c78947883592e5c88913` passed Build `33271895037`.
 - Draft PR #51 was closed only because the connected ready-for-review mutation failed on obsolete `Repository.fullDatabaseId`; non-draft same-head PR #52 merged `[no-release]` as `49385aedff74f2382fcd9a9bb44e59cf559e63c4`.
 - **Active milestone: P3.9 — Partial remeshing (EXPERIMENTAL).**
-- P3.9 source work remains blocked until a new immutable contract freeze is recorded from synchronized P3.8-complete `main`.
+- Active branch: `phase3/partial-remeshing`, based on exact synchronized P3.8-complete main `169274b468d2a278d39043938efff19844bec9ba` (Build `33272073819` SUCCESS).
+- Frozen first P3.9 slice: **A-0159 / planned `0.3.0-phase3-dev16`** — shadow-only four fixed Y slices, exact block-local dirty provenance with mandatory full fallback, matched full-section control and pre-frozen benefit/complexity thresholds.
+- Dev16 production GPU emission/install remains unchanged; later partial GPU patching is blocked on successful shadow evidence and a separate contract.
 - Public release intent: keep the existing public checkpoint; internal milestone merges use `[no-release]`.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
 
@@ -362,9 +364,9 @@ This is the first trustworthy P3.8 reference baseline. No numerical threshold is
 
 ## Immediate next action
 
-P3.8 is merged and COMPLETE. From the exact synchronized P3.8-complete `main`, create the P3.9 experimental branch and freeze partial-remeshing in a new immutable attempt before any source change. The experiment must prove benefit against the recorded A-0158 full-section baseline while preserving every inherited correctness/lifetime gate and explicitly accounting for metadata, GPU-allocation and fragmentation complexity.
+A-0159 freezes the first P3.9 experiment before source changes. Implement dev16 in shadow mode only: exact bounded block-local dirty provenance; deterministic four-slice mask/dependency planning; shadow slice meshing/proofs over existing immutable captured truth; unselected-slice under-invalidation fingerprints; matched shadow/full-section timing/work/output telemetry; and the frozen decision gate. Keep production full-section GPU emission/install authoritative and unchanged.
 
-Do not implement P3.9 before its contract freeze.
+Do not implement partial GPU patching in dev16.
 
 ## Continuity order
 

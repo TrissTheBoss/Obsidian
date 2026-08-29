@@ -332,7 +332,7 @@ A-0158 closes the frozen A-0154 full-section production-mesher baseline on `0.3.
 
 #### P3.9 — Partial remeshing — ACTIVE / EXPERIMENTAL
 
-Only after full-section greedy meshing is stable and measured. Partial slice/subregion rebuilds must prove enough benefit against the recorded A-0158 full-section baseline to justify metadata, scheduling, GPU-allocation and fragmentation complexity. A new immutable contract freeze is mandatory before source changes; fallback to the proven full-section path remains authoritative until the experiment closes.
+A-0159 freezes the first experiment as `0.3.0-phase3-dev16`: a **shadow-only fixed four-Y-slice decomposition** over the existing full-section production control. Exact block-local dirty provenance is required; unavailable/global lifecycle causes fall back to full-section. Selected slices are expanded by the proven one-block Y dependency, shadow output must pass permanent source/reference differential checks and prove unselected slices unchanged, and matched per-generation CPU/work/upload ratios are judged against pre-frozen thresholds. Dev16 changes no production GPU geometry/install path. Partial GPU patching is a later P3.9 slice only if this experiment proves sufficient benefit while keeping fixed metadata <=1 KiB/section and bounded geometry inflation.
 
 Phase 3 exits only when the greedy mesher is default for supported terrain, permanent differential correctness passes, the worker system remains bounded/cancellation-safe, hot paths avoid routine allocation and throughput supports large-scale scene testing.
 
