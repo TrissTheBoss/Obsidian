@@ -54,6 +54,10 @@ jobs:
             fi
           done
           echo "PUBLIC_SINGLE_SECTION_CALLER_CLASSES=$found"
+          echo '=== CLIENT_CHUNK_CACHE_METHOD_HEADERS_AND_LIGHT_UPDATE ==='
+          javap -classpath "$JAR" -c -p net.minecraft.client.multiplayer.ClientChunkCache | grep -n -B 15 -A 35 -E '^  public void onLightUpdate|LevelExtractor.setSectionDirty:\(III\)V' || true
+          echo '=== CLIENT_PACKET_LISTENER_METHOD_HEADERS_AND_BIOME_DIRTY ==='
+          javap -classpath "$JAR" -c -p net.minecraft.client.multiplayer.ClientPacketListener | grep -n -B 120 -A 35 -E '^  public void .*ClientboundChunksBiomesPacket|^  private void .*ClientboundChunksBiomesPacket|LevelExtractor.setSectionDirty:\(III\)V' || true
           echo '=== LEVEL_EXTRACTOR_PUBLIC_SINGLE_SECTION_BODY ==='
           javap -classpath "$JAR" -c -p net.minecraft.client.renderer.extract.LevelExtractor | grep -n -B 25 -A 45 -E '^  public void setSectionDirty\(int, int, int\);|setSectionDirty:\(III\)V' || true
           test "$found" -gt 0
