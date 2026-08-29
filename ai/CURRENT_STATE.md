@@ -10,14 +10,13 @@ Last updated: 2026-08-29
 - P3.1-P3.4: COMPLETE.
 - **P3.5 — border/halo correctness: COMPLETE through `0.3.0-phase3-dev12.1`.**
 - P3.5 promotion merge: PR #46, `[no-release]` commit `1f34b3e4819b4eaa3a8fa474b09570a2e049b15a`.
-- **P3.6 — T-junction policy: PROMOTION-READY through `0.3.0-phase3-dev13`.**
-- P3.6 evidence branch: `phase3/t-junction-policy`.
-- P3.6 draft PR: **#47** pending final exact-head CI/promotion.
+- **P3.6 — T-junction policy: COMPLETE through `0.3.0-phase3-dev13`.**
+- P3.6 promotion merge: PR #48, `[no-release]` commit `602c53abb76dff0e27cf314abc308ff5b7ac0cae`.
 - P3.6 contract: A-0147.
 - P3.6 package checkpoint: A-0148.
-- P3.6 reference runtime + targeted visual PASS: **A-0149**.
-- Class-A roadmap synchronization is complete: P3.6 is recorded COMPLETE and P3.7 ACTIVE in `MASTER_ROADMAP.md` on synchronization commit `4bff1cb4c1b1a31b2bae5c70a1a79e440cb91609`.
-- **Next milestone after promotion: P3.7 — Differential correctness framework.**
+- P3.6 reference runtime + targeted visual PASS: A-0149.
+- **Active milestone: P3.7 — Differential correctness framework.**
+- P3.7 implementation branch is not yet created; create it from this synchronized `main` before source changes.
 - Public release intent: keep the existing public checkpoint; internal milestone merges use `[no-release]`.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
 
@@ -52,7 +51,7 @@ Exact synchronized P3.5 evidence head `d139f8229318109f146003aa186b6d4a46cbdad6`
 
 Historical fixed-anchor Phase 2 flags remain irrelevant: A-0101 permanently closed that far-travel obligation.
 
-## P3.6 — T-junction policy — PROMOTION-READY
+## P3.6 — T-junction policy — COMPLETE
 
 A-0147 froze dev13 as a **non-geometry-changing evidence slice**. The purpose was to determine whether real T-junctions in the actual emitted greedy path require mitigation before changing topology.
 
@@ -171,13 +170,13 @@ The targeted visual gate armed only after real strict junctions were proven in a
 
 Do not add global edge splitting or otherwise weaken greedy meshing based only on theoretical T-junction risk. Retain the D-0024 cross-vendor/larger-scale revisit hook. If future evidence shows cracks/pinholes/flicker on another vendor, driver, scale or renderer change, prefer targeted raster-safe mitigation or selective splitting of proven-problematic boundaries before broader topology changes.
 
-`MASTER_ROADMAP.md` is synchronized to P3.6 COMPLETE / P3.7 ACTIVE on commit `4bff1cb4c1b1a31b2bae5c70a1a79e440cb91609`. That bot-authored synchronization commit received GitHub's `action_required` non-execution state for the normal PR Build, so this connector-authored status commit exists solely to obtain normal hosted CI on the fully synchronized tree; it changes no source/runtime semantics.
+Class-A roadmap synchronization commit `4bff1cb4c1b1a31b2bae5c70a1a79e440cb91609` recorded P3.6 COMPLETE / P3.7 ACTIVE. Final fully synchronized promotion head `3e2a6c751ad0a77a87f2e60e4de9b80757dc75fc` passed hosted Build workflow `33263393349`: Java 25 / Gradle 9.5.1 build SUCCESS, artifact upload SUCCESS, release SKIPPED. Draft PR #47 was closed as superseded only because the connected ready-for-review mutation is known broken; non-draft PR #48 promoted the exact same validated head and merged `[no-release]` as `602c53abb76dff0e27cf314abc308ff5b7ac0cae`.
 
-## NEXT: P3.7 — Differential correctness framework
+## ACTIVE: P3.7 — Differential correctness framework
 
-P3.7 is the next roadmap milestone and becomes implementation-active after the P3.6 promotion lands on `main`.
+P3.7 is now the active Phase 3 milestone.
 
-Required direction from the roadmap:
+Roadmap direction:
 
 - run the permanent independent reference oracle and optimized mesher against representative immutable snapshots;
 - expand optimized greedy output conceptually back to source-face coverage where necessary;
@@ -186,7 +185,14 @@ Required direction from the roadmap:
 - keep worker/world ownership, bounded scratch, generation safety and existing runtime lifetime rules intact;
 - do not consume P3.8 benchmark work or P3.9 partial-remesh experimentation.
 
-The first P3.7 action after promotion is to inspect the existing reference/optimized proof surfaces and freeze a narrow differential-correctness contract before implementation.
+Source findings already established for the contract freeze:
+
+- `ReferenceFaceMesh` is deliberately independent, primitive-only, one-face-per-exposed-supported-full-cube truth carrying packed local face identity plus original state ID;
+- `SectionBakedQuadSnapshot` independently freezes the supported generalized vanilla SOLID/CUTOUT render truth including source block/state, positions, UVs, exact ARGB, packed light, direction, layer and material identity;
+- `RepeatAwareGreedyMesh` retains exact passthrough source-quad identities and exact merged candidate identities after suppression, which provides a bounded route to conceptually expand optimized output back to source truth without treating optimized bytes as their own oracle;
+- P3.7 must use those independent/captured sources as authority and only use optimized output as the system under test.
+
+The first P3.7 action is to create a dedicated branch from this synchronized `main`, freeze the exact first differential-correctness slice as the next immutable attempt, then implement only that slice.
 
 ## Durable foundation that remains authoritative
 
@@ -203,10 +209,10 @@ The first P3.7 action after promotion is to inspect the existing reference/optim
 
 ## Immediate next action
 
-1. Require the normal hosted Build on this fully synchronized, connector-authored promotion-status head to pass.
-2. Promote the exact same P3.6 tree and merge `[no-release]`; use the established same-head replacement-PR workaround if GitHub's connected ready-for-review mutation remains broken.
-3. From merged `main`, create the P3.7 milestone branch.
-4. Inspect the existing reference/optimized proof surfaces and freeze the P3.7 differential-correctness contract before changing source.
+1. Create `phase3/differential-correctness` from this synchronized `main`.
+2. Inspect the exact reference/optimized identity APIs needed for conceptual expansion and fixture capture.
+3. Freeze the first P3.7 contract in the next monotonic immutable attempt before source changes.
+4. Implement that bounded differential proof without consuming P3.8/P3.9 scope.
 
 ## Continuity order
 
