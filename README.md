@@ -4,7 +4,7 @@
 
 Obsidian is an experimental Vulkan-only Minecraft Java 26.2 Fabric renderer project focused first on frame pacing and large render-distance scalability.
 
-Current development phase: **Phase 2 - real-section correctness and renderer semantics**. Phase 1's Vulkan/GPU infrastructure is runtime-validated and complete; Phase 2 is establishing immutable real-section data and a permanent correctness oracle before visible terrain replacement and production greedy meshing.
+Current development phase: Phase 3
 
 Project planning and continuity:
 
