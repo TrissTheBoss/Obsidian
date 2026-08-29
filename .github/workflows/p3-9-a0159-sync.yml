@@ -1,0 +1,32 @@
+name: P3.9 A-0159 Continuity Sync
+
+on:
+  push:
+    branches:
+      - phase3/partial-remeshing
+    paths:
+      - '.github/workflows/p3-9-a0159-sync.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout P3.9 branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase3/partial-remeshing
+          fetch-depth: 0
+      - name: Synchronize A-0159 contract state
+        run: python tools/p3_9_a0159_sync.py
+      - name: Remove temporary helper files
+        run: rm tools/p3_9_a0159_sync.py .github/workflows/p3-9-a0159-sync.yml
+      - name: Commit synchronized state
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ai/CURRENT_STATE.md ai/MASTER_ROADMAP.md ai/ATTEMPT_LOG.md tools/p3_9_a0159_sync.py .github/workflows/p3-9-a0159-sync.yml
+          git commit -m '[no-release] Synchronize P3.9 dev16 contract freeze'
+          git push origin HEAD:phase3/partial-remeshing
