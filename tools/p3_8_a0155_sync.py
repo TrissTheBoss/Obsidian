@@ -7,7 +7,7 @@ new = '- Dev15 implementation: **IMPLEMENTED; hosted package CI pending.**\n- De
 if text.count(old) != 1:
     raise SystemExit('CURRENT_STATE dev15 status anchor mismatch')
 text = text.replace(old, new, 1)
-old2 = 'Create the P3.8 feature branch from this synchronized `main`, then freeze the meshing-benchmark/representative-workload contract in a new immutable attempt before any implementation change. The benchmark slice must measure real worker meshing cost and tail percentiles under representative immutable snapshots/workload churn without consuming P3.9 partial-remeshing scope.\n\nDo not implement P3.9 during P3.8.\n'
+old2 = 'Implement the frozen A-0154 dev15 measurement slice on `phase3/meshing-benchmarks`: one bounded primitive percentile/window telemetry component, integrate queue-wait/full-ticket sampling at existing boundaries, expose representative workload/scratch/GC/utilization evidence, add `meshingBenchmarkEvidenceReady`, bump to `0.3.0-phase3-dev15`, then open a draft P3.8 PR and require exact Java 25 / Gradle 9.5.1 package CI before runtime handoff.\n\nDo not implement P3.9 during P3.8.\n'
 new2 = 'Dev15 is implemented under frozen A-0154 and reviewed in A-0155. Obtain hosted exact package CI for the current P3.8 implementation, record the canonical direct dev15 JAR, then run the frozen representative benchmark exercise: settled measured-window arm, multiple ordinary rebuilds with READY recovery, F3+T with READY recovery, actual scene recenter with READY recovery, bounded concurrent worker pressure, and normal exit. Do not promote P3.8 from compilation alone.\n\nDo not implement P3.9 during P3.8.\n'
 if text.count(old2) != 1:
     raise SystemExit('CURRENT_STATE immediate action anchor mismatch')
