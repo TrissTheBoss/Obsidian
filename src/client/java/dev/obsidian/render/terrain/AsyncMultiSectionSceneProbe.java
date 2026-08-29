@@ -805,35 +805,60 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     private void preparePartialRemeshEpisode(int reasons) {
         if (!partialRemeshWindowArmed) return;
         PartialRemeshDirtyProvenance.drainInto(partialDirtyDrain);
-        if (pendingPartialEpisode != null) {
-            partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_PENDING_EPISODE);
-            pendingPartialEpisode = null;
-        }
         if (reasons != SectionLifecycleEvents.REASON_SECTION_DIRTY) {
             partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_GLOBAL_LIFECYCLE);
-            return;
-        }
-        if (state != State.LIVE) {
-            partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_NOT_LIVE);
+            pendingPartialEpisode = null;
             return;
         }
         if (partialDirtyDrain.fallbackFlags() != 0 || partialDirtyDrain.count() == 0) {
             partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_PROVENANCE);
+            pendingPartialEpisode = null;
             return;
         }
         if (partialDirtyDrain.count() != 1) {
             partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_MULTI_SECTION);
+            pendingPartialEpisode = null;
             return;
         }
         int sx = partialDirtyDrain.sectionX(0), sy = partialDirtyDrain.sectionY(0), sz = partialDirtyDrain.sectionZ(0);
         if (sy != centerSectionY || Math.abs(sx - centerSectionX) > 1 || Math.abs(sz - centerSectionZ) > 1
                 || (partialDirtyDrain.flags(0) & PartialRemeshDirtyProvenance.FLAG_XZ_BOUNDARY) != 0) {
             partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_HALO_OR_BOUNDARY);
+            pendingPartialEpisode = null;
             return;
         }
         int mask = partialDirtyDrain.sliceMask(0);
         if (mask == 0 || mask == PartialRemeshDirtyProvenance.ALL_SLICES_MASK) {
             partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_ALL_SLICES);
+            pendingPartialEpisode = null;
+            return;
+        }
+
+        PendingPartialEpisode pending = pendingPartialEpisode;
+        if (pending != null) {
+            if (pending.sectionX != sx || pending.sectionY != sy || pending.sectionZ != sz) {
+                partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_MULTI_SECTION);
+                pendingPartialEpisode = null;
+                return;
+            }
+            int combinedMask = pending.request.sliceMask() | mask;
+            if (combinedMask == PartialRemeshDirtyProvenance.ALL_SLICES_MASK) {
+                partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_ALL_SLICES);
+                pendingPartialEpisode = null;
+                return;
+            }
+            try {
+                PartialRemeshShadowRequest widened = pending.request.coalesce(mask, partialDirtyDrain.editCount(0));
+                pendingPartialEpisode = new PendingPartialEpisode(sx, sy, sz, widened);
+            } catch (ArithmeticException | IllegalArgumentException overflowOrInvalid) {
+                partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_PROVENANCE);
+                pendingPartialEpisode = null;
+            }
+            return;
+        }
+
+        if (state != State.LIVE) {
+            partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_NOT_LIVE);
             return;
         }
         SceneRecord record = findRecord(sx, sy, sz);
@@ -867,7 +892,8 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         if (!partialRemeshWindowArmed || pending == null
                 || pending.sectionX != record.sectionX || pending.sectionY != record.sectionY || pending.sectionZ != record.sectionZ) return;
         PartialRemeshShadowResult result = probe.partialRemeshShadowResult();
-        if (result == null || result.episodeId() != pending.request.episodeId()) {
+        if (result == null || result.episodeId() != pending.request.episodeId()
+                || result.sliceMask() != pending.request.sliceMask()) {
             partialRemeshTelemetry.recordFallback(PartialRemeshExperimentTelemetry.FALLBACK_PENDING_EPISODE);
         } else {
             partialRemeshTelemetry.recordCompleted(pending.sectionX, pending.sectionY, pending.sectionZ,

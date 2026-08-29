@@ -62,10 +62,10 @@ public final class FrameCoordinator implements AutoCloseable {
         try {
             workers = new SectionMeshWorkerPool(SectionMeshWorkerPool.defaultWorkerCount());
             staging = new StagingUploadArena(
-                    device, () -> "Obsidian Phase 3 dev17 bounded scene staging ring",
+                    device, () -> "Obsidian Phase 3 dev18 bounded scene staging ring",
                     VALIDATION_STAGING_BYTES);
             arena = new DeviceGeometryArena(
-                    device, () -> "Obsidian Phase 3 dev17 scene device geometry arena",
+                    device, () -> "Obsidian Phase 3 dev18 scene device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
             sceneProbe = new AsyncMultiSectionSceneProbe(device, staging, arena, deferredReleases, workers);
         } catch (RuntimeException e) {
@@ -75,7 +75,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (arena != null) try { arena.close(); } catch (RuntimeException ignored) { }
             try { deferredReleases.close(); } catch (RuntimeException ignored) { }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev17 P3.9 initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 3 dev18 P3.9 initialization failed; Minecraft will continue for diagnosis.", e);
             hardFailure = true;
         }
         meshWorkers = workers;
@@ -95,13 +95,13 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev17 P3.9 frame coordinator active. contextSlots=" + frameContexts.size()
+                    "Phase 3 dev18 P3.9 frame coordinator active. contextSlots=" + frameContexts.size()
                             + ", cpuTimingCapacity=" + cpuFrameTimings.capacity()
                             + ", meshWorkers=" + (meshWorkers == null ? 0 : meshWorkers.workerCount())
                             + ", meshQueueCapacity=" + (meshWorkers == null ? 0 : meshWorkers.queueCapacity())
                             + ", stagingCapacity=" + (stagingUploads == null ? 0 : stagingUploads.capacityBytes())
                             + ", deviceArenaCapacity=" + (deviceArena == null ? 0L : deviceArena.capacityBytes())
-                            + "; all proven P3.2-P3.8 production/correctness paths remain armed unchanged. P3.9 dev17 is shadow-only: it aligns selected-slice reference auditing to the permanent P3.7 oracle and adds bounded per-fallback plus first-failure diagnostics. Production geometry, shader, pipeline, atlas/lightmap semantics, scheduling, rebuild granularity and native graphics behavior remain unchanged.");
+                            + "; all proven P3.2-P3.8 production/correctness paths remain armed unchanged. P3.9 dev18 is shadow-only: it preserves the dev17 corrected proof semantics and coalesces exact same-section localized dirty provenance into one pending immutable episode across production rebuild generations while preserving original pre-edit fingerprints. Production geometry, shader, pipeline, atlas/lightmap semantics, scheduling, rebuild granularity and native graphics behavior remain unchanged.");
         }
     }
 
@@ -114,7 +114,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (!visualDelayLogged) {
                 visualDelayLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev17 P3.9 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
+                        "Phase 3 dev18 P3.9 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
             }
             return;
         }
@@ -146,10 +146,10 @@ public final class FrameCoordinator implements AutoCloseable {
             sceneProbe.beginPartialRemeshExperimentWindow();
             partialRemeshWindowArmed = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev17 P3.9 measured benchmark window armed after settled READY at ns={0}. The window records only completed production full-section jobs enqueued after this point. Exercise multiple ordinary block break/place rebuilds with READY recovery, perform F3+T and let READY return, traverse far enough for a real scene-recenter and READY return, include a short bounded edit/traversal burst so concurrent worker pressure is observed, then exit normally. No new visual verdict is required because dev15 changes no rendering semantics.",
+                    "Phase 3 dev18 P3.9 measured benchmark window armed after settled READY at ns={0}. The window records only completed production full-section jobs enqueued after this point. Exercise multiple ordinary block break/place rebuilds with READY recovery, perform F3+T and let READY return, traverse far enough for a real scene-recenter and READY return, include a short bounded edit/traversal burst so concurrent worker pressure is observed, then exit normally. No new visual verdict is required because dev15 changes no rendering semantics.",
                     benchmarkStartNs);
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev17 P3.9 diagnostic/corrected shadow partial-remesh window armed. Production rendering remains full-section and unchanged. The A-0159 thresholds and four-slice admission policy are unchanged; dev17 only restores permanent P3.7 reference semantics and records exact fallback/failure diagnostics. Exercise the same localized one-slice, two-slice, coalesced, F3+T and scene-recenter workload.");
+                    "Phase 3 dev18 P3.9 pending-coalescing shadow partial-remesh window armed. Production rendering remains full-section and unchanged. The A-0159 thresholds, four slices, provenance surface and all correctness gates are unchanged; dev18 only preserves exact same-section localized dirty evidence across rebuild generations so coalesced episodes can complete. Exercise the same localized one-slice, two-slice, coalesced, F3+T and scene-recenter workload.");
         }
     }
 
@@ -197,7 +197,7 @@ public final class FrameCoordinator implements AutoCloseable {
         meshingBenchmarkEvidenceReady = true;
         benchmarkEvidenceLogged = true;
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev17 P3.9 benchmark gate armed: meshingBenchmarkEvidenceReady=true, samples={0}, durationMs={1}, queueWaitNs[p50/p95/p99/max]={2}/{3}/{4}/{5}, executionNs[p50/p95/p99/max]={6}/{7}/{8}/{9}, sourceQuads={10}, referenceFaces={11}, mergedIdentities={12}, mergedCoveredFaces={13}, outputBytes={14}, workerBusyPermille={15}, gcCollections={16}, gcTimeMs={17}, readyDelta={18}, coreDirtyDelta={19}, reloadDelta={20}, recenterDelta={21}.",
+                "Phase 3 dev18 P3.9 benchmark gate armed: meshingBenchmarkEvidenceReady=true, samples={0}, durationMs={1}, queueWaitNs[p50/p95/p99/max]={2}/{3}/{4}/{5}, executionNs[p50/p95/p99/max]={6}/{7}/{8}/{9}, sourceQuads={10}, referenceFaces={11}, mergedIdentities={12}, mergedCoveredFaces={13}, outputBytes={14}, workerBusyPermille={15}, gcCollections={16}, gcTimeMs={17}, readyDelta={18}, coreDirtyDelta={19}, reloadDelta={20}, recenterDelta={21}.",
                 snapshot.completedSamples(), snapshot.durationNs() / 1_000_000L,
                 snapshot.queueWait().p50Ns(), snapshot.queueWait().p95Ns(), snapshot.queueWait().p99Ns(), snapshot.queueWait().maxNs(),
                 snapshot.execution().p50Ns(), snapshot.execution().p95Ns(), snapshot.execution().p99Ns(), snapshot.execution().maxNs(),
@@ -216,7 +216,7 @@ public final class FrameCoordinator implements AutoCloseable {
             partialRemeshExperimentEvidenceReady = true;
             partialRemeshEvidenceLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev17 P3.9 experiment gate armed: partialRemeshExperimentEvidenceReady=true, completed={0}, fallback={1}, oneSlice={2}, twoSlice={3}, coalesced={4}, selectedCellsP50Permille={5}, cpuRatioP50/P95={6}/{7}, uploadRatioP50/P95={8}/{9}, inflationMean/Max={10}/{11}, exact={12}/{13}.",
+                    "Phase 3 dev18 P3.9 experiment gate armed: partialRemeshExperimentEvidenceReady=true, completed={0}, fallback={1}, oneSlice={2}, twoSlice={3}, coalesced={4}, selectedCellsP50Permille={5}, cpuRatioP50/P95={6}/{7}, uploadRatioP50/P95={8}/{9}, inflationMean/Max={10}/{11}, exact={12}/{13}.",
                     snapshot.completedEpisodes(), snapshot.fallbackEpisodes(), snapshot.oneSliceEpisodes(),
                     snapshot.twoSliceEpisodes(), snapshot.coalescedEpisodes(), snapshot.selectedCellPermille().p50(),
                     snapshot.cpuRatioPermille().p50(), snapshot.cpuRatioPermille().p95(),
@@ -811,7 +811,7 @@ public final class FrameCoordinator implements AutoCloseable {
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
         StringBuilder out = new StringBuilder(32768);
-        out.append("Phase 3 dev17 P3.9 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
+        out.append("Phase 3 dev18 P3.9 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
                 .append("phase3GateReady=").append(phase3GateReady)
                 .append(", schedulerEvidenceReady=").append(schedulerEvidenceReady)
                 .append(", binaryVisibilityEvidenceReady=").append(binaryVisibilityEvidenceReady)

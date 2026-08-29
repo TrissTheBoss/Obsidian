@@ -282,7 +282,8 @@ public final class PartialRemeshExperimentTelemetry {
                 firstFailureSliceMask, firstFailureEditCount, firstFailureCode, firstFailureIndex,
                 firstFailureDeterministic,
                 Math.max(0L, gc[0] - gcStartCount), Math.max(0L, gc[1] - gcStartTimeMs),
-                selfTest(), PartialRemeshDirtyProvenance.selfTest(), PartialRemeshShadowResult.selfTest());
+                selfTest(), PartialRemeshDirtyProvenance.selfTest(),
+                PartialRemeshShadowRequest.selfTest() && PartialRemeshShadowResult.selfTest());
     }
 
     private static Distribution distribution(long[] source, int count) {
