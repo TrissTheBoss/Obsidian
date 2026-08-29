@@ -1,0 +1,59 @@
+name: P3.9 dev23 continuity append
+
+on:
+  push:
+    branches: [phase3/partial-remeshing-dev23-safety-fallback]
+    paths:
+      - '.github/workflows/p3-9-dev23-continuity-append.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  append:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase3/partial-remeshing-dev23-safety-fallback
+      - name: Append A-0185 through A-0187
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >> ai/ATTEMPT_LOG.md <<'EOF'
+
+---
+
+## A-0185 - dev22 full-volume closure correctness failure
+
+**Date:** 2026-08-30
+**Objective:** Execute the full unchanged A-0159 closure workload after a valid P3.9 arm.
+**Result:** `CORRECTNESS FAIL` with excellent benefit/volume evidence. Completed 67, fallback 55, one-slice 29, two-slice 38, coalesced 6; CPU P50/P95 21/291 permille; projected upload P50/P95 597/723; selected-cell P50 500; complexity green. Six deterministic `unselected-changed` failures blocked closure; first fixture episode 11, section `(63,4,-1)`, sliceMask 4, failureIndex 1. P3.5/P3.6/P3.7/P3.8 and lifetime gates all green; normal exit 0.
+**Decision:** Do not weaken the slice fingerprint. Full captured truth proved same-section light propagation can change an unselected slice. Use the one final safety correction permitted by the frozen conclusion rule: such deterministic oracle outcomes become mandatory full-section fallback.
+**Evidence:** `ai/attempts/A-0185-phase3-p3.9-dev22-full-volume-correctness-failure.md`.
+
+## A-0186 - dev23 unselected-truth fallback contract
+
+**Date:** 2026-08-30
+**Status:** `PLAN FROZEN`.
+**Decision:** Preserve dev22 admission and the exact unselected fingerprint oracle. Add explicit `FALLBACK_UNSELECTED_TRUTH_CHANGED`; deterministic failure code 1 is routed to mandatory fallback before completed/performance accounting. Nondeterminism and every other failure remain correctness failures. No threshold, slice, greedy, P3.7, worker, production GPU/render or partial-patch change.
+**Evidence:** `ai/attempts/A-0186-phase3-p3.9-dev23-unselected-truth-fallback-contract.md`.
+
+## A-0187 - dev23 implementation/package
+
+**Date:** 2026-08-30
+**Result:** `SUCCESS for implementation/package; one final full-volume runtime required`.
+**Implementation authority:** `fa779604924a6e6f7d6b845b9a3c8522bfa222b6`, tree `ac6d83c1204fdbd519eff391ba927225a9e00db8`.
+**Hosted CI:** Build `33280453234` Java 25 / Gradle 9.5.1 SUCCESS; artifact `9722827474`; wrapper digest `sha256:ee97dca85800e6ac9ab8af7321595aa4e8ec047df31167eb4576c55646b49456`.
+**Canonical JAR:** `Obsidian-0.3.0-phase3-dev23.jar`, 525855 bytes, SHA-256 `f920cae998a8d27c6419dd05fb50c58cf2d7626c27616e8f7ec6e224dd4368d1`.
+**Sources:** 271702 bytes, SHA-256 `527eab20994c4fc75ef6e63ebf92a090a19e0210ff52e148c8df5cf44ebe7b38`.
+**Static proof:** only telemetry, closure diagnostic, version and bootstrap changed after A-0186. Core scene admission, dev22 light-update preservation, slice truth, shadow oracle, P3.7, greedy/worker/GPU paths unchanged. Packaged bytecode routes deterministic failure code 1 through fallback bit 128 before incrementing completed.
+**Next:** Run the final unchanged A-0159 workload with dev23. PASS or formal REJECT/DEFER then moves directly to production opaque/cutout terrain replacement.
+**Evidence:** `ai/attempts/A-0187-phase3-p3.9-dev23-unselected-truth-fallback-package.md`.
+EOF
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add ai/ATTEMPT_LOG.md
+          git commit -m '[no-release] Append A-0185 through A-0187 continuity'
+          git push origin HEAD:phase3/partial-remeshing-dev23-safety-fallback
