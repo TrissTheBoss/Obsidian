@@ -29,7 +29,10 @@ Last updated: 2026-08-29
 - Draft PR #51 was closed only because the connected ready-for-review mutation failed on obsolete `Repository.fullDatabaseId`; non-draft same-head PR #52 merged `[no-release]` as `49385aedff74f2382fcd9a9bb44e59cf559e63c4`.
 - **Active milestone: P3.9 — Partial remeshing (EXPERIMENTAL).**
 - Active branch: `phase3/partial-remeshing`, based on exact synchronized P3.8-complete main `169274b468d2a278d39043938efff19844bec9ba` (Build `33272073819` SUCCESS).
-- Frozen first P3.9 slice: **A-0159 / planned `0.3.0-phase3-dev16`** — shadow-only four fixed Y slices, exact block-local dirty provenance with mandatory full fallback, matched full-section control and pre-frozen benefit/complexity thresholds.
+- Frozen first P3.9 slice: **A-0159 / `0.3.0-phase3-dev16`** — shadow-only four fixed Y slices, exact block-local dirty provenance with mandatory full fallback, matched full-section control and pre-frozen benefit/complexity thresholds.
+- Dev16 implementation/package checkpoint: **A-0160 SUCCESS for implementation/package; reference runtime required.**
+- Exact clean package-validation head `9b5930a24c8bd1841c474a03f67407231e11bc65` passed hosted Build `33273077105`; canonical dev16 JAR is `Obsidian-0.3.0-phase3-dev16.jar`, 490,250 bytes, SHA-256 `b14640ab1a397561371564e6b3c38b93b105e481be6a32b8172b8448de701ffd`.
+- Draft P3.9 PR: **#53**; keep draft until the exact A-0159 reference runtime proves or rejects the frozen experiment thresholds.
 - Dev16 production GPU emission/install remains unchanged; later partial GPU patching is blocked on successful shadow evidence and a separate contract.
 - Public release intent: keep the existing public checkpoint; internal milestone merges use `[no-release]`.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
@@ -362,11 +365,17 @@ This is the first trustworthy P3.8 reference baseline. No numerical threshold is
 - Unsupported/generalized/ambiguous/unsafe geometry remains exact passthrough.
 - Render-thread capture/GPU ownership remains authoritative; worker live-world reads after capture remain zero.
 
+## ACTIVE: P3.9 — Partial remeshing experiment
+
+A-0159 freezes dev16 as a shadow-only four-slice experiment. A-0160 records the implemented/package-validated result. Exact package authority is head `9b5930a24c8bd1841c474a03f67407231e11bc65`, Build `33273077105`, canonical direct JAR `Obsidian-0.3.0-phase3-dev16.jar`, 490,250 bytes, SHA-256 `b14640ab1a397561371564e6b3c38b93b105e481be6a32b8172b8448de701ffd`. Production remains the unchanged full-section renderer.
+
+Dev16 now includes exact block-local dirty provenance, fixed four-slice shadow requests, previous/current per-slice truth fingerprints, selected source/reference/render-equivalence proofs, deterministic double-build shadow projection, matched full-production execution/upload controls, bounded percentile/ratio telemetry and the pre-frozen A-0159 decision gate. No shadow output is uploaded or rendered.
+
 ## Immediate next action
 
-A-0159 freezes the first P3.9 experiment before source changes. Implement dev16 in shadow mode only: exact bounded block-local dirty provenance; deterministic four-slice mask/dependency planning; shadow slice meshing/proofs over existing immutable captured truth; unselected-slice under-invalidation fingerprints; matched shadow/full-section timing/work/output telemetry; and the frozen decision gate. Keep production full-section GPU emission/install authoritative and unchanged.
+Run the exact canonical dev16 JAR under A-0159/A-0160. After the explicit P3.9 shadow-window arm, collect at least 32 localized episodes including at least 16 one-slice, 8 two-slice and one coalesced episode; include post-arm F3+T and a real scene recenter as full-fallback exercises; require every inherited P3.8/P3.7/lifetime gate and all dev16 correctness gates to remain clean. The frozen benefit/complexity thresholds decide whether P3.9 advances, is rejected/deferred, or is redesigned in a new immutable attempt.
 
-Do not implement partial GPU patching in dev16.
+Do not implement partial GPU patching unless the shadow experiment first passes and a separate contract is frozen.
 
 ## Continuity order
 
