@@ -1,0 +1,95 @@
+name: P3.7 Runtime Partial State Sync
+
+on:
+  push:
+    branches: [phase3/differential-correctness]
+    paths:
+      - '.github/workflows/p3.7-runtime-partial-sync.yml'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase3/differential-correctness
+          fetch-depth: 0
+
+      - name: Synchronize CURRENT_STATE
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('ai/CURRENT_STATE.md')
+          text = p.read_text()
+          old = "- Current implementation/package checkpoint: **A-0151 / `0.3.0-phase3-dev14`**.\n- Reference runtime differential gate: **REQUIRED before promotion**."
+          new = "- Current implementation/package checkpoint: **A-0151 / `0.3.0-phase3-dev14`**.\n- First reference runtime: **A-0152 PARTIAL** — automated differential/lifetime gate PASS, but required scene-recenter/boundary exercise not evidenced (`cameraRecenterEvents=0`).\n- Reference runtime differential gate: **REQUIRED before promotion; rerun exact dev14 package with real scene recenter and READY afterward**."
+          if old not in text:
+              raise SystemExit('top-state anchor missing')
+          text = text.replace(old, new, 1)
+
+          anchor = "### Required dev14 reference runtime gate\n\nP3.7 is **not promotion-ready** until the reference run closes the frozen A-0150 contract."
+          insert = """### A-0152 first reference runtime — PARTIAL, no code defect
+
+The first dev14 reference run passed the complete automated differential and lifetime evidence but did not evidence the frozen section-boundary/recenter exercise.
+
+Automated PASS evidence:
+
+- `differentialCorrectnessEvidenceReady=true` and every inherited P3.6 gate true;
+- proof records/determinism `318 / 318`;
+- independent reference faces `94,732`, mapped/unmapped/ambiguous `67,161 / 0 / 27,571`;
+- source baked quads `229,831`;
+- passthrough identities `216,457`;
+- merged candidates / expanded merged source faces `5,868 / 13,374`;
+- material/direction/geometry exact `13,374 / 13,374` each;
+- UV/color/light exact `53,496 / 53,496` each;
+- missing/duplicate/optimized-without-reference/real-mismatch all `0`;
+- fixture self-tests `318 / 318`;
+- workers submitted/completed `323 / 323`, cancellations/failures/rejections `0`;
+- unsafe stale installs `0`, dropped lifecycle events `0`;
+- workers/staging/arena/resources clean;
+- staging submitted/reclaimed `31,012,744 / 31,012,744` bytes;
+- arena allocations/retired/reclaimed `954 / 954 / 954`, used bytes `0`;
+- retired/released resources `318 / 318`, pending `0`;
+- process exit code `0`.
+
+The frozen exercise nevertheless remains open: final `cameraRecenterEvents=0` and `observedReasons=section-dirty|world-change|resource-reload`, so `scene-recenter` was never observed. A-0150/A-0151 explicitly require section-boundary/recenter movement in the reference run. The automated final flag does not waive that human-directed precondition.
+
+No source, renderer, oracle or package change is justified by A-0152. Use the exact same dev14 JAR for the rerun. PR #49 remains draft and P3.8/P3.9 remain inactive.
+
+### Required dev14 reference runtime gate
+
+P3.7 is **not promotion-ready** until the reference run closes the frozen A-0150 contract."""
+          if anchor not in text:
+              raise SystemExit('runtime section anchor missing')
+          text = text.replace(anchor, insert, 1)
+
+          old_next = """## Immediate next action
+
+Run the canonical `Obsidian-0.3.0-phase3-dev14.jar` on the reference Windows 11 / RX 6800 XT Vulkan system and complete the frozen A-0150 runtime exercise. Return the complete log. No new visual verdict is required unless an unexpected visual/rendering change is observed.
+
+Keep PR #49 draft and P3.7 active until the automated reference-runtime evidence closes. Do not start P3.8 or P3.9."""
+          new_next = """## Immediate next action
+
+Rerun the exact canonical `Obsidian-0.3.0-phase3-dev14.jar` on the reference Windows 11 / RX 6800 XT Vulkan system. In one coherent run: wait for differential gate + READY; ordinary block break/place + READY; F3+T/resource reload + READY; move far enough for a real async scene rebind/recenter (`scene-recenter`, `cameraRecenterEvents > 0`) + READY; then exit normally and return the complete log.
+
+No new visual verdict is required unless an unexpected visual/rendering change is observed. Do not change source/package for A-0152, do not promote PR #49, and do not start P3.8/P3.9 until the rerun closes the frozen A-0150 exercise."""
+          if old_next not in text:
+              raise SystemExit('immediate-next anchor missing')
+          text = text.replace(old_next, new_next, 1)
+          p.write_text(text)
+          PY
+
+      - name: Remove temporary sync workflow
+        run: rm -f .github/workflows/p3.7-runtime-partial-sync.yml
+
+      - name: Commit synchronized state
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git commit -m '[no-release] Synchronize P3.7 A-0152 partial runtime state'
+          git push origin HEAD:phase3/differential-correctness
