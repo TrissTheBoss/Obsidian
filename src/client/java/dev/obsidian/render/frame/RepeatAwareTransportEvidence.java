@@ -57,12 +57,23 @@ final class RepeatAwareTransportEvidence {
                 : facesSaved * 1000L / renderKeyEligibleFaces;
         long internalResetUnion = internalS + internalT - internalBoth;
 
+        long uvBuilds = workers.repeatAwareUvBuilds();
+        long cancelledPrefixBuilds = uvBuilds - builds;
+        long cancelledPrefixMultiFace = repeatAwareUvMultiFace - sourceMultiFace;
+        long cancelledPrefixRepresentable = repeatAwareUvRepresentable - sourceRepresentable;
+        long cancelledPrefixSafe = repeatAwareUvFourVertexSafe - sourceFourVertexSafe;
+        boolean cancellationAccountingExact = cancelledPrefixBuilds >= 0L
+                && cancelledPrefixBuilds <= workers.cancelledJobs()
+                && cancelledPrefixMultiFace >= 0L
+                && cancelledPrefixRepresentable >= 0L
+                && cancelledPrefixSafe >= 0L
+                && cancelledPrefixRepresentable <= cancelledPrefixMultiFace
+                && cancelledPrefixSafe <= cancelledPrefixRepresentable;
+
         boolean ready = priorGateReady
                 && builds > 0L
                 && builds >= workerCompletedJobs
-                && sourceMultiFace == repeatAwareUvMultiFace
-                && sourceRepresentable == repeatAwareUvRepresentable
-                && sourceFourVertexSafe == repeatAwareUvFourVertexSafe
+                && cancellationAccountingExact
                 && records == sourceFourVertexSafe
                 && unsafe == sourceMultiFace - records
                 && explicitGradient == records
