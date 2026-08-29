@@ -24,8 +24,12 @@ Last updated: 2026-08-29
 - **Active milestone: P3.8 — Meshing benchmarks.**
 - Active branch: `phase3/meshing-benchmarks`.
 - Frozen first P3.8 slice: **A-0154 / planned `0.3.0-phase3-dev15`**.
-- Dev15 implementation: **IMPLEMENTED; hosted package CI pending.**
+- Dev15 implementation: **IMPLEMENTED; exact hosted package CI GREEN.**
 - Dev15 implementation review checkpoint: **A-0155**.
+- Dev15 package/runtime handoff: **A-0156**.
+- Exact package validation head: `e6f4b81903ddcdcb859d70a1a01c002a3f550e12`; Build workflow `33270995728` SUCCESS.
+- Canonical dev15 JAR: `Obsidian-0.3.0-phase3-dev15.jar`, 456,609 bytes, SHA-256 `eaad8132665e5f662ac30f5e71abbaff3d604f010e09ffd7aa82379c79a9ed65`.
+- Draft P3.8 PR: **#51**; reference benchmark runtime still required before promotion.
 - P3.9 partial remeshing remains out of scope until P3.8 is measured and closed.
 - Public release intent: keep the existing public checkpoint; internal milestone merges use `[no-release]`.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
@@ -340,7 +344,7 @@ A valid but slower-than-desired baseline is still valid P3.8 evidence; future op
 
 ## Immediate next action
 
-Dev15 is implemented under frozen A-0154 and reviewed in A-0155. Obtain hosted exact package CI for the current P3.8 implementation, record the canonical direct dev15 JAR, then run the frozen representative benchmark exercise: settled measured-window arm, multiple ordinary rebuilds with READY recovery, F3+T with READY recovery, actual scene recenter with READY recovery, bounded concurrent worker pressure, and normal exit. Do not promote P3.8 from compilation alone.
+A-0156 records exact hosted dev15 package authority. Run the canonical direct dev15 JAR through the frozen representative benchmark exercise: wait for settled measured-window arm, perform multiple ordinary rebuilds with READY recovery, F3+T with READY recovery, actual scene recenter with READY recovery, create bounded concurrent worker pressure, wait for the benchmark gate when possible, exit normally, and return the complete log. Do not promote P3.8 from package CI alone.
 
 Do not implement P3.9 during P3.8.
 
