@@ -1,0 +1,56 @@
+from pathlib import Path
+
+path = Path("ai/MASTER_ROADMAP.md")
+text = path.read_text(encoding="utf-8")
+
+old = """#### P3.6 — T-junction policy — ACTIVE
+
+A-0147 freezes `0.3.0-phase3-dev13` as a non-geometry-changing evidence slice. The first task is to prove the actual emitted dev10-safe merged topology rather than preemptively split all greedy quads. Detect strict same-facing/coplanar merged/merged T-junctions in exact section-local integer coordinates, prove bounds/lattice/plane identities and camera-relative section transforms, then deliberately visually inspect a runtime that is proven to contain real junctions.
+
+If real detected T-junctions render without cracks/pinholes/flickering seams on the reference Vulkan path, record no baseline mitigation required for the proven path and retain a cross-vendor/scale revisit hook. If artifacts are observed, prefer targeted raster-safe mitigation or selective splitting before any broader topology change. Any geometry-changing mitigation requires a separately frozen slice and renewed explicit visual/runtime validation. D-0024 remains authoritative.
+
+#### P3.7 — Differential correctness framework — PLANNED"""
+
+new = """#### P3.6 — T-junction policy — COMPLETE
+
+Validated as `0.3.0-phase3-dev13`; A-0149 closes the frozen A-0147 contract on the reference RX 6800 XT Vulkan path. Dev13 proved the actual dev10-safe/dev11-emitted merged topology contains real strict coplanar same-facing T-junctions while changing no geometry, shader or pipeline behavior. Final evidence recorded 329 deterministic installed proofs, 7,391 emitted merged candidates, 29,564 exact candidate edges, 3,231 strict T-junction points, exact bounds/plane/integer-lattice matches, 329 camera-relative transform proofs and 283 junction-bearing transform proofs with zero transform failures. All inherited gates through P3.5/dev11 remained green, worker world reads after capture remained zero, unsafe stale installs remained zero, lifetime closed cleanly and process exit was 0.
+
+The targeted visual gate armed only after proven strict junctions existed in drawn LIVE sections. The explicit human verdict was PASS: visually everything looked fine, with no reported cracks, pinholes, flickering seams, double/z-fighting edges or camera-motion-dependent gaps. Therefore no baseline T-junction mitigation is required on the proven reference path. D-0024 remains authoritative: retain the cross-vendor/larger-scale revisit hook and prefer targeted mitigation/selective splitting only if future evidence demonstrates an artifact; do not globally weaken greedy meshing based on theoretical risk alone.
+
+#### P3.7 — Differential correctness framework — ACTIVE"""
+
+if old not in text:
+    raise SystemExit("P3.6/P3.7 roadmap block not found")
+text = text.replace(old, new, 1)
+
+feature = "- [ACTIVE] Evidence-driven T-junction topology/raster policy."
+if feature not in text:
+    raise SystemExit("T-junction feature line not found")
+text = text.replace(
+    feature,
+    "- [COMPLETE] Evidence-driven T-junction topology/raster policy.\n"
+    "- [ACTIVE] Differential correctness framework against the permanent independent reference oracle.",
+    1,
+)
+
+old_status = """- A-0147 activated P3.6 and froze dev13 as a non-geometry-changing proof of actual emitted strict T-junction topology plus camera-relative transform evidence before deciding whether mitigation is justified;
+- P3.7+ phase order remains unchanged."""
+new_status = """- A-0147 activated P3.6 and froze dev13 as a non-geometry-changing proof of actual emitted strict T-junction topology plus camera-relative transform evidence before deciding whether mitigation is justified;
+- A-0148 integrated/package-validated the dev13 proof path without geometry changes;
+- A-0149 proved 3,231 real strict T-junction points, exact topology/transform identities, clean runtime/lifetime closure and an explicit targeted visual PASS on the reference RX 6800 XT Vulkan path;
+- completed P3.6 with no baseline mitigation required on the proven path and retained the D-0024 cross-vendor/scale revisit hook;
+- activated P3.7 differential correctness while leaving P3.8+ order unchanged."""
+if old_status not in text:
+    raise SystemExit("2026-08-29 status block not found")
+text = text.replace(old_status, new_status, 1)
+
+old_position = """- **P3.6: ACTIVE — evidence-driven T-junction policy, dev13 contract frozen in A-0147.**
+- P3.7-P3.9 remain PLANNED/EXPERIMENTAL as marked."""
+new_position = """- **P3.6: COMPLETE through `0.3.0-phase3-dev13`; A-0149 proves no baseline mitigation required on the reference path.**
+- **P3.7: ACTIVE — differential correctness framework.**
+- P3.8 remains PLANNED and P3.9 remains EXPERIMENTAL."""
+if old_position not in text:
+    raise SystemExit("immediate roadmap position block not found")
+text = text.replace(old_position, new_position, 1)
+
+path.write_text(text, encoding="utf-8")
