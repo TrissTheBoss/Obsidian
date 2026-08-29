@@ -15,6 +15,7 @@ Last updated: 2026-08-29
 - Active draft PR: **#47**.
 - Frozen P3.6 contract: A-0147.
 - Current implementation/package checkpoint: **A-0148 / `0.3.0-phase3-dev13`**.
+- **Dev13 reference-runtime handoff is READY.**
 - Public release intent: keep the existing public checkpoint; internal milestone merges use `[no-release]`.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
 
@@ -72,17 +73,28 @@ Source truth retained by the contract:
 
 Dev13 implementation head `1504c87c3ed42dc4b4c49a1cdbdb61c4b5d8c6fc` passed the normal pull-request Build workflow `33262626441` against the exact Minecraft 26.2 dependency set.
 
-Package artifact:
+Initial package artifact:
 
 - artifact id `9717691386`
 - wrapper `obsidian-5ccc041bcabe45408c9051749aa75ea9c7dde9d2`
 - wrapper size `611,209` bytes
 - wrapper digest `sha256:2654a9e94b5b183ed3ff302f758ab566e3b4ee09a72ed3bcf58c9a7c30185067`
+
+Class-A roadmap and continuity synchronization then completed without source/runtime changes. Exact synchronized head `505a84b76854cd4e2d3e629be204876da3ef3ff1` passed normal Build workflow `33262729983`: Java 25 / Gradle 9.5.1 build SUCCESS, artifact upload SUCCESS, versioned release SKIPPED.
+
+Final synchronized artifact:
+
+- artifact id `9717721369`
+- wrapper `obsidian-e9a95d52469c7229689cfab55f2930fe9675c04c`
+- wrapper size `611,209` bytes
+- wrapper digest `sha256:bb99157db044ea3a86e55a6584f92f964b7f6573d1d5c2348c8580261fe41a7b`
 - direct JAR `Obsidian-0.3.0-phase3-dev13.jar`
 - direct JAR size **419,659 bytes**
 - direct JAR SHA-256 **`44f7d9bec8979ddad8eb741b7024ed7ff1cb921d70cb6baff98e2a147956adc7`**
 - sources JAR size `217,731` bytes
 - sources SHA-256 `013aa35a35b349ef00aaedbb117c0de9ab5031788b6f5ca7d995fe486d59ea8b`
+
+The direct runtime and sources JAR bytes are identical between the implementation build and the synchronized final build; only the Actions wrapper digest/name changed.
 
 Implemented evidence path:
 
@@ -141,7 +153,9 @@ P3.7 differential correctness remains separate and must not be consumed here.
 
 ## Immediate next action
 
-Wait only on the normal hosted Build triggered by this synchronized continuity head. If green, use the exact direct `Obsidian-0.3.0-phase3-dev13.jar` runtime package on the reference machine and follow the targeted P3.6 exercise. Keep PR #47 draft until automated runtime evidence and the explicit targeted visual verdict close.
+Run the exact direct `Obsidian-0.3.0-phase3-dev13.jar` on the reference machine. Keep PR #47 draft. Let the automated scene reach `tJunctionPolicyEvidenceReady=true` before treating the visual exercise as valid, then perform the targeted stationary/motion/camera-angle/section-boundary/block-rebuild/F3+T exercise and provide the complete shutdown log plus explicit PASS/FAIL for cracks, pinholes, flickering seams, z-fighting/double edges or camera-motion-dependent gaps.
+
+Do not promote P3.6 or begin P3.7 until that runtime gate and explicit targeted visual verdict close.
 
 ## Continuity order
 
