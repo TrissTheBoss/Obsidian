@@ -29,11 +29,15 @@ Last updated: 2026-08-29
 - Draft PR #51 was closed only because the connected ready-for-review mutation failed on obsolete `Repository.fullDatabaseId`; non-draft same-head PR #52 merged `[no-release]` as `49385aedff74f2382fcd9a9bb44e59cf559e63c4`.
 - **Active milestone: P3.9 — Partial remeshing (EXPERIMENTAL).**
 - Active branch: `phase3/partial-remeshing`, based on exact synchronized P3.8-complete main `169274b468d2a278d39043938efff19844bec9ba` (Build `33272073819` SUCCESS).
-- Frozen first P3.9 slice: **A-0159 / `0.3.0-phase3-dev16`** — shadow-only four fixed Y slices, exact block-local dirty provenance with mandatory full fallback, matched full-section control and pre-frozen benefit/complexity thresholds.
-- Dev16 implementation/package checkpoint: **A-0160 SUCCESS for implementation/package; reference runtime required.**
-- Exact clean package-validation head `9b5930a24c8bd1841c474a03f67407231e11bc65` passed hosted Build `33273077105`; canonical dev16 JAR is `Obsidian-0.3.0-phase3-dev16.jar`, 490,250 bytes, SHA-256 `b14640ab1a397561371564e6b3c38b93b105e481be6a32b8172b8448de701ffd`.
-- Draft P3.9 PR: **#53**; keep draft until the exact A-0159 reference runtime proves or rejects the frozen experiment thresholds.
-- Dev16 production GPU emission/install remains unchanged; later partial GPU patching is blocked on successful shadow evidence and a separate contract.
+- Frozen first P3.9 slice: **A-0159** — shadow-only four fixed Y slices, exact block-local dirty provenance with mandatory full fallback, matched full-section control and pre-frozen benefit/complexity thresholds; these thresholds remain unchanged.
+- Dev16 implementation/package checkpoint: **A-0160 SUCCESS** for implementation/package.
+- Dev16 reference runtime: **A-0161 FAILED** under frozen A-0159: only 6 localized episodes / 150 fallbacks and one shadow correctness failure; all inherited production/P3.7/P3.8/lifetime gates remained green.
+- Dev17 diagnostic/correction contract: **A-0162 SUCCESS / PLAN FROZEN**. It permits only bounded diagnostics plus correction of source defects proven against permanent P3.7 semantics; provenance surface, admission policy, four-slice layout and every A-0159 threshold are unchanged.
+- Dev17 implementation/package checkpoint: **A-0163 SUCCESS for implementation/package; reference runtime required.** Two dev16 shadow-only correctness defects are corrected: bidirectional visibility/reference equality stronger than permanent P3.7, and raw Minecraft `Direction.ordinal()` vs Obsidian binary-direction comparison.
+- Exact corrected package-validation head `bce641ff08353035d6012fb5c5f5d8c06918da41` / tree `1d6c9a17f089c25f6d70ad9706ba626b2c98eae4` passed hosted Build `33274284466`; canonical dev17 JAR is `Obsidian-0.3.0-phase3-dev17.jar`, 495,236 bytes, SHA-256 `4f8d58251f29742afbc67d95e33a884ea72849fe099a225b154af19616ef7904`.
+- Dev17 final closure now retains exact per-reason fallback counts and the first failed episode fixture (section/episode/mask/edit-count/code/name/index/determinism).
+- Draft P3.9 PR: **#53**; keep draft until the exact dev17 reference runtime closes or rejects A-0159.
+- Dev17 production full-section capture/worker/GPU emission/install/draw remains unchanged; later partial GPU patching is blocked on successful shadow evidence and a separate freeze.
 - Public release intent: keep the existing public checkpoint; internal milestone merges use `[no-release]`.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
 
