@@ -17,6 +17,8 @@ public final class BorderHaloCorrectnessProof {
             * SectionSnapshot.INTERIOR_SIZE
             * SectionSnapshot.INTERIOR_SIZE;
 
+    private static final int EXPECTED_VISIBLE = 1;
+    private static final int EXPECTED_UNSUPPORTED_BLOCKER = 1 << 1;
     private static final int[] DX = {-1, 1, 0, 0, 0, 0};
     private static final int[] DY = {0, 0, -1, 1, 0, 0};
     private static final int[] DZ = {0, 0, 0, 0, -1, 1};
@@ -133,19 +135,35 @@ public final class BorderHaloCorrectnessProof {
 
         for (int a = 0; a < SectionSnapshot.INTERIOR_SIZE; a++) {
             for (int b = 0; b < SectionSnapshot.INTERIOR_SIZE; b++) {
-                int[] result;
-                result = checkBoundary(snapshot, visibility, scratch, 0, 0, a, b);
-                checks += result[0]; visibilityMatches += result[1]; referenceMatches += result[2]; visible += result[3]; unsupported += result[4];
-                result = checkBoundary(snapshot, visibility, scratch, 1, 15, a, b);
-                checks += result[0]; visibilityMatches += result[1]; referenceMatches += result[2]; visible += result[3]; unsupported += result[4];
-                result = checkBoundary(snapshot, visibility, scratch, 2, a, 0, b);
-                checks += result[0]; visibilityMatches += result[1]; referenceMatches += result[2]; visible += result[3]; unsupported += result[4];
-                result = checkBoundary(snapshot, visibility, scratch, 3, a, 15, b);
-                checks += result[0]; visibilityMatches += result[1]; referenceMatches += result[2]; visible += result[3]; unsupported += result[4];
-                result = checkBoundary(snapshot, visibility, scratch, 4, a, b, 0);
-                checks += result[0]; visibilityMatches += result[1]; referenceMatches += result[2]; visible += result[3]; unsupported += result[4];
-                result = checkBoundary(snapshot, visibility, scratch, 5, a, b, 15);
-                checks += result[0]; visibilityMatches += result[1]; referenceMatches += result[2]; visible += result[3]; unsupported += result[4];
+                int flags = checkBoundary(snapshot, visibility, scratch, 0, 0, a, b);
+                checks++; visibilityMatches++; referenceMatches++;
+                if ((flags & EXPECTED_VISIBLE) != 0) visible++;
+                if ((flags & EXPECTED_UNSUPPORTED_BLOCKER) != 0) unsupported++;
+
+                flags = checkBoundary(snapshot, visibility, scratch, 1, 15, a, b);
+                checks++; visibilityMatches++; referenceMatches++;
+                if ((flags & EXPECTED_VISIBLE) != 0) visible++;
+                if ((flags & EXPECTED_UNSUPPORTED_BLOCKER) != 0) unsupported++;
+
+                flags = checkBoundary(snapshot, visibility, scratch, 2, a, 0, b);
+                checks++; visibilityMatches++; referenceMatches++;
+                if ((flags & EXPECTED_VISIBLE) != 0) visible++;
+                if ((flags & EXPECTED_UNSUPPORTED_BLOCKER) != 0) unsupported++;
+
+                flags = checkBoundary(snapshot, visibility, scratch, 3, a, 15, b);
+                checks++; visibilityMatches++; referenceMatches++;
+                if ((flags & EXPECTED_VISIBLE) != 0) visible++;
+                if ((flags & EXPECTED_UNSUPPORTED_BLOCKER) != 0) unsupported++;
+
+                flags = checkBoundary(snapshot, visibility, scratch, 4, a, b, 0);
+                checks++; visibilityMatches++; referenceMatches++;
+                if ((flags & EXPECTED_VISIBLE) != 0) visible++;
+                if ((flags & EXPECTED_UNSUPPORTED_BLOCKER) != 0) unsupported++;
+
+                flags = checkBoundary(snapshot, visibility, scratch, 5, a, b, 15);
+                checks++; visibilityMatches++; referenceMatches++;
+                if ((flags & EXPECTED_VISIBLE) != 0) visible++;
+                if ((flags & EXPECTED_UNSUPPORTED_BLOCKER) != 0) unsupported++;
             }
         }
 
@@ -197,7 +215,11 @@ public final class BorderHaloCorrectnessProof {
                 System.nanoTime() - startNs);
     }
 
-    private static int[] checkBoundary(
+    /**
+     * Returns only two classification bits after throwing on either oracle mismatch.
+     * No per-boundary allocation is permitted in this P3.5 proof path.
+     */
+    private static int checkBoundary(
             SectionSnapshot snapshot,
             BinarySectionVisibility visibility,
             BuildScratch scratch,
@@ -221,7 +243,10 @@ public final class BorderHaloCorrectnessProof {
             throw new IllegalStateException("P3.5 independent reference border mismatch at ("
                     + x + "," + y + "," + z + ") direction=" + direction);
         }
-        return new int[] {1, 1, 1, expected ? 1 : 0, expectedUnsupported ? 1 : 0};
+        int flags = 0;
+        if (expected) flags |= EXPECTED_VISIBLE;
+        if (expectedUnsupported) flags |= EXPECTED_UNSUPPORTED_BLOCKER;
+        return flags;
     }
 
     private static int referenceIndex(int x, int y, int z, int direction) {
