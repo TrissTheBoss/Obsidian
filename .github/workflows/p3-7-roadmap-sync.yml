@@ -18,8 +18,9 @@ jobs:
           ref: phase3/t-junction-policy
           fetch-depth: 0
       - name: Synchronize roadmap
-        shell: python
+        shell: bash
         run: |
+          python3 <<'PY'
           from pathlib import Path
 
           path = Path('ai/MASTER_ROADMAP.md')
@@ -45,7 +46,10 @@ The targeted visual gate armed only after proven strict junctions existed in dra
               raise SystemExit('P3.6/P3.7 roadmap block not found')
           text = text.replace(old, new, 1)
 
-          text = text.replace('- [ACTIVE] Evidence-driven T-junction topology/raster policy.', '- [COMPLETE] Evidence-driven T-junction topology/raster policy.\n- [ACTIVE] Differential correctness framework against the permanent independent reference oracle.', 1)
+          feature = '- [ACTIVE] Evidence-driven T-junction topology/raster policy.'
+          if feature not in text:
+              raise SystemExit('T-junction feature line not found')
+          text = text.replace(feature, '- [COMPLETE] Evidence-driven T-junction topology/raster policy.\n- [ACTIVE] Differential correctness framework against the permanent independent reference oracle.', 1)
 
           old_status = '''- A-0147 activated P3.6 and froze dev13 as a non-geometry-changing proof of actual emitted strict T-junction topology plus camera-relative transform evidence before deciding whether mitigation is justified;
 - P3.7+ phase order remains unchanged.'''
@@ -68,10 +72,10 @@ The targeted visual gate armed only after proven strict junctions existed in dra
           text = text.replace(old_position, new_position, 1)
 
           path.write_text(text, encoding='utf-8')
-
-          wf = Path('.github/workflows/p3-7-roadmap-sync.yml')
-          wf.unlink()
+          Path('.github/workflows/p3-7-roadmap-sync.yml').unlink()
+          PY
       - name: Commit synchronized roadmap
+        shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
