@@ -11,15 +11,14 @@ import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.SectionPos;
 
 /**
- * Phase 3 dev3 persistent 3x3 scene whose drawable meshes are produced by the
+ * Phase 3 persistent 3x3 scene whose drawable meshes are produced by the
  * bounded {@link SectionMeshWorkerPool} and installed only on the render thread.
  *
  * <p>The already-validated P2.7 whole-window validity model is deliberately
  * retained. Live world/model/material/light capture remains render-thread owned;
- * only pure {@link BakedSectionMesh} construction crosses the worker boundary.
- * Dev3 adds relevance-aware HIGH/NORMAL/LOW admission plus conservative bounded
- * multi-admission so the production scheduler is exercised without unbounded
- * render-thread capture or queue growth.</p>
+ * only pure mesh/proof construction crosses the worker boundary. P3.5 adds
+ * immutable installed-record border/halo proofs and exact shared-border audits
+ * without changing the dev11 emitted geometry path.</p>
  */
 public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/AsyncMultiSectionSceneProbe");
@@ -28,6 +27,8 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     private static final int MIN_ADJACENT_PAIRS = 2;
     private static final int MAX_ADMISSIONS_PER_FRAME = 2;
     private static final long ELIGIBILITY_RETRY_NS = 500_000_000L;
+    private static final int SHARED_BORDER_COMPARISONS_PER_PAIR =
+            SectionSnapshot.INTERIOR_SIZE * SectionSnapshot.INTERIOR_SIZE * 2;
 
     public enum State { WAITING_WORLD, SCANNING, BUILDING, LIVE, RETIRING, FAILED, CLOSED }
     private enum Eligibility { PENDING, ELIGIBLE, SKIPPED }
@@ -57,6 +58,8 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     private final SectionMeshWorkerPool workers;
     private final SectionLifecycleEvents.Cursor lifecycleCursor = new SectionLifecycleEvents.Cursor();
     private final SceneRecord[] records = new SceneRecord[RECORD_CAPACITY];
+    private final BorderHaloCorrectnessProof.BuildScratch borderProofScratch =
+            new BorderHaloCorrectnessProof.BuildScratch();
 
     private State state = State.WAITING_WORLD;
     private boolean hardFailure;
@@ -93,6 +96,20 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     private long maxSceneIndexBytes;
     private long maxSceneQuads;
     private int maxSimultaneousSceneJobs;
+
+    private long borderProofRecords;
+    private long borderProofDeterminismAudits;
+    private long borderProofDeterminismMatches;
+    private long borderOutwardChecks;
+    private long borderVisibilityMatches;
+    private long borderReferenceMatches;
+    private long borderExpectedVisibleFaces;
+    private long borderUnsupportedBlockedFaces;
+    private long borderBakedQuads;
+    private long borderLightColorSamples;
+    private long sharedBorderPairAudits;
+    private long sharedBorderComparisons;
+    private long sharedBorderMatches;
 
     private long totalUsefulSubmissions;
     private long totalDrawSubmissions;
@@ -147,9 +164,11 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         invalidateScene(reasons, frameSerial, false);
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev3 scene invalidation on frame {0}: reasons={1}, relevantEvents={2}, generation={3}, center={4}.",
+                "Phase 3 P3.5 scene invalidation on frame {0}: reasons={1}, relevantEvents={2}, generation={3}, center={4}, coreDirty={5}, haloOnlyDirty={6}, horizontalHaloDirty={7}, verticalHaloDirty={8}.",
                 frameSerial, SectionLifecycleEvents.describeReasons(reasons), relevantEvents,
-                sceneGeneration, centerKnown ? centerString() : "unbound");
+                sceneGeneration, centerKnown ? centerString() : "unbound",
+                lifecycleCursor.renderedCoreDirtyEvents(), lifecycleCursor.haloOnlyDirtyEvents(),
+                lifecycleCursor.horizontalHaloDirtyEvents(), lifecycleCursor.verticalHaloDirtyEvents());
     }
 
     public void afterWorldRender(GameRenderer renderer, long frameSerial) {
@@ -198,7 +217,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 state = State.FAILED;
                 disposeRecordProbe(record);
                 LOG.log(System.Logger.Level.ERROR,
-                        "Phase 3 dev3 worker-backed section record failed; async scene validation failed.");
+                        "Phase 3 P3.5 worker-backed section record failed; async scene validation failed.");
             }
         }
         updateMaxSimultaneousJobs();
@@ -228,7 +247,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         configureRecordsForCenter();
         state = State.SCANNING;
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev3 bound async 3x3 scene center {0}; capture stays render-thread-only and pure mesh construction uses {1} bounded worker(s) with HIGH/NORMAL/LOW relevance scheduling.",
+                "Phase 3 P3.5 bound async 3x3 scene center {0}; immutable one-block halos participate in a conservative 5x3x5 section-dirty dependency domain and pure mesh construction uses {1} bounded worker(s).",
                 centerString(), workers.workerCount());
         return true;
     }
@@ -287,14 +306,14 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
             if (eligible >= MIN_LIVE_RECORDS && adjacent >= MIN_ADJACENT_PAIRS) {
                 state = State.BUILDING;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev3 eligibility scan complete on frame {0}: eligibleRecords={1}/{2}, adjacentPairs={3}; bounded relevance-aware worker admission begins.",
+                        "Phase 3 P3.5 eligibility scan complete on frame {0}: eligibleRecords={1}/{2}, adjacentPairs={3}; bounded relevance-aware worker admission begins.",
                         frameSerial, eligible, records.length, adjacent);
                 return;
             }
             if (!insufficientSceneLogged) {
                 insufficientSceneLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev3 needs at least {0} eligible records and {1} adjacent pairs. Current eligible={2}, adjacent={3}.",
+                        "Phase 3 P3.5 needs at least {0} eligible records and {1} adjacent pairs. Current eligible={2}, adjacent={3}.",
                         MIN_LIVE_RECORDS, MIN_ADJACENT_PAIRS, eligible, adjacent);
             }
             if (now >= nextEligibilityRetryNs) {
@@ -346,7 +365,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
             hardFailure = true;
             state = State.FAILED;
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev3 eligibility capture failed for section (" + record.sectionX + ","
+                    "Phase 3 P3.5 eligibility capture failed for section (" + record.sectionX + ","
                             + record.sectionY + "," + record.sectionZ + ").", e);
         }
     }
@@ -436,10 +455,47 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 invalidateScene(SectionLifecycleEvents.REASON_OVERFLOW, frameSerial, false);
                 return;
             }
+
+            try {
+                SectionSnapshot snapshot = probe.snapshot();
+                SectionBakedQuadSnapshot baked = probe.bakedSnapshot();
+                BorderHaloCorrectnessProof first = BorderHaloCorrectnessProof.build(
+                        snapshot, baked, borderProofScratch);
+                BorderHaloCorrectnessProof second = BorderHaloCorrectnessProof.build(
+                        snapshot, baked, borderProofScratch);
+                borderProofDeterminismAudits++;
+                if (!first.contentEquals(second)) {
+                    throw new IllegalStateException("P3.5 installed border/halo proof was nondeterministic");
+                }
+                borderProofDeterminismMatches++;
+                borderProofRecords++;
+                borderOutwardChecks += first.outwardChecks();
+                borderVisibilityMatches += first.visibilityMatches();
+                borderReferenceMatches += first.referenceMatches();
+                borderExpectedVisibleFaces += first.expectedVisibleFaces();
+                borderUnsupportedBlockedFaces += first.unsupportedBlockedFaces();
+                borderBakedQuads += first.borderBakedQuads();
+                borderLightColorSamples += first.borderLightColorSamples();
+
+                LOG.log(System.Logger.Level.INFO,
+                        "Phase 3 P3.5 installed border proof: section=({0},{1},{2}), proofFingerprint={3}, outwardChecks={4}, visibilityMatches={5}, referenceMatches={6}, expectedVisible={7}, unsupportedBlockers={8}, borderBakedQuads={9}, frozenLightColorSamples={10}, workerWorldReadsAfterCapture=0.",
+                        first.sectionX(), first.sectionY(), first.sectionZ(),
+                        Long.toUnsignedString(first.fingerprint()), first.outwardChecks(),
+                        first.visibilityMatches(), first.referenceMatches(), first.expectedVisibleFaces(),
+                        first.unsupportedBlockedFaces(), first.borderBakedQuads(),
+                        first.borderLightColorSamples());
+            } catch (RuntimeException e) {
+                hardFailure = true;
+                state = State.FAILED;
+                LOG.log(System.Logger.Level.ERROR,
+                        "Phase 3 P3.5 installed border/halo proof failed.", e);
+                return;
+            }
+
             record.installObserved = true;
             recordInstallCount++;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev3 worker-backed scene record installed: generation={0}, section=({1},{2},{3}), priority={4}, installs={5}, liveRecords={6}.",
+                    "Phase 3 P3.5 worker-backed scene record installed: generation={0}, section=({1},{2},{3}), priority={4}, installs={5}, liveRecords={6}.",
                     sceneGeneration, record.sectionX, record.sectionY, record.sectionZ,
                     SectionMeshWorkerPool.priorityName(probe.workerPriority()), recordInstallCount, liveRecordCount());
         } else if (probeState == WorkerBackedSectionLifecycleProbe.State.FAILED) {
@@ -462,6 +518,16 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         int live = liveRecordCount();
         int adjacent = adjacentLivePairCount();
         if (live < MIN_LIVE_RECORDS || adjacent < MIN_ADJACENT_PAIRS) return;
+
+        try {
+            auditLiveSharedBorders();
+        } catch (RuntimeException e) {
+            hardFailure = true;
+            state = State.FAILED;
+            LOG.log(System.Logger.Level.ERROR,
+                    "Phase 3 P3.5 shared-border snapshot audit failed.", e);
+            return;
+        }
 
         long quads = 0L;
         long vertexBytes = 0L;
@@ -487,16 +553,99 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         state = State.LIVE;
 
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev3 async scene READY on frame {0}: generation={1}, center={2}, liveRecords={3}, adjacentPairs={4}, recordInstalls={5}, workerResultInstalls={6}, synchronousSceneMeshBuilds={7}, maxSceneJobs={8}, maxAdmissionBurst={9}.",
+                "Phase 3 P3.5 async scene READY on frame {0}: generation={1}, center={2}, liveRecords={3}, adjacentPairs={4}, recordInstalls={5}, borderProofRecords={6}, sharedPairAudits={7}, sharedComparisons={8}, sharedMatches={9}, borderHaloCorrectnessEvidenceReady={10}, synchronousSceneMeshBuilds={11}.",
                 frameSerial, sceneGeneration, centerString(), live, adjacent, recordInstallCount,
-                workerResultInstalls(), synchronousSceneMeshBuilds(), maxSimultaneousSceneJobs, maxAdmissionBurst);
+                borderProofRecords, sharedBorderPairAudits, sharedBorderComparisons, sharedBorderMatches,
+                borderHaloCorrectnessEvidenceReady(), synchronousSceneMeshBuilds());
+    }
+
+    private void auditLiveSharedBorders() {
+        long pairs = 0L;
+        long comparisons = 0L;
+        for (int z = 0; z < 3; z++) {
+            for (int x = 0; x < 3; x++) {
+                int index = z * 3 + x;
+                SceneRecord current = records[index];
+                if (!recordQualifies(current, true)) continue;
+                if (x < 2 && recordQualifies(records[index + 1], true)) {
+                    comparisons += auditXPair(current, records[index + 1]);
+                    pairs++;
+                }
+                if (z < 2 && recordQualifies(records[index + 3], true)) {
+                    comparisons += auditZPair(current, records[index + 3]);
+                    pairs++;
+                }
+            }
+        }
+        if (pairs <= 0L || comparisons != pairs * SHARED_BORDER_COMPARISONS_PER_PAIR) {
+            throw new IllegalStateException("P3.5 shared-border pair accounting mismatch");
+        }
+        sharedBorderPairAudits += pairs;
+        sharedBorderComparisons += comparisons;
+        sharedBorderMatches += comparisons;
+    }
+
+    private static int auditXPair(SceneRecord left, SceneRecord right) {
+        if (right.sectionX != left.sectionX + 1
+                || right.sectionY != left.sectionY
+                || right.sectionZ != left.sectionZ) {
+            throw new IllegalStateException("P3.5 X pair coordinates are not adjacent");
+        }
+        SectionSnapshot a = requiredLiveSnapshot(left);
+        SectionSnapshot b = requiredLiveSnapshot(right);
+        int comparisons = 0;
+        for (int y = 0; y < SectionSnapshot.INTERIOR_SIZE; y++) {
+            for (int z = 0; z < SectionSnapshot.INTERIOR_SIZE; z++) {
+                compareSnapshotCell(a, SectionSnapshot.INTERIOR_SIZE, y, z, b, 0, y, z);
+                compareSnapshotCell(b, -1, y, z, a, SectionSnapshot.INTERIOR_SIZE - 1, y, z);
+                comparisons += 2;
+            }
+        }
+        return comparisons;
+    }
+
+    private static int auditZPair(SceneRecord north, SceneRecord south) {
+        if (south.sectionX != north.sectionX
+                || south.sectionY != north.sectionY
+                || south.sectionZ != north.sectionZ + 1) {
+            throw new IllegalStateException("P3.5 Z pair coordinates are not adjacent");
+        }
+        SectionSnapshot a = requiredLiveSnapshot(north);
+        SectionSnapshot b = requiredLiveSnapshot(south);
+        int comparisons = 0;
+        for (int y = 0; y < SectionSnapshot.INTERIOR_SIZE; y++) {
+            for (int x = 0; x < SectionSnapshot.INTERIOR_SIZE; x++) {
+                compareSnapshotCell(a, x, y, SectionSnapshot.INTERIOR_SIZE, b, x, y, 0);
+                compareSnapshotCell(b, x, y, -1, a, x, y, SectionSnapshot.INTERIOR_SIZE - 1);
+                comparisons += 2;
+            }
+        }
+        return comparisons;
+    }
+
+    private static SectionSnapshot requiredLiveSnapshot(SceneRecord record) {
+        if (record.probe == null || record.probe.state() != WorkerBackedSectionLifecycleProbe.State.LIVE) {
+            throw new IllegalStateException("P3.5 shared-border record is not LIVE");
+        }
+        SectionSnapshot snapshot = record.probe.snapshot();
+        if (snapshot == null) throw new IllegalStateException("P3.5 LIVE record lost immutable snapshot");
+        return snapshot;
+    }
+
+    private static void compareSnapshotCell(
+            SectionSnapshot a, int ax, int ay, int az,
+            SectionSnapshot b, int bx, int by, int bz) {
+        if (a.stateId(ax, ay, az) != b.stateId(bx, by, bz)
+                || a.classification(ax, ay, az) != b.classification(bx, by, bz)) {
+            throw new IllegalStateException("P3.5 independently captured shared-border cells disagree");
+        }
     }
 
     private void invalidateScene(int reasons, long frameSerial, boolean recenter) {
         if (sceneGeneration == Long.MAX_VALUE) {
             hardFailure = true;
             state = State.FAILED;
-            throw new IllegalStateException("Phase 3 dev3 scene generation exhausted");
+            throw new IllegalStateException("Phase 3 P3.5 scene generation exhausted");
         }
         sceneGeneration++;
         buildEventSequence = SectionLifecycleEvents.latestSequence();
@@ -641,6 +790,20 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     public int maxSimultaneousSceneJobs() { return maxSimultaneousSceneJobs; }
     public SectionLifecycleEvents.Cursor lifecycleCursor() { return lifecycleCursor; }
 
+    public long borderProofRecords() { return borderProofRecords; }
+    public long borderProofDeterminismAudits() { return borderProofDeterminismAudits; }
+    public long borderProofDeterminismMatches() { return borderProofDeterminismMatches; }
+    public long borderOutwardChecks() { return borderOutwardChecks; }
+    public long borderVisibilityMatches() { return borderVisibilityMatches; }
+    public long borderReferenceMatches() { return borderReferenceMatches; }
+    public long borderExpectedVisibleFaces() { return borderExpectedVisibleFaces; }
+    public long borderUnsupportedBlockedFaces() { return borderUnsupportedBlockedFaces; }
+    public long borderBakedQuads() { return borderBakedQuads; }
+    public long borderLightColorSamples() { return borderLightColorSamples; }
+    public long sharedBorderPairAudits() { return sharedBorderPairAudits; }
+    public long sharedBorderComparisons() { return sharedBorderComparisons; }
+    public long sharedBorderMatches() { return sharedBorderMatches; }
+
     public long usefulSubmissions() { return totalUsefulSubmissions + sumCurrent(WorkerBackedSectionLifecycleProbe::usefulSubmissions); }
     public long drawSubmissions() { return totalDrawSubmissions + sumCurrent(WorkerBackedSectionLifecycleProbe::drawSubmissions); }
     public long indirectCalls() { return totalIndirectCalls + sumCurrent(WorkerBackedSectionLifecycleProbe::indirectCalls); }
@@ -682,10 +845,40 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 && unsafeStaleSceneInstalls == 0L;
     }
 
+    public boolean borderHaloCorrectnessEvidenceReady() {
+        return productionWorkerIntegrationReady()
+                && SectionLifecycleEvents.dirtyDependencyClassifierSelfTest()
+                && borderProofRecords > 0L
+                && borderProofRecords == recordInstallCount
+                && borderProofDeterminismAudits == borderProofRecords
+                && borderProofDeterminismMatches == borderProofDeterminismAudits
+                && borderOutwardChecks == borderProofRecords * BorderHaloCorrectnessProof.OUTWARD_CHECKS_PER_BUILD
+                && borderVisibilityMatches == borderOutwardChecks
+                && borderReferenceMatches == borderOutwardChecks
+                && borderBakedQuads > 0L
+                && borderLightColorSamples > 0L
+                && sharedBorderPairAudits > 0L
+                && sharedBorderComparisons == sharedBorderPairAudits * SHARED_BORDER_COMPARISONS_PER_PAIR
+                && sharedBorderMatches == sharedBorderComparisons
+                && unsafeStaleSceneInstalls == 0L
+                && lifecycleCursor.droppedEvents() == 0L;
+    }
+
     @Override
     public void close() {
         RenderSystem.assertOnRenderThread();
         if (closed) return;
+
+        boolean borderReady = borderHaloCorrectnessEvidenceReady();
+        LOG.log(System.Logger.Level.INFO,
+                "Phase 3 P3.5 final border/halo evidence: borderHaloCorrectnessEvidenceReady={0}, lifecycleClassifierSelfTest={1}, borderProofRecords={2}, outwardChecks={3}, visibilityMatches={4}, referenceMatches={5}, borderBakedQuads={6}, frozenLightColorSamples={7}, sharedPairAudits={8}, sharedComparisons={9}, sharedMatches={10}, coreDirty={11}, haloOnlyDirty={12}, horizontalHaloDirty={13}, verticalHaloDirty={14}, workerWorldReadsAfterCapture=0, synchronousSceneMeshBuilds={15}, unsafeStaleSceneInstalls={16}.",
+                borderReady, SectionLifecycleEvents.dirtyDependencyClassifierSelfTest(), borderProofRecords,
+                borderOutwardChecks, borderVisibilityMatches, borderReferenceMatches, borderBakedQuads,
+                borderLightColorSamples, sharedBorderPairAudits, sharedBorderComparisons, sharedBorderMatches,
+                lifecycleCursor.renderedCoreDirtyEvents(), lifecycleCursor.haloOnlyDirtyEvents(),
+                lifecycleCursor.horizontalHaloDirtyEvents(), lifecycleCursor.verticalHaloDirtyEvents(),
+                synchronousSceneMeshBuilds(), unsafeStaleSceneInstalls);
+
         closed = true;
         for (SceneRecord record : records) {
             WorkerBackedSectionLifecycleProbe probe = record.probe;

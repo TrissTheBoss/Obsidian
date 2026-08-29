@@ -53,12 +53,33 @@ final class OrdinaryQuadEmissionSafetyEvidence {
         long reductionPermille = renderKeyEligibleFaces == 0L ? 0L
                 : safeFacesSaved * 1000L / renderKeyEligibleFaces;
 
+        /*
+         * Cancellation is checked between pure pipeline stages. A cancelled
+         * ticket may have published merge-candidate telemetry without reaching
+         * emission-safety. Prove the aggregate delta is exactly such a cancelled
+         * prefix; when no build was skipped, every cross-stage residual must be 0.
+         */
+        long mergeBuilds = workers.mergeCandidateBuilds();
+        long cancelledPrefixBuilds = mergeBuilds - builds;
+        long cancelledPrefixCandidates = mergeCandidateCount - candidates;
+        long cancelledPrefixSingletons = mergeCandidateSingletons - singletons;
+        long cancelledPrefixMultiFace = mergeCandidateMultiFace - multiFace;
+        boolean residualRequiresCancellation = cancelledPrefixBuilds > 0L
+                || (cancelledPrefixCandidates == 0L
+                    && cancelledPrefixSingletons == 0L
+                    && cancelledPrefixMultiFace == 0L);
+        boolean cancellationAccountingExact = cancelledPrefixBuilds >= 0L
+                && cancelledPrefixBuilds <= workers.cancelledJobs()
+                && cancelledPrefixCandidates >= 0L
+                && cancelledPrefixSingletons >= 0L
+                && cancelledPrefixMultiFace >= 0L
+                && cancelledPrefixCandidates == cancelledPrefixSingletons + cancelledPrefixMultiFace
+                && residualRequiresCancellation;
+
         boolean ready = priorGateReady
                 && builds > 0L
                 && builds >= workerCompletedJobs
-                && candidates == mergeCandidateCount
-                && singletons == mergeCandidateSingletons
-                && multiFace == mergeCandidateMultiFace
+                && cancellationAccountingExact
                 && singletons + multiFace == candidates
                 && colorSafe + colorUnsafe == multiFace
                 && lightSafe + lightUnsafe == multiFace

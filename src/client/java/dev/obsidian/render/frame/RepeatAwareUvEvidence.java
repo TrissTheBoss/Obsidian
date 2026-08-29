@@ -47,10 +47,21 @@ final class RepeatAwareUvEvidence {
         long reductionPermille = renderKeyEligibleFaces == 0L ? 0L
                 : safeFacesSaved * 1000L / renderKeyEligibleFaces;
 
+        long emissionBuilds = workers.emissionSafetyBuilds();
+        long emissionMultiFace = workers.totalEmissionSafetyMultiFace();
+        long cancelledPrefixBuilds = emissionBuilds - builds;
+        long cancelledPrefixMultiFace = emissionMultiFace - multiFace;
+        boolean residualRequiresCancellation = cancelledPrefixBuilds > 0L
+                || cancelledPrefixMultiFace == 0L;
+        boolean cancellationAccountingExact = cancelledPrefixBuilds >= 0L
+                && cancelledPrefixBuilds <= workers.cancelledJobs()
+                && cancelledPrefixMultiFace >= 0L
+                && residualRequiresCancellation;
+
         boolean ready = priorGateReady
                 && builds > 0L
                 && builds >= workerCompletedJobs
-                && multiFace == mergeCandidateMultiFace
+                && cancellationAccountingExact
                 && representable + unrepresentable == multiFace
                 && safe + unsafe == multiFace
                 && safe <= representable
