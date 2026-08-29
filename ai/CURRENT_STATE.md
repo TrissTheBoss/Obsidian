@@ -25,7 +25,8 @@ Last updated: 2026-08-30
 - A-0178 exact Minecraft 26.2 bytecode proved public `LevelExtractor.setSectionDirty(III)` is shared by single-section `ClientChunkCache.onLightUpdate(...)` and broad `ClientPacketListener.handleChunksBiomes(...)`, so generic single-section preservation is forbidden.
 - Dev21 A-0181 runtime **closed the caller question**: all `43/43` missing/empty provenance fallbacks remained outer `SINGLE_SECTION` and all `43/43` were `LIGHT_UPDATE` only. Caller totals were `117` relevant, `117` light update, `0` biome, `0` other; mixed/unavailable/cross-thread/overflow all `0`. Permanent P3.7 proof closed `312/312` with zero real mismatches and lifetime shutdown was clean. Do not rerun dev21.
 - **A-0182 dev22 exact-section light-update preservation contract: PLAN FROZEN.** This is the final correction pass for the fixed four-slice experiment before a PASS or formal REJECT/DEFER decision.
-- **A-0183 dev22 implementation/package: SUCCESS; full unchanged A-0159 closure runtime required.**
+- **A-0183 dev22 implementation/package: SUCCESS.**
+- **A-0184 dev22 reference runtime: PARTIAL / NOT ARMED / NON-DECISIVE.** The run was clean but the P3.9 window never armed because the selected scene produced no strict T-junction witness: `strictTJunctionPoints=0`, `junctionBearingTransformProofRecords=0`. P3.5 remained exact; all 385 P3.7 differential proof contents were exact with zero missing/duplicate/optimized-without-reference/real mismatches, but the high-level P3.7 readiness inherited the unsatisfied P3.6 gate. `partialRemeshWindowArmed=false`, completed/observed/retained `0/0/0`; no A-0159 benefit decision is permitted from this run. No source change or new JAR is justified.
 
 ## Dev22 canonical runtime handoff
 
@@ -56,19 +57,21 @@ Dev22 correction scope:
 
 Draft P3.9 PR: **#53**, keep DRAFT / DO NOT MERGE until the full closure decision is recorded.
 
-## Exact next action — final P3.9 decision run
+## Exact next action — final P3.9 decision run, same dev22 binary
 
-Run the exact canonical dev22 JAR through the full unchanged A-0159 workload. This is **not another short diagnostic**.
+A-0184 proved scene selection must establish the inherited P3.6 witness **before** the closure workload. Use the exact canonical dev22 JAR; do not build dev23.
 
-Required minimum workload after settled READY / P3.9 arm:
-
-1. >=16 separate safe-interior one-slice edits, allowing READY recovery between episodes;
-2. >=8 separate safe-interior two-slice boundary edits, allowing READY recovery;
-3. >=1 quick same-section coalesced burst;
-4. F3+T and READY recovery to exercise mandatory global fallback;
-5. one real scene recenter and READY recovery to exercise mandatory global fallback;
-6. continue safe-interior localized edits until completed localized episodes >=32;
-7. quit normally and return the complete log.
+1. Enter the world and move to a geometrically richer area before doing the measured edit workload. A previously successful reference scene was near section `(69,4,1)`, corresponding approximately to world X `1104..1119`, Y `64..79`, Z `16..31` if the same world still contains that terrain.
+2. Wait for READY and watch the log. **Do not begin the 32-episode closure workload until both arming lines have appeared:**
+   - `Phase 3 dev18 P3.9 measured benchmark window armed...`
+   - `Phase 3 dev18 P3.9 pending-coalescing shadow partial-remesh window armed...`
+3. After arming, perform >=16 separate safe-interior one-slice edits, allowing READY recovery between episodes.
+4. Perform >=8 separate safe-interior two-slice boundary edits, allowing READY recovery.
+5. Perform >=1 quick same-section 3-5 edit burst for coalescing.
+6. F3+T and READY recovery to exercise mandatory global fallback.
+7. Move more than the 3x3 scene radius so `cameraRecenterEvents` increases by at least one, then recover READY.
+8. Continue safe-interior localized edits until completed localized episodes >=32.
+9. Quit normally and return the complete log.
 
 Frozen conclusion rule:
 
