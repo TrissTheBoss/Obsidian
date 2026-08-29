@@ -51,9 +51,12 @@ final class RepeatAwareUvEvidence {
         long emissionMultiFace = workers.totalEmissionSafetyMultiFace();
         long cancelledPrefixBuilds = emissionBuilds - builds;
         long cancelledPrefixMultiFace = emissionMultiFace - multiFace;
+        boolean residualRequiresCancellation = cancelledPrefixBuilds > 0L
+                || cancelledPrefixMultiFace == 0L;
         boolean cancellationAccountingExact = cancelledPrefixBuilds >= 0L
                 && cancelledPrefixBuilds <= workers.cancelledJobs()
-                && cancelledPrefixMultiFace >= 0L;
+                && cancelledPrefixMultiFace >= 0L
+                && residualRequiresCancellation;
 
         boolean ready = priorGateReady
                 && builds > 0L
