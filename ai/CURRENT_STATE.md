@@ -12,10 +12,11 @@ Last updated: 2026-08-29
 - P3.5 promotion merge: PR #46, `[no-release]` commit `1f34b3e4819b4eaa3a8fa474b09570a2e049b15a`.
 - **P3.6 — T-junction policy: PROMOTION-READY through `0.3.0-phase3-dev13`.**
 - P3.6 evidence branch: `phase3/t-junction-policy`.
-- P3.6 draft PR: **#47** pending exact evidence-head CI/promotion.
+- P3.6 draft PR: **#47** pending final exact-head CI/promotion.
 - P3.6 contract: A-0147.
 - P3.6 package checkpoint: A-0148.
 - P3.6 reference runtime + targeted visual PASS: **A-0149**.
+- Class-A roadmap synchronization is complete: P3.6 is recorded COMPLETE and P3.7 ACTIVE in `MASTER_ROADMAP.md` on synchronization commit `4bff1cb4c1b1a31b2bae5c70a1a79e440cb91609`.
 - **Next milestone after promotion: P3.7 — Differential correctness framework.**
 - Public release intent: keep the existing public checkpoint; internal milestone merges use `[no-release]`.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
@@ -170,11 +171,11 @@ The targeted visual gate armed only after real strict junctions were proven in a
 
 Do not add global edge splitting or otherwise weaken greedy meshing based only on theoretical T-junction risk. Retain the D-0024 cross-vendor/larger-scale revisit hook. If future evidence shows cracks/pinholes/flicker on another vendor, driver, scale or renderer change, prefer targeted raster-safe mitigation or selective splitting of proven-problematic boundaries before broader topology changes.
 
-P3.6 may be merged under the standing Phase 3 authorization after the exact A-0149 evidence head passes hosted CI.
+`MASTER_ROADMAP.md` is synchronized to P3.6 COMPLETE / P3.7 ACTIVE on commit `4bff1cb4c1b1a31b2bae5c70a1a79e440cb91609`. That bot-authored synchronization commit received GitHub's `action_required` non-execution state for the normal PR Build, so this connector-authored status commit exists solely to obtain normal hosted CI on the fully synchronized tree; it changes no source/runtime semantics.
 
 ## NEXT: P3.7 — Differential correctness framework
 
-P3.7 remains a separate milestone and becomes ACTIVE only after P3.6 promotion lands on `main`.
+P3.7 is the next roadmap milestone and becomes implementation-active after the P3.6 promotion lands on `main`.
 
 Required direction from the roadmap:
 
@@ -202,10 +203,10 @@ The first P3.7 action after promotion is to inspect the existing reference/optim
 
 ## Immediate next action
 
-1. Run hosted CI on the exact A-0149 P3.6 promotion evidence head.
-2. If green, synchronize the P3.6 COMPLETE / P3.7 ACTIVE roadmap status, promote/merge PR #47 `[no-release]` without changing validated source semantics.
+1. Require the normal hosted Build on this fully synchronized, connector-authored promotion-status head to pass.
+2. Promote the exact same P3.6 tree and merge `[no-release]`; use the established same-head replacement-PR workaround if GitHub's connected ready-for-review mutation remains broken.
 3. From merged `main`, create the P3.7 milestone branch.
-4. Freeze the P3.7 differential-correctness contract before changing source.
+4. Inspect the existing reference/optimized proof surfaces and freeze the P3.7 differential-correctness contract before changing source.
 
 ## Continuity order
 
