@@ -21,8 +21,10 @@ jobs:
       - name: Reassemble and apply dev14 source patch
         run: |
           cat tools/dev14-parts/00 tools/dev14-parts/01 tools/dev14-parts/02 tools/dev14-parts/03 tools/dev14-parts/04 tools/dev14-parts/05 tools/dev14-parts/06 tools/dev14-parts/07 | base64 -d | gzip -d > /tmp/dev14.patch
-          git apply --check /tmp/dev14.patch
-          git apply /tmp/dev14.patch
+          git apply --check --exclude=gradle.properties /tmp/dev14.patch
+          git apply --exclude=gradle.properties /tmp/dev14.patch
+          sed -i 's/^mod_version=0.3.0-phase3-dev13$/mod_version=0.3.0-phase3-dev14/' gradle.properties
+          grep -q '^mod_version=0.3.0-phase3-dev14$' gradle.properties
 
       - name: Remove temporary patch machinery
         run: |
