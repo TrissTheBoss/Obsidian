@@ -520,3 +520,38 @@ Copy this section and replace placeholders. Do not edit previous entries.
 **Result:** `SUCCESS` for implementation/package; short reference runtime required.
 **Evidence:** `ai/attempts/A-0180-phase3-p3.9-dev21-caller-specific-tracer-package.md`; exact implementation `28d14510991eddd05fb68eed2cb806b63a4ff0eb`, tree `31ba14ce0256090a0055236126afe649e5f3bd84`, Build `33278257773` SUCCESS, artifact `9722180208`; canonical JAR 518,959 bytes, SHA-256 `9b0e103de085c3f35fac3a3c245f8577c362df1e7c2925bb21c96c107fd7621a`.
 **Next action:** Short dev21 runtime. If all provenance fallbacks are still outer SINGLE_SECTION and caller correlation is LIGHT_UPDATE only, freeze a separate exact-section light-update preservation correction; otherwise redesign/capture the independent cause.
+
+---
+
+## A-0181 - dev21 caller-specific runtime
+
+**Date:** 2026-08-30
+**Objective:** Determine whether the missing/empty provenance fallback population is exclusively the exact Minecraft 26.2 light-update caller.
+**Action:** Ran canonical dev21 on the reference Windows / RX 6800 XT Vulkan system.
+**Result:** `SUCCESS` for the diagnostic objective; P3.9 remains experimental.
+**Evidence:** `ai/attempts/A-0181-phase3-p3.9-dev21-caller-runtime.md`; outer correlation `43/43 SINGLE_SECTION`; caller correlation `43/43 LIGHT_UPDATE`, biome/other/mixed/unavailable `0`; caller totals `117/117` light, cross-thread/overflow `0/0`; P3.7 `312/312`, zero real mismatches, clean lifetime/exit `0`.
+**Lesson:** The observed empty-provenance follower is caller-pure light invalidation, but generic SINGLE_SECTION preservation remains unsafe because biome invalidation shares the public sink.
+**Next action:** Freeze one exact-section light-update-only shadow preservation correction.
+
+---
+
+## A-0182 - dev22 exact-section light-update preservation contract
+
+**Date:** 2026-08-30
+**Objective:** Freeze the final fail-closed correction pass before concluding the fixed four-slice P3.9 experiment.
+**Action:** Froze preservation only for an already-pending exact episode when an empty/unflagged provenance drain corresponds entirely to same-section LIGHT_UPDATE lifecycle events for exactly the pending section.
+**Result:** `SUCCESS` / `PLAN FROZEN`.
+**Evidence:** `ai/attempts/A-0182-phase3-p3.9-dev22-light-update-preservation-contract.md`.
+**Lesson:** Production full-section invalidation continues; only the shadow pending request may survive. Generic single-section, biome, wrong-section, mixed, unavailable, cross-thread or overflow cases remain fail-closed.
+**Next action:** Package dev22 and run one full unchanged A-0159 closure workload.
+
+---
+
+## A-0183 - dev22 exact-section light-update preservation implementation/package
+
+**Date:** 2026-08-30
+**Objective:** Implement and package the final A-0182-authorized shadow-only correction without changing production rendering or frozen thresholds.
+**Action:** Added fixed primitive same-section light interval proof plus a post-provenance-drain exception that cancels only the shadow fallback when every A-0182 condition is satisfied.
+**Result:** `SUCCESS` for implementation/package; full A-0159 closure runtime required.
+**Evidence:** `ai/attempts/A-0183-phase3-p3.9-dev22-light-update-preservation-package.md`; exact implementation `177081d5b8605439f66d70ffca481c0044e62add`, tree `9fadf0e62b7833f7676dc067e7b4cab40ae19805`, Build `33279229989` SUCCESS, artifact `9722466081`; canonical JAR `524452` bytes, SHA-256 `ec0574c7d24a521eed3de13b5c7efc23f54d501c6c8915c597a283f9296a3f27`.
+**Next action:** Full frozen A-0159 closure run. PASS or formal benefit REJECT/DEFER both move the project to full production opaque/cutout terrain rendering replacement; do not retune thresholds or automatically implement partial GPU patching.
