@@ -331,4 +331,4 @@ Copy this section and replace placeholders. Do not edit previous entries.
 **Actual effect:** P3.8 dev15 is constrained to measurement-only instrumentation over the real production path; no numerical pass threshold is invented before baseline capture, all P3.7 correctness/lifetime gates remain mandatory, and P3.9 partial remeshing is explicitly excluded.  
 **Evidence:** `ai/attempts/A-0154-phase3-p3.8-meshing-benchmark-contract.md`.  
 **Next action:** Implement bounded dev15 telemetry, exact package CI, then run the representative benchmark contract.
-
+- **A-0155** — P3.8 dev15 benchmark implementation review: measurement-only full-section worker instrumentation implemented under frozen A-0154; fixed primitive percentile window, workload/output identity, GC/scratch/pressure evidence and layered runtime gate added; hosted package CI and reference runtime remain pending. See `ai/attempts/A-0155-phase3-p3.8-dev15-implementation-review.md`.
