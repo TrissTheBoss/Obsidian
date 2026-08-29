@@ -5,11 +5,14 @@ package dev.obsidian.render.terrain;
  * the render-thread multi-section scene.
  *
  * <p>The active tracked scene is a 3x3 horizontal section window at one section
- * Y. Exact dirty events inside that window advance renderer validity. Chunk
- * load/unload events use radius two in X/Z because the union of every record's
- * one-block halo spans a 5x5 chunk footprint. World and resource changes are
- * always relevant. Counters are sticky and drained by delta, so unrelated world
- * streaming cannot overflow a queue or stale a valid scene generation.</p>
+ * Y. Every record owns a one-block halo, so section-dirty validity extends one
+ * additional section in X/Z around the scene and one section above/below the
+ * tracked Y. That conservative dependency volume is 5x3x5 sections. Chunk
+ * load/unload events use radius two in X/Z because chunk lifecycle covers every
+ * section Y and the union of every record's one-block halo spans a 5x5 chunk
+ * footprint. World and resource changes are always relevant. Counters are
+ * sticky and drained by delta, so unrelated world streaming cannot overflow a
+ * queue or stale a valid scene generation.</p>
  *
  * <p>Dev3 additionally freezes the first tracked scene center as a diagnostic-only
  * lifecycle anchor. Chunk load/unload events in that anchor's 3x3 chunk halo are
@@ -31,8 +34,14 @@ public final class SectionLifecycleEvents {
 
     public static final int SCENE_SECTION_RADIUS = 1;
     public static final int SCENE_RECORD_CAPACITY = 9;
+    public static final int SCENE_HALO_SECTION_RADIUS = SCENE_SECTION_RADIUS + 1;
+    public static final int SCENE_HALO_SECTION_Y_RADIUS = 1;
     public static final int SCENE_HALO_CHUNK_RADIUS = SCENE_SECTION_RADIUS + 1;
     public static final int FIXED_LIFECYCLE_HALO_CHUNK_RADIUS = 1;
+
+    private static final int DIRTY_DOMAIN_CORE = 1;
+    private static final int DIRTY_DOMAIN_HORIZONTAL_HALO = 1 << 1;
+    private static final int DIRTY_DOMAIN_VERTICAL_HALO = 1 << 2;
 
     private static boolean targetKnown;
     private static int targetSectionX;
@@ -46,6 +55,10 @@ public final class SectionLifecycleEvents {
     /** Monotonic sequence of events relevant to the currently tracked scene validity domain. */
     private static long relevantSequence;
     private static long sectionDirtyEvents;
+    private static long renderedCoreDirtyEvents;
+    private static long haloOnlyDirtyEvents;
+    private static long horizontalHaloDirtyEvents;
+    private static long verticalHaloDirtyEvents;
     private static long playerDirtyEvents;
     private static long chunkLoadEvents;
     private static long chunkUnloadEvents;
@@ -60,6 +73,10 @@ public final class SectionLifecycleEvents {
         private long sequence;
         private long droppedEvents;
         private long sectionDirtyEvents;
+        private long renderedCoreDirtyEvents;
+        private long haloOnlyDirtyEvents;
+        private long horizontalHaloDirtyEvents;
+        private long verticalHaloDirtyEvents;
         private long playerDirtyEvents;
         private long chunkLoadEvents;
         private long chunkUnloadEvents;
@@ -72,6 +89,10 @@ public final class SectionLifecycleEvents {
         public long sequence() { return sequence; }
         public long droppedEvents() { return droppedEvents; }
         public long sectionDirtyEvents() { return sectionDirtyEvents; }
+        public long renderedCoreDirtyEvents() { return renderedCoreDirtyEvents; }
+        public long haloOnlyDirtyEvents() { return haloOnlyDirtyEvents; }
+        public long horizontalHaloDirtyEvents() { return horizontalHaloDirtyEvents; }
+        public long verticalHaloDirtyEvents() { return verticalHaloDirtyEvents; }
         public long playerDirtyEvents() { return playerDirtyEvents; }
         public long chunkLoadEvents() { return chunkLoadEvents; }
         public long chunkUnloadEvents() { return chunkUnloadEvents; }
@@ -111,9 +132,14 @@ public final class SectionLifecycleEvents {
             int sectionY,
             int sectionZ,
             boolean dirtyFromPlayer) {
-        if (!isRenderedSceneSection(sectionX, sectionY, sectionZ)) return;
+        int dirtyDomain = classifyDirtySectionDependency(sectionX, sectionY, sectionZ);
+        if (dirtyDomain == 0) return;
         relevantSequence++;
         sectionDirtyEvents++;
+        if ((dirtyDomain & DIRTY_DOMAIN_CORE) != 0) renderedCoreDirtyEvents++;
+        else haloOnlyDirtyEvents++;
+        if ((dirtyDomain & DIRTY_DOMAIN_HORIZONTAL_HALO) != 0) horizontalHaloDirtyEvents++;
+        if ((dirtyDomain & DIRTY_DOMAIN_VERTICAL_HALO) != 0) verticalHaloDirtyEvents++;
         if (dirtyFromPlayer) playerDirtyEvents++;
     }
 
@@ -146,6 +172,50 @@ public final class SectionLifecycleEvents {
     public static synchronized void resourceReloaded() {
         relevantSequence++;
         resourceReloadEvents++;
+    }
+
+    private static int classifyDirtySectionDependency(int sectionX, int sectionY, int sectionZ) {
+        if (!targetKnown) return 0;
+        return classifyDirtyOffset(
+                sectionX - targetSectionX,
+                sectionY - targetSectionY,
+                sectionZ - targetSectionZ);
+    }
+
+    private static int classifyDirtyOffset(int dx, int dy, int dz) {
+        int absX = Math.abs(dx);
+        int absY = Math.abs(dy);
+        int absZ = Math.abs(dz);
+        if (absX > SCENE_HALO_SECTION_RADIUS
+                || absY > SCENE_HALO_SECTION_Y_RADIUS
+                || absZ > SCENE_HALO_SECTION_RADIUS) {
+            return 0;
+        }
+
+        int result = 0;
+        if (absY == 0 && absX <= SCENE_SECTION_RADIUS && absZ <= SCENE_SECTION_RADIUS) {
+            result |= DIRTY_DOMAIN_CORE;
+        }
+        if (absX > SCENE_SECTION_RADIUS || absZ > SCENE_SECTION_RADIUS) {
+            result |= DIRTY_DOMAIN_HORIZONTAL_HALO;
+        }
+        if (absY != 0) {
+            result |= DIRTY_DOMAIN_VERTICAL_HALO;
+        }
+        return result;
+    }
+
+    /** Pure deterministic proof that the frozen P3.5 dirty dependency domain is classified as intended. */
+    public static boolean dirtyDependencyClassifierSelfTest() {
+        return classifyDirtyOffset(0, 0, 0) == DIRTY_DOMAIN_CORE
+                && classifyDirtyOffset(1, 0, 1) == DIRTY_DOMAIN_CORE
+                && classifyDirtyOffset(2, 0, 0) == DIRTY_DOMAIN_HORIZONTAL_HALO
+                && classifyDirtyOffset(0, 1, 0) == DIRTY_DOMAIN_VERTICAL_HALO
+                && classifyDirtyOffset(-2, -1, 2)
+                    == (DIRTY_DOMAIN_HORIZONTAL_HALO | DIRTY_DOMAIN_VERTICAL_HALO)
+                && classifyDirtyOffset(3, 0, 0) == 0
+                && classifyDirtyOffset(0, 2, 0) == 0
+                && classifyDirtyOffset(0, 0, -3) == 0;
     }
 
     private static boolean isRenderedSceneSection(int sectionX, int sectionY, int sectionZ) {
@@ -197,6 +267,10 @@ public final class SectionLifecycleEvents {
             cursor.sectionDirtyEvents = sectionDirtyEvents;
             cursor.lastRelevantEventCount = addRelevantCount(cursor.lastRelevantEventCount, dirtyDelta);
         }
+        cursor.renderedCoreDirtyEvents = renderedCoreDirtyEvents;
+        cursor.haloOnlyDirtyEvents = haloOnlyDirtyEvents;
+        cursor.horizontalHaloDirtyEvents = horizontalHaloDirtyEvents;
+        cursor.verticalHaloDirtyEvents = verticalHaloDirtyEvents;
 
         long playerDelta = playerDirtyEvents - cursor.playerDirtyEvents;
         if (playerDelta > 0L) cursor.playerDirtyEvents = playerDirtyEvents;
