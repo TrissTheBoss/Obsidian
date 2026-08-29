@@ -13,7 +13,7 @@ import dev.obsidian.render.terrain.SectionLifecycleEvents;
 import dev.obsidian.render.upload.StagingUploadArena;
 import net.minecraft.client.renderer.GameRenderer;
 
-/** Render-thread lifecycle root for active Phase 3 P3.6 dev13 T-junction policy evidence. */
+/** Render-thread lifecycle root for active Phase 3 P3.7 dev14 differential correctness evidence. */
 public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
     private static final int VALIDATION_STAGING_BYTES = 4 * 1024 * 1024;
@@ -45,10 +45,10 @@ public final class FrameCoordinator implements AutoCloseable {
         try {
             workers = new SectionMeshWorkerPool(SectionMeshWorkerPool.defaultWorkerCount());
             staging = new StagingUploadArena(
-                    device, () -> "Obsidian Phase 3 dev13 bounded scene staging ring",
+                    device, () -> "Obsidian Phase 3 dev14 bounded scene staging ring",
                     VALIDATION_STAGING_BYTES);
             arena = new DeviceGeometryArena(
-                    device, () -> "Obsidian Phase 3 dev13 scene device geometry arena",
+                    device, () -> "Obsidian Phase 3 dev14 scene device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
             sceneProbe = new AsyncMultiSectionSceneProbe(device, staging, arena, deferredReleases, workers);
         } catch (RuntimeException e) {
@@ -58,7 +58,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (arena != null) try { arena.close(); } catch (RuntimeException ignored) { }
             try { deferredReleases.close(); } catch (RuntimeException ignored) { }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev13 P3.6 initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 3 dev14 P3.7 initialization failed; Minecraft will continue for diagnosis.", e);
             hardFailure = true;
         }
         meshWorkers = workers;
@@ -78,13 +78,13 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev13 P3.6 frame coordinator active. contextSlots=" + frameContexts.size()
+                    "Phase 3 dev14 P3.7 frame coordinator active. contextSlots=" + frameContexts.size()
                             + ", cpuTimingCapacity=" + cpuFrameTimings.capacity()
                             + ", meshWorkers=" + (meshWorkers == null ? 0 : meshWorkers.workerCount())
                             + ", meshQueueCapacity=" + (meshWorkers == null ? 0 : meshWorkers.queueCapacity())
                             + ", stagingCapacity=" + (stagingUploads == null ? 0 : stagingUploads.capacityBytes())
                             + ", deviceArenaCapacity=" + (deviceArena == null ? 0L : deviceArena.capacityBytes())
-                            + "; all proven P3.2-P3.5 correctness and dev11 repeat-aware greedy GPU emission remain armed unchanged. P3.6 dev13 adds a worker-side exact integer-lattice T-junction topology proof over the actual emitted dev10-safe candidates plus runtime camera-relative transform evidence. Dev13 changes no geometry, shader, pipeline, vertex/index format, atlas/lightmap semantics or native graphics behavior.");
+                            + "; all proven P3.2-P3.6 correctness and dev11 repeat-aware greedy GPU emission remain armed unchanged. P3.7 dev14 adds only a worker-side differential proof that expands the final optimized identity stream back to independent/captured source truth. Dev14 changes no geometry, shader, pipeline, vertex/index format, atlas/lightmap semantics or native graphics behavior.");
         }
     }
 
@@ -97,7 +97,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (!visualDelayLogged) {
                 visualDelayLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev13 P3.6 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
+                        "Phase 3 dev14 P3.7 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
             }
             return;
         }
@@ -108,10 +108,10 @@ public final class FrameCoordinator implements AutoCloseable {
                 return;
             }
         }
-        if (!runtimeInstructionsLogged && sceneProbe != null && sceneProbe.tJunctionPolicyEvidenceReady()) {
+        if (!runtimeInstructionsLogged && sceneProbe != null && sceneProbe.differentialCorrectnessEvidenceReady()) {
             runtimeInstructionsLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev13 P3.6 targeted visual gate is armed because the LIVE scene contains proven strict T-junctions and a junction-bearing record has executed the camera-relative draw transform. Inspect greedy rectangle boundaries/T-junctions while standing still, strafing/advancing, rotating slowly and rapidly, using grazing and ordinary angles, and crossing/recentering a section boundary. Then perform an ordinary block break/place rebuild, let READY return, perform F3+T, let READY return again, and exit normally. Report explicit PASS or FAIL for cracks, pinholes, flickering seams, z-fighting/double edges, or camera-motion-dependent gaps. Automated promotion requires every prior gate through borderHaloCorrectnessEvidenceReady=true plus tJunctionPolicyEvidenceReady=true. Dev13 changes no emitted geometry, shaders or pipelines.");
+                    "Phase 3 dev14 P3.7 differential correctness gate is armed. Automated source-truth reconstruction is exact on installed LIVE records. Exercise an ordinary block break/place rebuild and let READY return, perform F3+T and let READY return, cross/recenter a section boundary, then exit normally. No new human visual verdict is required because dev14 changes no emitted geometry, shaders, pipelines, atlas/lightmap behavior or draw semantics. Promotion requires differentialCorrectnessEvidenceReady=true plus all inherited gates and clean lifetime.");
         }
     }
 
@@ -184,9 +184,21 @@ public final class FrameCoordinator implements AutoCloseable {
         long tJunctionIntegerLatticeChecks = 0L, tJunctionIntegerLatticeMatches = 0L;
         long cameraRelativeTransformProofRecords = 0L, junctionBearingTransformProofRecords = 0L;
         long cameraRelativeTransformFailures = 0L;
+        long differentialProofRecords = 0L, differentialProofDeterminismAudits = 0L, differentialProofDeterminismMatches = 0L;
+        long differentialReferenceFacesChecked = 0L, differentialReferenceMappedFaces = 0L, differentialReferenceUnmappedFaces = 0L, differentialReferenceAmbiguousFaces = 0L;
+        long differentialSourceQuadsChecked = 0L, differentialPassthroughIdentitiesChecked = 0L;
+        long differentialMergedCandidatesChecked = 0L, differentialMergedExpandedFacesChecked = 0L;
+        long differentialMaterialChecks = 0L, differentialMaterialMatches = 0L;
+        long differentialDirectionChecks = 0L, differentialDirectionMatches = 0L;
+        long differentialGeometryChecks = 0L, differentialGeometryMatches = 0L;
+        long differentialUvChecks = 0L, differentialUvMatches = 0L;
+        long differentialColorChecks = 0L, differentialColorMatches = 0L;
+        long differentialLightChecks = 0L, differentialLightMatches = 0L;
+        long differentialMissing = 0L, differentialDuplicate = 0L, differentialOptimizedWithoutReference = 0L;
+        long differentialRealMismatches = 0L, differentialFixtureSelfTestPasses = 0L;
         String center = "unbound";
         boolean localSceneReady = false, productionWorkerIntegrationReady = false;
-        boolean borderSceneEvidenceReady = false, tJunctionSceneEvidenceReady = false;
+        boolean borderSceneEvidenceReady = false, tJunctionSceneEvidenceReady = false, differentialSceneEvidenceReady = false;
         SectionLifecycleEvents.Cursor lifecycleCursor = null;
 
         if (probe != null) {
@@ -256,6 +268,34 @@ public final class FrameCoordinator implements AutoCloseable {
             cameraRelativeTransformProofRecords = probe.cameraRelativeTransformProofRecords();
             junctionBearingTransformProofRecords = probe.junctionBearingTransformProofRecords();
             cameraRelativeTransformFailures = probe.cameraRelativeTransformFailures();
+            differentialProofRecords = probe.differentialProofRecords();
+            differentialProofDeterminismAudits = probe.differentialProofDeterminismAudits();
+            differentialProofDeterminismMatches = probe.differentialProofDeterminismMatches();
+            differentialReferenceFacesChecked = probe.differentialReferenceFacesChecked();
+            differentialReferenceMappedFaces = probe.differentialReferenceMappedFaces();
+            differentialReferenceUnmappedFaces = probe.differentialReferenceUnmappedFaces();
+            differentialReferenceAmbiguousFaces = probe.differentialReferenceAmbiguousFaces();
+            differentialSourceQuadsChecked = probe.differentialSourceQuadsChecked();
+            differentialPassthroughIdentitiesChecked = probe.differentialPassthroughIdentitiesChecked();
+            differentialMergedCandidatesChecked = probe.differentialMergedCandidatesChecked();
+            differentialMergedExpandedFacesChecked = probe.differentialMergedExpandedFacesChecked();
+            differentialMaterialChecks = probe.differentialMaterialChecks();
+            differentialMaterialMatches = probe.differentialMaterialMatches();
+            differentialDirectionChecks = probe.differentialDirectionChecks();
+            differentialDirectionMatches = probe.differentialDirectionMatches();
+            differentialGeometryChecks = probe.differentialCanonicalGeometryChecks();
+            differentialGeometryMatches = probe.differentialCanonicalGeometryMatches();
+            differentialUvChecks = probe.differentialUvChecks();
+            differentialUvMatches = probe.differentialUvMatches();
+            differentialColorChecks = probe.differentialColorChecks();
+            differentialColorMatches = probe.differentialColorMatches();
+            differentialLightChecks = probe.differentialLightChecks();
+            differentialLightMatches = probe.differentialLightMatches();
+            differentialMissing = probe.differentialMissingSourceCoverage();
+            differentialDuplicate = probe.differentialDuplicateSourceCoverage();
+            differentialOptimizedWithoutReference = probe.differentialOptimizedCanonicalWithoutReference();
+            differentialRealMismatches = probe.differentialRealMismatchCount();
+            differentialFixtureSelfTestPasses = probe.differentialFixtureSelfTestPasses();
             lifecycleCursor = probe.lifecycleCursor();
             sceneGeneration = probe.sceneGeneration();
             center = probe.centerKnown() ? "(" + probe.centerSectionX() + "," + probe.centerSectionY() + "," + probe.centerSectionZ() + ")" : "unbound";
@@ -263,6 +303,7 @@ public final class FrameCoordinator implements AutoCloseable {
             productionWorkerIntegrationReady = probe.productionWorkerIntegrationReady();
             borderSceneEvidenceReady = probe.borderHaloCorrectnessEvidenceReady();
             tJunctionSceneEvidenceReady = probe.tJunctionPolicyEvidenceReady();
+            differentialSceneEvidenceReady = probe.differentialCorrectnessEvidenceReady();
             probe.close();
             sceneProbe = null;
         }
@@ -588,6 +629,32 @@ public final class FrameCoordinator implements AutoCloseable {
                 && unsafeStaleSceneInstalls == 0L
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
+        boolean differentialCorrectnessEvidenceReady = tJunctionPolicyEvidenceReady
+                && differentialSceneEvidenceReady
+                && differentialProofRecords > 0L
+                && differentialProofRecords == recordInstallCount
+                && differentialProofDeterminismAudits == differentialProofRecords
+                && differentialProofDeterminismMatches == differentialProofDeterminismAudits
+                && differentialReferenceFacesChecked > 0L
+                && differentialSourceQuadsChecked > 0L
+                && differentialPassthroughIdentitiesChecked > 0L
+                && differentialMergedCandidatesChecked > 0L
+                && differentialMergedExpandedFacesChecked > 0L
+                && differentialMaterialMatches == differentialMaterialChecks
+                && differentialDirectionMatches == differentialDirectionChecks
+                && differentialGeometryMatches == differentialGeometryChecks
+                && differentialUvMatches == differentialUvChecks
+                && differentialColorMatches == differentialColorChecks
+                && differentialLightMatches == differentialLightChecks
+                && differentialMissing == 0L
+                && differentialDuplicate == 0L
+                && differentialOptimizedWithoutReference == 0L
+                && differentialRealMismatches == 0L
+                && differentialFixtureSelfTestPasses == differentialProofRecords
+                && unsafeStaleSceneInstalls == 0L
+                && droppedLifecycleEvents == 0L
+                && workersClean && stagingClean && arenaClean && resourcesClean;
+
         boolean phase2ChunkLifecycleEvidenceReady = phase3GateReady
                 && fixedAnchorChunkUnloadEvents > 0L
                 && fixedAnchorChunkLoadEvents > 0L
@@ -597,7 +664,7 @@ public final class FrameCoordinator implements AutoCloseable {
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
         StringBuilder out = new StringBuilder(23552);
-        out.append("Phase 3 dev13 P3.6 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
+        out.append("Phase 3 dev14 P3.7 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
                 .append("phase3GateReady=").append(phase3GateReady)
                 .append(", schedulerEvidenceReady=").append(schedulerEvidenceReady)
                 .append(", binaryVisibilityEvidenceReady=").append(binaryVisibilityEvidenceReady)
@@ -610,14 +677,15 @@ public final class FrameCoordinator implements AutoCloseable {
                 .append(", repeatAwareGreedyEmissionEvidenceReady=").append(repeatAwareGreedyEmissionEvidenceReady)
                 .append(", borderHaloCorrectnessEvidenceReady=").append(borderHaloCorrectnessEvidenceReady)
                 .append(", tJunctionPolicyEvidenceReady=").append(tJunctionPolicyEvidenceReady)
+                .append(", differentialCorrectnessEvidenceReady=").append(differentialCorrectnessEvidenceReady)
                 .append(", phase2ChunkLifecycleEvidenceReady=").append(phase2ChunkLifecycleEvidenceReady)
                 .append(", fixedAnchorReturnSceneReady=").append(fixedAnchorReturnSceneReady)
                 .append(", productionWorkerIntegrationReady=").append(productionWorkerIntegrationReady)
                 .append(", hardFailure=").append(hardFailure)
                 .append(", productionSceneInstallStillSynchronous=false, productionWorkerSceneIntegration=true")
                 .append(", renderThreadCaptureOwnership=true, renderThreadGpuOwnership=true, workerWorldReadsAfterCapture=0")
-                .append(", binaryVisibilitySidecarIntegrated=true, greedyRectangleSidecarIntegrated=true, renderMergeKeySidecarIntegrated=true, renderMergeCandidateSidecarIntegrated=true, ordinaryQuadEmissionSafetySidecarIntegrated=true, repeatAwareUvDescriptorSidecarIntegrated=true, repeatAwareTransportSidecarIntegrated=true, repeatAwareGreedyMeshIntegrated=true, borderHaloProofIntegrated=true, tJunctionTopologyProofIntegrated=true")
-                .append(", repeatAwareGreedyGpuEmission=true, borderHaloGeometryChanged=false, tJunctionGeometryChanged=false, tJunctionShaderChanged=false, tJunctionPipelineChanged=false, renderCorrectMergeKeyComplete=false")
+                .append(", binaryVisibilitySidecarIntegrated=true, greedyRectangleSidecarIntegrated=true, renderMergeKeySidecarIntegrated=true, renderMergeCandidateSidecarIntegrated=true, ordinaryQuadEmissionSafetySidecarIntegrated=true, repeatAwareUvDescriptorSidecarIntegrated=true, repeatAwareTransportSidecarIntegrated=true, repeatAwareGreedyMeshIntegrated=true, borderHaloProofIntegrated=true, tJunctionTopologyProofIntegrated=true, differentialCorrectnessProofIntegrated=true")
+                .append(", repeatAwareGreedyGpuEmission=true, borderHaloGeometryChanged=false, tJunctionGeometryChanged=false, tJunctionShaderChanged=false, tJunctionPipelineChanged=false, differentialGeometryChanged=false, differentialShaderChanged=false, differentialPipelineChanged=false, renderCorrectMergeKeyComplete=false")
                 .append(", synchronousSceneMeshBuilds=").append(synchronousSceneMeshBuilds)
                 .append(", workerCount=").append(meshWorkers == null ? 0 : meshWorkers.workerCount())
                 .append(", workerQueueCapacity=").append(meshWorkers == null ? 0 : meshWorkers.queueCapacity())
@@ -774,6 +842,27 @@ public final class FrameCoordinator implements AutoCloseable {
                 .append(", cameraRelativeTransformProofRecords=").append(cameraRelativeTransformProofRecords)
                 .append(", junctionBearingTransformProofRecords=").append(junctionBearingTransformProofRecords)
                 .append(", cameraRelativeTransformFailures=").append(cameraRelativeTransformFailures)
+                .append(", differentialProofRecords=").append(differentialProofRecords)
+                .append(", differentialProofDeterminism=").append(differentialProofDeterminismMatches).append('/').append(differentialProofDeterminismAudits)
+                .append(", differentialReferenceFaces=").append(differentialReferenceFacesChecked)
+                .append(", differentialReferenceMapped=").append(differentialReferenceMappedFaces)
+                .append(", differentialReferenceUnmapped=").append(differentialReferenceUnmappedFaces)
+                .append(", differentialReferenceAmbiguous=").append(differentialReferenceAmbiguousFaces)
+                .append(", differentialSourceQuads=").append(differentialSourceQuadsChecked)
+                .append(", differentialPassthroughIdentities=").append(differentialPassthroughIdentitiesChecked)
+                .append(", differentialMergedCandidates=").append(differentialMergedCandidatesChecked)
+                .append(", differentialMergedExpandedFaces=").append(differentialMergedExpandedFacesChecked)
+                .append(", differentialMaterial=").append(differentialMaterialMatches).append('/').append(differentialMaterialChecks)
+                .append(", differentialDirection=").append(differentialDirectionMatches).append('/').append(differentialDirectionChecks)
+                .append(", differentialGeometry=").append(differentialGeometryMatches).append('/').append(differentialGeometryChecks)
+                .append(", differentialUv=").append(differentialUvMatches).append('/').append(differentialUvChecks)
+                .append(", differentialColor=").append(differentialColorMatches).append('/').append(differentialColorChecks)
+                .append(", differentialLight=").append(differentialLightMatches).append('/').append(differentialLightChecks)
+                .append(", differentialMissing=").append(differentialMissing)
+                .append(", differentialDuplicate=").append(differentialDuplicate)
+                .append(", differentialOptimizedWithoutReference=").append(differentialOptimizedWithoutReference)
+                .append(", differentialRealMismatches=").append(differentialRealMismatches)
+                .append(", differentialFixtureSelfTests=").append(differentialFixtureSelfTestPasses).append('/').append(differentialProofRecords)
                 .append(", tJunctionTargetedVisualVerdictRequired=true")
                 .append(", borderLifecycleClassifierSelfTest=").append(SectionLifecycleEvents.dirtyDependencyClassifierSelfTest())
                 .append(", borderProofRecords=").append(borderProofRecords)

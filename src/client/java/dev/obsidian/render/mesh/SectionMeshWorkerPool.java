@@ -3,10 +3,12 @@ package dev.obsidian.render.mesh;
 import dev.obsidian.render.terrain.BakedSectionMesh;
 import dev.obsidian.render.terrain.BinarySectionVisibility;
 import dev.obsidian.render.terrain.CanonicalFaceRenderKeys;
+import dev.obsidian.render.terrain.DifferentialCorrectnessProof;
 import dev.obsidian.render.terrain.GreedySectionRectangles;
 import dev.obsidian.render.terrain.OrdinaryQuadEmissionSafety;
 import dev.obsidian.render.terrain.ReferenceFaceMesh;
 import dev.obsidian.render.terrain.RenderMergeCandidates;
+import dev.obsidian.render.terrain.RepeatAwareGreedyMesh;
 import dev.obsidian.render.terrain.RepeatAwareTransportProof;
 import dev.obsidian.render.terrain.RepeatAwareUvDescriptors;
 import dev.obsidian.render.terrain.SectionBakedQuadSnapshot;
@@ -57,6 +59,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private final long eventSequence;
         private final int priority;
         private final SectionSnapshot snapshot;
+        private final ReferenceFaceMesh referenceMesh;
         private final SectionBakedQuadSnapshot bakedSnapshot;
         private final long enqueueNs;
 
@@ -70,6 +73,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private volatile RepeatAwareUvDescriptors repeatAwareUv;
         private volatile RepeatAwareTransportProof repeatAwareTransport;
         private volatile TJunctionTopologyProof tJunctionTopologyProof;
+        private volatile DifferentialCorrectnessProof differentialCorrectnessProof;
         private volatile BakedSectionMesh mesh;
         private volatile Throwable failure;
         private volatile long startNs;
@@ -82,12 +86,14 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 long eventSequence,
                 int priority,
                 SectionSnapshot snapshot,
+                ReferenceFaceMesh referenceMesh,
                 SectionBakedQuadSnapshot bakedSnapshot) {
             this.id = id;
             this.generation = generation;
             this.eventSequence = eventSequence;
             this.priority = priority;
             this.snapshot = snapshot;
+            this.referenceMesh = referenceMesh;
             this.bakedSnapshot = bakedSnapshot;
             this.enqueueNs = System.nanoTime();
         }
@@ -112,6 +118,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         public RepeatAwareUvDescriptors repeatAwareUv() { return repeatAwareUv; }
         public RepeatAwareTransportProof repeatAwareTransport() { return repeatAwareTransport; }
         public TJunctionTopologyProof tJunctionTopologyProof() { return tJunctionTopologyProof; }
+        public DifferentialCorrectnessProof differentialCorrectnessProof() { return differentialCorrectnessProof; }
         public BakedSectionMesh mesh() { return mesh; }
         public Throwable failure() { return failure; }
         public long queueWaitNs() { return startNs == 0L ? 0L : Math.max(0L, startNs - enqueueNs); }
@@ -184,6 +191,8 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
         private final RepeatAwareUvDescriptors.BuildScratch repeatAwareUvScratch = new RepeatAwareUvDescriptors.BuildScratch();
         private final RepeatAwareTransportProof.BuildScratch repeatAwareTransportScratch = new RepeatAwareTransportProof.BuildScratch();
         private final TJunctionTopologyProof.BuildScratch tJunctionTopologyScratch = new TJunctionTopologyProof.BuildScratch();
+        private final DifferentialCorrectnessProof.BuildScratch differentialCorrectnessScratch =
+                new DifferentialCorrectnessProof.BuildScratch();
         private long completedLocalBuilds;
         private long lastFingerprint;
 
@@ -453,6 +462,32 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                     return;
                 }
 
+                // P3.7 dev14 is the final pure worker-side correctness proof.
+                // The optimized mesh is the system under test; independent/captured
+                // source truth is passed immutably through the ticket.
+                RepeatAwareGreedyMesh firstGreedy = firstRepeatAwareTransport.greedyMesh();
+                DifferentialCorrectnessProof firstDifferential = DifferentialCorrectnessProof.build(
+                        ticket.snapshot, ticket.referenceMesh, ticket.bakedSnapshot, first,
+                        firstVisibility, firstRenderKeys, firstMergeCandidates,
+                        firstRepeatAwareTransport, firstGreedy, differentialCorrectnessScratch);
+                DifferentialCorrectnessProof secondDifferential = DifferentialCorrectnessProof.build(
+                        ticket.snapshot, ticket.referenceMesh, ticket.bakedSnapshot, first,
+                        firstVisibility, firstRenderKeys, firstMergeCandidates,
+                        firstRepeatAwareTransport, firstGreedy, differentialCorrectnessScratch);
+                if (!firstDifferential.contentEquals(secondDifferential)) {
+                    throw new IllegalStateException(
+                            "Worker-produced differential correctness proof was nondeterministic");
+                }
+                if (!firstDifferential.exact()) {
+                    throw new IllegalStateException(
+                            "P3.7 differential correctness mismatch: "
+                                    + firstDifferential.firstMismatch().describe());
+                }
+                if (ticket.cancellationRequested || closed) {
+                    cancelTicket(ticket);
+                    return;
+                }
+
                 boolean audit = completedLocalBuilds == 0L
                         || (completedLocalBuilds % DETERMINISM_AUDIT_INTERVAL) == 0L;
                 if (audit) {
@@ -555,6 +590,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 ticket.repeatAwareUv = firstRepeatAwareUv;
                 ticket.repeatAwareTransport = firstRepeatAwareTransport;
                 ticket.tJunctionTopologyProof = firstTJunctionTopology;
+                ticket.differentialCorrectnessProof = firstDifferential;
                 ticket.mesh = first;
                 ticket.endNs = System.nanoTime();
                 ticket.state = TicketState.COMPLETED;
@@ -805,9 +841,10 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
             long eventSequence,
             int priority,
             SectionSnapshot snapshot,
+            ReferenceFaceMesh referenceMesh,
             SectionBakedQuadSnapshot bakedSnapshot) {
         if (closed) throw new IllegalStateException("Section mesh worker pool is closed");
-        validateJob(priority, snapshot, bakedSnapshot);
+        validateJob(priority, snapshot, referenceMesh, bakedSnapshot);
 
         int start = Math.floorMod(submitCursor.getAndIncrement(), workers.length);
         int chosen = -1;
@@ -820,7 +857,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 chosenDepth = depth;
             }
         }
-        return enqueue(chosen, generation, eventSequence, priority, snapshot, bakedSnapshot);
+        return enqueue(chosen, generation, eventSequence, priority, snapshot, referenceMesh, bakedSnapshot);
     }
 
     Ticket submitPinnedForValidation(
@@ -829,13 +866,14 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
             long eventSequence,
             int priority,
             SectionSnapshot snapshot,
+            ReferenceFaceMesh referenceMesh,
             SectionBakedQuadSnapshot bakedSnapshot) {
         if (closed) throw new IllegalStateException("Section mesh worker pool is closed");
-        validateJob(priority, snapshot, bakedSnapshot);
+        validateJob(priority, snapshot, referenceMesh, bakedSnapshot);
         if (workerIndex < 0 || workerIndex >= workers.length) {
             throw new IllegalArgumentException("Invalid worker index");
         }
-        return enqueue(workerIndex, generation, eventSequence, priority, snapshot, bakedSnapshot);
+        return enqueue(workerIndex, generation, eventSequence, priority, snapshot, referenceMesh, bakedSnapshot);
     }
 
     public void cancel(Ticket ticket) {
@@ -863,9 +901,11 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
             long eventSequence,
             int priority,
             SectionSnapshot snapshot,
+            ReferenceFaceMesh referenceMesh,
             SectionBakedQuadSnapshot bakedSnapshot) {
         Ticket ticket = new Ticket(
-                nextTicketId.getAndIncrement(), generation, eventSequence, priority, snapshot, bakedSnapshot);
+                nextTicketId.getAndIncrement(), generation, eventSequence, priority,
+                snapshot, referenceMesh, bakedSnapshot);
         if (!workers[workerIndex].queue.offer(ticket)) {
             queueFullRejections.incrementAndGet();
             queueFullByPriority.incrementAndGet(priority);
@@ -953,10 +993,11 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
     private static void validateJob(
             int priority,
             SectionSnapshot snapshot,
+            ReferenceFaceMesh referenceMesh,
             SectionBakedQuadSnapshot bakedSnapshot) {
         validatePriority(priority);
-        if (snapshot == null || bakedSnapshot == null) {
-            throw new NullPointerException("snapshot and bakedSnapshot are required");
+        if (snapshot == null || referenceMesh == null || bakedSnapshot == null) {
+            throw new NullPointerException("snapshot, referenceMesh and bakedSnapshot are required");
         }
         if (snapshot.sectionX() != bakedSnapshot.sectionX()
                 || snapshot.sectionY() != bakedSnapshot.sectionY()
@@ -964,6 +1005,7 @@ public final class SectionMeshWorkerPool implements AutoCloseable {
                 || snapshot.fingerprint() != bakedSnapshot.sourceSnapshotFingerprint()) {
             throw new IllegalArgumentException("Worker mesh job snapshot identity mismatch");
         }
+        referenceMesh.validateAgainst(snapshot);
     }
 
     private static void validatePriority(int priority) {

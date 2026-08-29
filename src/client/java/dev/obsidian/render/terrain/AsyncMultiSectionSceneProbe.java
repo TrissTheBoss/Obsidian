@@ -130,6 +130,35 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     private long junctionBearingTransformProofRecords;
     private long cameraRelativeTransformFailures;
 
+    private long differentialProofRecords;
+    private long differentialProofDeterminismAudits;
+    private long differentialProofDeterminismMatches;
+    private long differentialReferenceFacesChecked;
+    private long differentialReferenceMappedFaces;
+    private long differentialReferenceUnmappedFaces;
+    private long differentialReferenceAmbiguousFaces;
+    private long differentialSourceQuadsChecked;
+    private long differentialPassthroughIdentitiesChecked;
+    private long differentialMergedCandidatesChecked;
+    private long differentialMergedExpandedFacesChecked;
+    private long differentialMaterialChecks;
+    private long differentialMaterialMatches;
+    private long differentialDirectionChecks;
+    private long differentialDirectionMatches;
+    private long differentialCanonicalGeometryChecks;
+    private long differentialCanonicalGeometryMatches;
+    private long differentialUvChecks;
+    private long differentialUvMatches;
+    private long differentialColorChecks;
+    private long differentialColorMatches;
+    private long differentialLightChecks;
+    private long differentialLightMatches;
+    private long differentialMissingSourceCoverage;
+    private long differentialDuplicateSourceCoverage;
+    private long differentialOptimizedCanonicalWithoutReference;
+    private long differentialRealMismatchCount;
+    private long differentialFixtureSelfTestPasses;
+
     private long totalUsefulSubmissions;
     private long totalDrawSubmissions;
     private long totalIndirectCalls;
@@ -516,6 +545,39 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 tJunctionIntegerLatticeChecks += tJunction.integerLatticeChecks();
                 tJunctionIntegerLatticeMatches += tJunction.integerLatticeMatches();
 
+                DifferentialCorrectnessProof differential = probe.differentialCorrectnessProof();
+                if (differential == null || !differential.exact()) {
+                    throw new IllegalStateException("P3.7 installed record lost exact differential correctness proof");
+                }
+                differentialProofRecords++;
+                differentialProofDeterminismAudits++;
+                differentialProofDeterminismMatches++;
+                differentialReferenceFacesChecked += differential.referenceFacesChecked();
+                differentialReferenceMappedFaces += differential.referenceMappedFaces();
+                differentialReferenceUnmappedFaces += differential.referenceUnmappedFaces();
+                differentialReferenceAmbiguousFaces += differential.referenceAmbiguousFaces();
+                differentialSourceQuadsChecked += differential.sourceQuadsChecked();
+                differentialPassthroughIdentitiesChecked += differential.passthroughSourceIdentitiesChecked();
+                differentialMergedCandidatesChecked += differential.mergedCandidatesChecked();
+                differentialMergedExpandedFacesChecked += differential.mergedExpandedSourceFacesChecked();
+                differentialMaterialChecks += differential.materialChecks();
+                differentialMaterialMatches += differential.materialMatches();
+                differentialDirectionChecks += differential.directionChecks();
+                differentialDirectionMatches += differential.directionMatches();
+                differentialCanonicalGeometryChecks += differential.canonicalGeometryChecks();
+                differentialCanonicalGeometryMatches += differential.canonicalGeometryMatches();
+                differentialUvChecks += differential.uvChecks();
+                differentialUvMatches += differential.uvMatches();
+                differentialColorChecks += differential.colorChecks();
+                differentialColorMatches += differential.colorMatches();
+                differentialLightChecks += differential.lightChecks();
+                differentialLightMatches += differential.lightMatches();
+                differentialMissingSourceCoverage += differential.missingSourceCoverage();
+                differentialDuplicateSourceCoverage += differential.duplicateSourceCoverage();
+                differentialOptimizedCanonicalWithoutReference += differential.optimizedCanonicalWithoutReference();
+                differentialRealMismatchCount += differential.realMismatchCount();
+                if (differential.fixtureSelfTestPassed()) differentialFixtureSelfTestPasses++;
+
                 LOG.log(System.Logger.Level.INFO,
                         "Phase 3 P3.5 installed border proof: section=({0},{1},{2}), proofFingerprint={3}, outwardChecks={4}, visibilityMatches={5}, referenceMatches={6}, expectedVisible={7}, unsupportedBlockers={8}, borderBakedQuads={9}, frozenLightColorSamples={10}, workerWorldReadsAfterCapture=0.",
                         first.sectionX(), first.sectionY(), first.sectionZ(),
@@ -532,6 +594,19 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                         tJunction.planeDirectionMatches(), tJunction.planeDirectionChecks(),
                         tJunction.integerLatticeMatches(), tJunction.integerLatticeChecks(),
                         Long.toUnsignedString(tJunction.fingerprint()));
+                LOG.log(System.Logger.Level.INFO,
+                        "Phase 3 P3.7 installed differential proof: section=({0},{1},{2}), referenceFaces={3}, sourceQuads={4}, passthroughIdentities={5}, mergedCandidates={6}, mergedExpandedFaces={7}, material={8}/{9}, geometry={10}/{11}, uv={12}/{13}, color={14}/{15}, light={16}/{17}, missing={18}, duplicate={19}, optimizedWithoutReference={20}, realMismatches={21}, fixtureSelfTest={22}, proofFingerprint={23}.",
+                        record.sectionX, record.sectionY, record.sectionZ,
+                        differential.referenceFacesChecked(), differential.sourceQuadsChecked(),
+                        differential.passthroughSourceIdentitiesChecked(), differential.mergedCandidatesChecked(),
+                        differential.mergedExpandedSourceFacesChecked(), differential.materialMatches(),
+                        differential.materialChecks(), differential.canonicalGeometryMatches(),
+                        differential.canonicalGeometryChecks(), differential.uvMatches(), differential.uvChecks(),
+                        differential.colorMatches(), differential.colorChecks(), differential.lightMatches(),
+                        differential.lightChecks(), differential.missingSourceCoverage(),
+                        differential.duplicateSourceCoverage(), differential.optimizedCanonicalWithoutReference(),
+                        differential.realMismatchCount(), differential.fixtureSelfTestPassed(),
+                        Long.toUnsignedString(differential.fingerprint()));
             } catch (RuntimeException e) {
                 hardFailure = true;
                 state = State.FAILED;
@@ -887,6 +962,34 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     public long cameraRelativeTransformProofRecords() { return cameraRelativeTransformProofRecords; }
     public long junctionBearingTransformProofRecords() { return junctionBearingTransformProofRecords; }
     public long cameraRelativeTransformFailures() { return cameraRelativeTransformFailures; }
+    public long differentialProofRecords() { return differentialProofRecords; }
+    public long differentialProofDeterminismAudits() { return differentialProofDeterminismAudits; }
+    public long differentialProofDeterminismMatches() { return differentialProofDeterminismMatches; }
+    public long differentialReferenceFacesChecked() { return differentialReferenceFacesChecked; }
+    public long differentialReferenceMappedFaces() { return differentialReferenceMappedFaces; }
+    public long differentialReferenceUnmappedFaces() { return differentialReferenceUnmappedFaces; }
+    public long differentialReferenceAmbiguousFaces() { return differentialReferenceAmbiguousFaces; }
+    public long differentialSourceQuadsChecked() { return differentialSourceQuadsChecked; }
+    public long differentialPassthroughIdentitiesChecked() { return differentialPassthroughIdentitiesChecked; }
+    public long differentialMergedCandidatesChecked() { return differentialMergedCandidatesChecked; }
+    public long differentialMergedExpandedFacesChecked() { return differentialMergedExpandedFacesChecked; }
+    public long differentialMaterialChecks() { return differentialMaterialChecks; }
+    public long differentialMaterialMatches() { return differentialMaterialMatches; }
+    public long differentialDirectionChecks() { return differentialDirectionChecks; }
+    public long differentialDirectionMatches() { return differentialDirectionMatches; }
+    public long differentialCanonicalGeometryChecks() { return differentialCanonicalGeometryChecks; }
+    public long differentialCanonicalGeometryMatches() { return differentialCanonicalGeometryMatches; }
+    public long differentialUvChecks() { return differentialUvChecks; }
+    public long differentialUvMatches() { return differentialUvMatches; }
+    public long differentialColorChecks() { return differentialColorChecks; }
+    public long differentialColorMatches() { return differentialColorMatches; }
+    public long differentialLightChecks() { return differentialLightChecks; }
+    public long differentialLightMatches() { return differentialLightMatches; }
+    public long differentialMissingSourceCoverage() { return differentialMissingSourceCoverage; }
+    public long differentialDuplicateSourceCoverage() { return differentialDuplicateSourceCoverage; }
+    public long differentialOptimizedCanonicalWithoutReference() { return differentialOptimizedCanonicalWithoutReference; }
+    public long differentialRealMismatchCount() { return differentialRealMismatchCount; }
+    public long differentialFixtureSelfTestPasses() { return differentialFixtureSelfTestPasses; }
 
     public long usefulSubmissions() { return totalUsefulSubmissions + sumCurrent(WorkerBackedSectionLifecycleProbe::usefulSubmissions); }
     public long drawSubmissions() { return totalDrawSubmissions + sumCurrent(WorkerBackedSectionLifecycleProbe::drawSubmissions); }
@@ -968,6 +1071,37 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 && lifecycleCursor.droppedEvents() == 0L;
     }
 
+    public boolean differentialCorrectnessEvidenceReady() {
+        return tJunctionPolicyEvidenceReady()
+                && differentialProofRecords > 0L
+                && differentialProofRecords == recordInstallCount
+                && differentialProofDeterminismAudits == differentialProofRecords
+                && differentialProofDeterminismMatches == differentialProofDeterminismAudits
+                && differentialReferenceFacesChecked > 0L
+                && differentialSourceQuadsChecked > 0L
+                && differentialPassthroughIdentitiesChecked > 0L
+                && differentialMergedCandidatesChecked > 0L
+                && differentialMergedExpandedFacesChecked > 0L
+                && differentialMaterialChecks > 0L
+                && differentialMaterialMatches == differentialMaterialChecks
+                && differentialDirectionMatches == differentialDirectionChecks
+                && differentialCanonicalGeometryChecks > 0L
+                && differentialCanonicalGeometryMatches == differentialCanonicalGeometryChecks
+                && differentialUvChecks > 0L
+                && differentialUvMatches == differentialUvChecks
+                && differentialColorChecks > 0L
+                && differentialColorMatches == differentialColorChecks
+                && differentialLightChecks > 0L
+                && differentialLightMatches == differentialLightChecks
+                && differentialMissingSourceCoverage == 0L
+                && differentialDuplicateSourceCoverage == 0L
+                && differentialOptimizedCanonicalWithoutReference == 0L
+                && differentialRealMismatchCount == 0L
+                && differentialFixtureSelfTestPasses == differentialProofRecords
+                && unsafeStaleSceneInstalls == 0L
+                && lifecycleCursor.droppedEvents() == 0L;
+    }
+
     @Override
     public void close() {
         RenderSystem.assertOnRenderThread();
@@ -992,6 +1126,21 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 tJunctionIntegerLatticeMatches, tJunctionIntegerLatticeChecks,
                 cameraRelativeTransformProofRecords, junctionBearingTransformProofRecords,
                 cameraRelativeTransformFailures);
+        LOG.log(System.Logger.Level.INFO,
+                "Phase 3 P3.7 final differential evidence: differentialCorrectnessEvidenceReady={0}, proofRecords={1}, determinism={2}/{3}, referenceFaces={4}, mapped={5}, unmapped={6}, ambiguous={7}, sourceQuads={8}, passthroughIdentities={9}, mergedCandidates={10}, mergedExpandedFaces={11}, material={12}/{13}, direction={14}/{15}, geometry={16}/{17}, uv={18}/{19}, color={20}/{21}, light={22}/{23}, missing={24}, duplicate={25}, optimizedWithoutReference={26}, realMismatches={27}, fixtureSelfTests={28}/{29}, workerWorldReadsAfterCapture=0, geometryChanged=false, shaderChanged=false, pipelineChanged=false.",
+                differentialCorrectnessEvidenceReady(), differentialProofRecords,
+                differentialProofDeterminismMatches, differentialProofDeterminismAudits,
+                differentialReferenceFacesChecked, differentialReferenceMappedFaces,
+                differentialReferenceUnmappedFaces, differentialReferenceAmbiguousFaces,
+                differentialSourceQuadsChecked, differentialPassthroughIdentitiesChecked,
+                differentialMergedCandidatesChecked, differentialMergedExpandedFacesChecked,
+                differentialMaterialMatches, differentialMaterialChecks,
+                differentialDirectionMatches, differentialDirectionChecks,
+                differentialCanonicalGeometryMatches, differentialCanonicalGeometryChecks,
+                differentialUvMatches, differentialUvChecks, differentialColorMatches, differentialColorChecks,
+                differentialLightMatches, differentialLightChecks, differentialMissingSourceCoverage,
+                differentialDuplicateSourceCoverage, differentialOptimizedCanonicalWithoutReference,
+                differentialRealMismatchCount, differentialFixtureSelfTestPasses, differentialProofRecords);
 
         closed = true;
         for (SceneRecord record : records) {

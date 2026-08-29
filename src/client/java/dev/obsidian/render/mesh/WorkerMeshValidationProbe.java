@@ -115,7 +115,7 @@ public final class WorkerMeshValidationProbe implements AutoCloseable {
                     default -> SectionMeshWorkerPool.PRIORITY_LOW;
                 };
                 tickets[i] = workers.submitPinnedForValidation(
-                        0, generation, expectedEventSequence, priority, captured, firstBaked);
+                        0, generation, expectedEventSequence, priority, captured, firstReference, firstBaked);
                 if (tickets[i] == null) {
                     throw new IllegalStateException("P3.1 bounded worker queue rejected validation job " + i);
                 }

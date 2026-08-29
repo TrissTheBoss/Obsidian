@@ -15,8 +15,14 @@ Last updated: 2026-08-29
 - P3.6 contract: A-0147.
 - P3.6 package checkpoint: A-0148.
 - P3.6 reference runtime + targeted visual PASS: A-0149.
-- **Active milestone: P3.7 — Differential correctness framework.**
-- P3.7 implementation branch is not yet created; create it from this synchronized `main` before source changes.
+- **P3.7 — Differential correctness framework: PROMOTION-READY through `0.3.0-phase3-dev14`.**
+- Promotion branch: `phase3/differential-correctness`.
+- Promotion PR: **#49** (keep draft only until exact synchronized evidence-head CI passes).
+- Frozen P3.7 contract: A-0150.
+- Implementation/package checkpoint: A-0151.
+- First runtime: A-0152 PARTIAL only because required scene recenter was not exercised.
+- Successful reference-runtime closure: **A-0153**.
+- **Next milestone after merge: P3.8 — Meshing benchmarks.**
 - Public release intent: keep the existing public checkpoint; internal milestone merges use `[no-release]`.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
 
@@ -172,27 +178,123 @@ Do not add global edge splitting or otherwise weaken greedy meshing based only o
 
 Class-A roadmap synchronization commit `4bff1cb4c1b1a31b2bae5c70a1a79e440cb91609` recorded P3.6 COMPLETE / P3.7 ACTIVE. Final fully synchronized promotion head `3e2a6c751ad0a77a87f2e60e4de9b80757dc75fc` passed hosted Build workflow `33263393349`: Java 25 / Gradle 9.5.1 build SUCCESS, artifact upload SUCCESS, release SKIPPED. Draft PR #47 was closed as superseded only because the connected ready-for-review mutation is known broken; non-draft PR #48 promoted the exact same validated head and merged `[no-release]` as `602c53abb76dff0e27cf314abc308ff5b7ac0cae`.
 
-## ACTIVE: P3.7 — Differential correctness framework
+## P3.7 — Differential correctness framework — PROMOTION-READY
 
-P3.7 is now the active Phase 3 milestone.
+A-0150 freezes `0.3.0-phase3-dev14` as the first bounded differential-correctness slice. The optimized output is the system under test; it never becomes its own oracle.
 
-Roadmap direction:
+Authoritative truth surfaces:
 
-- run the permanent independent reference oracle and optimized mesher against representative immutable snapshots;
-- expand optimized greedy output conceptually back to source-face coverage where necessary;
-- compare topology coverage and render-affecting material/light/AO truth without making optimized output its own oracle;
-- preserve deterministic failing fixtures for every discovered mismatch;
-- keep worker/world ownership, bounded scratch, generation safety and existing runtime lifetime rules intact;
-- do not consume P3.8 benchmark work or P3.9 partial-remesh experimentation.
+- `ReferenceFaceMesh` remains the deliberately independent primitive canonical topology oracle;
+- `SectionBakedQuadSnapshot` independently freezes supported vanilla SOLID/CUTOUT render truth including source block/state identity, positions, UVs, exact ARGB, packed light, direction, layer and immutable material identity;
+- exact `BakedSectionMesh` remains the non-greedy drawable/oracle derived from that frozen render truth;
+- `RepeatAwareGreedyMesh` retains the actual final optimized passthrough source identities and merged-candidate identities that must expand back to authoritative source coverage.
 
-Source findings already established for the contract freeze:
+### A-0151 implementation/package checkpoint
 
-- `ReferenceFaceMesh` is deliberately independent, primitive-only, one-face-per-exposed-supported-full-cube truth carrying packed local face identity plus original state ID;
-- `SectionBakedQuadSnapshot` independently freezes the supported generalized vanilla SOLID/CUTOUT render truth including source block/state, positions, UVs, exact ARGB, packed light, direction, layer and material identity;
-- `RepeatAwareGreedyMesh` retains exact passthrough source-quad identities and exact merged candidate identities after suppression, which provides a bounded route to conceptually expand optimized output back to source truth without treating optimized bytes as their own oracle;
-- P3.7 must use those independent/captured sources as authority and only use optimized output as the system under test.
+Dev14 implementation head: `83388481b7a0fd566daf5cc39fd8713945df912c`.
 
-The first P3.7 action is to create a dedicated branch from this synchronized `main`, freeze the exact first differential-correctness slice as the next immutable attempt, then implement only that slice.
+Draft PR: #49.
+
+Hosted pull-request Build workflow `33264171457` passed:
+
+- Java 25 / Gradle 9.5.1 build SUCCESS;
+- artifact upload SUCCESS;
+- release SKIPPED.
+
+Canonical dev14 package:
+
+- artifact id `9718131242`;
+- wrapper `obsidian-99409bc5317779124d619e6c191ce23f4593aa67`;
+- wrapper size `642,620` bytes;
+- wrapper digest `sha256:41686a431bf9e7699be06de197d85ba72eb0543e5d0ad70e1f8fadb1a4aa0c4c`;
+- direct JAR `Obsidian-0.3.0-phase3-dev14.jar`;
+- direct JAR size **441,563 bytes**;
+- direct JAR SHA-256 **`9d79b1de179768d5b872178564f708b42dab0d9cc8e99a0dd8f80bf10336bc39`**;
+- sources JAR size `228,167` bytes;
+- sources SHA-256 `2b6b98611885bd264db5280cc866b6dddae3895e03e8389dd81bd29484d9ba30`.
+
+Implemented proof contract:
+
+- already captured immutable `ReferenceFaceMesh` is passed into worker tickets; workers do not rebuild it from live state;
+- only minimal read-only optimized identity accessors were added;
+- `DifferentialCorrectnessProof` uses reusable bounded primitive scratch and retains summary/fingerprint/first-fixture data only;
+- actual final passthrough identities and merged candidates are expanded conceptually back to source baked-quad coverage;
+- complete source coverage must be exactly once: missing and duplicate coverage are promotion failures;
+- independent canonical topology is checked against binary visibility and optimized canonical mapping;
+- optimized canonical mappings without an independent reference face are rejected;
+- merged expansion accounting must match the dev10 transport proof;
+- merged covered source quads are independently compared against their representative for immutable material/layer, direction, canonical geometry/corner order, raw UV bits, exact ARGB and packed-light/AO result;
+- a bounded deterministic first-failure fixture is preserved for any real mismatch;
+- a deterministic synthetic fixture self-test verifies the diagnostic path without perturbing production proof inputs;
+- every completed worker builds the proof twice and requires deterministic equality before publication;
+- real differential mismatch results fail before install;
+- scene evidence counts only after generation/resource-epoch validation and LIVE installation.
+
+Dev14 remains explicitly non-render-changing: no greedy eligibility, suppression/replacement policy, emitted positions, vertex/index formats, shaders, pipelines, atlas/lightmap behavior, draw classes, native graphics scope or resource-lifetime semantics changed. No new human visual verdict is required unless runtime discovers an accidental renderer-semantic change.
+
+### A-0152 first reference runtime — PARTIAL, no code defect
+
+The first dev14 reference run passed the complete automated differential/lifetime gate but correctly remained PARTIAL because `cameraRecenterEvents=0` and `scene-recenter` was absent. A-0150 required actual section-boundary/recenter movement followed by READY, so no waiver was taken and no source/package change was made.
+
+### A-0153 reference runtime closure — SUCCESS
+
+The exact same canonical dev14 JAR was rerun and closes the complete frozen contract:
+
+- all inherited gates through P3.6 plus `differentialCorrectnessEvidenceReady=true`;
+- proof records/determinism `238 / 238`;
+- reference faces `79,754`, mapped/unmapped/ambiguous `59,933 / 0 / 19,821`;
+- source baked quads `165,638`;
+- passthrough identities `154,306`;
+- real merged candidates / expanded merged source faces `4,964 / 11,332`;
+- material/direction/canonical-geometry checks exact `11,332 / 11,332` each;
+- UV/ARGB/light checks exact `45,328 / 45,328` each;
+- missing/duplicate/optimized-without-reference/real-mismatch all `0`;
+- fixture self-tests `238 / 238`;
+- `cameraRecenterEvents=5` and `scene-recenter` observed, with READY after recenter activity;
+- resource reload events `2` and ordinary dirty/rebuild activity present;
+- scene workers `244 / 244`, no cancellation/failure/rejection/join failure;
+- unsafe stale installs and dropped lifecycle evidence `0`;
+- staging `22,315,152 / 22,315,152` bytes reclaimed;
+- arena allocations/retired/reclaimed `714 / 714 / 714`, used bytes `0`;
+- resources retired/released `238 / 238`, pending `0`;
+- process exit code `0`;
+- differential geometry/shader/pipeline change flags remain `false`.
+
+No new visual verdict was required because dev14 changes no renderer semantics. A-0153 authorizes P3.7 promotion; exact synchronized evidence-head CI and merge remain administrative gates before `COMPLETE` is recorded on `main`.
+
+### Required dev14 reference runtime gate — CLOSED by A-0153
+
+A-0153 satisfies the frozen A-0150 contract. The required final evidence included:
+
+Required final evidence includes every prior P3.6 gate plus:
+
+- `differentialCorrectnessEvidenceReady=true`;
+- installed differential proof records > 0 and equal installed optimized records;
+- deterministic proof audits exact;
+- independent reference canonical faces checked > 0;
+- complete source baked quads checked > 0;
+- passthrough identities checked > 0;
+- merged candidates > 0 and expanded merged source faces > 0;
+- material checks/matches exact;
+- canonical geometry/corner checks/matches exact;
+- raw UV checks/matches exact;
+- exact ARGB checks/matches exact;
+- packed-light checks/matches exact;
+- source coverage missing `0`;
+- source coverage duplicate `0`;
+- optimized canonical-without-reference `0`;
+- real mismatch count `0`;
+- deterministic fixture self-test PASS;
+- `workerWorldReadsAfterCapture=0`;
+- zero unsafe stale installs and dropped lifecycle evidence;
+- clean worker/staging/arena/resources;
+- normal process exit code `0`.
+
+A-0153 contained actual merged candidates/covered faces and exercised initial READY, ordinary block rebuild/READY, F3+T/resource reload/READY, section-boundary scene recenter/READY, then normal exit.
+
+Future differential regressions must not weaken the independent/captured oracle. Preserve the deterministic fixture, record a new immutable attempt, classify the exact disagreement and make only the narrow correction.
+
+P3.8 meshing benchmarks and P3.9 partial remeshing remain out of scope.
 
 ## Durable foundation that remains authoritative
 
@@ -209,10 +311,9 @@ The first P3.7 action is to create a dedicated branch from this synchronized `ma
 
 ## Immediate next action
 
-1. Create `phase3/differential-correctness` from this synchronized `main`.
-2. Inspect the exact reference/optimized identity APIs needed for conceptual expansion and fixture capture.
-3. Freeze the first P3.7 contract in the next monotonic immutable attempt before source changes.
-4. Implement that bounded differential proof without consuming P3.8/P3.9 scope.
+Require hosted Java 25 / Gradle 9.5.1 Build success on the exact synchronized P3.7 evidence head, then promote and merge PR #49 `[no-release]` without source/evidence drift. After merge, synchronize `main` to P3.7 COMPLETE / P3.8 ACTIVE, create the P3.8 feature branch from that synchronized `main`, and freeze the meshing-benchmark/representative-workload contract in a new immutable attempt before implementation.
+
+Do not consume P3.9 partial-remeshing scope during P3.8.
 
 ## Continuity order
 
