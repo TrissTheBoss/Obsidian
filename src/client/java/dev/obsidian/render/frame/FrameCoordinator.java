@@ -13,7 +13,7 @@ import dev.obsidian.render.terrain.SectionLifecycleEvents;
 import dev.obsidian.render.upload.StagingUploadArena;
 import net.minecraft.client.renderer.GameRenderer;
 
-/** Render-thread lifecycle root for active Phase 3 P3.4 dev11 repeat-aware greedy GPU emission canary. */
+/** Render-thread lifecycle root for active Phase 3 P3.5 dev12 border/halo correctness. */
 public final class FrameCoordinator implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/FrameCoordinator");
     private static final int VALIDATION_STAGING_BYTES = 4 * 1024 * 1024;
@@ -45,10 +45,10 @@ public final class FrameCoordinator implements AutoCloseable {
         try {
             workers = new SectionMeshWorkerPool(SectionMeshWorkerPool.defaultWorkerCount());
             staging = new StagingUploadArena(
-                    device, () -> "Obsidian Phase 3 dev11 bounded scene staging ring",
+                    device, () -> "Obsidian Phase 3 dev12 bounded scene staging ring",
                     VALIDATION_STAGING_BYTES);
             arena = new DeviceGeometryArena(
-                    device, () -> "Obsidian Phase 3 dev11 scene device geometry arena",
+                    device, () -> "Obsidian Phase 3 dev12 scene device geometry arena",
                     VALIDATION_DEVICE_ARENA_BYTES);
             sceneProbe = new AsyncMultiSectionSceneProbe(device, staging, arena, deferredReleases, workers);
         } catch (RuntimeException e) {
@@ -58,7 +58,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (arena != null) try { arena.close(); } catch (RuntimeException ignored) { }
             try { deferredReleases.close(); } catch (RuntimeException ignored) { }
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 3 dev11 P3.4 initialization failed; Minecraft will continue for diagnosis.", e);
+                    "Phase 3 dev12 P3.5 initialization failed; Minecraft will continue for diagnosis.", e);
             hardFailure = true;
         }
         meshWorkers = workers;
@@ -78,13 +78,13 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev11 P3.4 frame coordinator active. contextSlots=" + frameContexts.size()
+                    "Phase 3 dev12 P3.5 frame coordinator active. contextSlots=" + frameContexts.size()
                             + ", cpuTimingCapacity=" + cpuFrameTimings.capacity()
                             + ", meshWorkers=" + (meshWorkers == null ? 0 : meshWorkers.workerCount())
                             + ", meshQueueCapacity=" + (meshWorkers == null ? 0 : meshWorkers.queueCapacity())
                             + ", stagingCapacity=" + (stagingUploads == null ? 0 : stagingUploads.capacityBytes())
                             + ", deviceArenaCapacity=" + (deviceArena == null ? 0L : deviceArena.capacityBytes())
-                            + "; P3.2 visibility, P3.3 topology rectangles, dev6 canonical render keys, dev7 merge candidates, dev8 ordinary emission-safety, dev9 repeat-aware UV descriptors, dev10 repeat transport proof and dev11 repeat-aware greedy GPU emission are armed. Dev11 replaces only exact dev10 transport-safe canonical groups, preserves exact passthrough for all other baked geometry, samples the same live blocks atlas with explicit textureGrad gradients, and intentionally turns the previously open repeat-line/raster obligation into a mandatory runtime plus human visual validation gate.");
+                            + "; all proven P3.2-P3.4 sidecars and dev11 repeat-aware greedy GPU emission remain armed unchanged. P3.5 adds conservative 5x3x5 section-dirty halo dependency tracking, 1,536 outward immutable boundary checks per installed record, exact frozen border light/color evidence, and shared-border agreement audits between independently captured LIVE neighbors. No geometry, shader, pipeline or native graphics semantics change in dev12.");
         }
     }
 
@@ -97,7 +97,7 @@ public final class FrameCoordinator implements AutoCloseable {
             if (!visualDelayLogged) {
                 visualDelayLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev11 P3.4 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
+                        "Phase 3 dev12 P3.5 validation is delayed for 5 seconds after first world render so startup activity settles before scene jobs are admitted.");
             }
             return;
         }
@@ -111,7 +111,7 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!runtimeInstructionsLogged && sceneProbe != null && sceneProbe.productionWorkerIntegrationReady()) {
             runtimeInstructionsLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev11 P3.4 runtime gate is active. Let the 3x3 async scene reach READY; deliberately inspect merged repeat surfaces while moving the camera; inspect repeat-reset lines and rectangle/section T-junctions for stretching, atlas bleed, mip shimmer, seams/cracks, winding/culling, light/color mismatch, double-draw or holes; perform a normal block break/place rebuild and inspect again; perform F3+T and inspect again; then exit normally and report an explicit human visual PASS or FAIL. Required automated flags are phase3GateReady=true, schedulerEvidenceReady=true, binaryVisibilityEvidenceReady=true, greedyRectangleEvidenceReady=true, renderMergeKeyEvidenceReady=true, renderMergeCandidateEvidenceReady=true, ordinaryQuadEmissionSafetyEvidenceReady=true, repeatAwareUvEvidenceReady=true, repeatAwareTransportEvidenceReady=true and repeatAwareGreedyEmissionEvidenceReady=true. Dev11 uses four fixed indexed-indirect classes (passthrough/merged x SOLID/CUTOUT), exact source suppression/replacement validation before install, candidate-local repeat with textureGrad from unwrapped gradients, and the same live blocks-atlas sampler. Full-atlas sampler wrapping remains forbidden. Automated success alone does not promote dev11: an explicit visual PASS is mandatory. The old fixed-anchor unload/return proof is already closed and is not required again.");
+                    "Phase 3 dev12 P3.5 runtime gate is active. Let the 3x3 async scene reach READY, perform a normal block break/place rebuild, perform F3+T and let the scene reach READY again, then exit normally. Required automated flags are all prior gates through repeatAwareGreedyEmissionEvidenceReady=true plus borderHaloCorrectnessEvidenceReady=true. Dev12 does not alter emitted geometry, shaders or pipelines, so no new human visual verdict is required. The P3.5 proof requires exact outward halo visibility/reference agreement, frozen border light/color payload, shared-border snapshot agreement, generation-safe invalidation and workerWorldReadsAfterCapture=0. The old fixed-anchor unload/return proof remains closed by A-0101.");
         }
     }
 
@@ -171,8 +171,14 @@ public final class FrameCoordinator implements AutoCloseable {
         long sceneWorkerCancellationRequests = 0L, sceneWorkerStaleDiscards = 0L, sceneWorkerInstalls = 0L;
         long sceneWorkerQueueRejections = 0L, sceneInstallAdmissionDeferrals = 0L, synchronousSceneMeshBuilds = 0L, preinstallInvalidations = 0L;
         long sceneGeneration = 0L;
+        long borderProofRecords = 0L, borderProofDeterminismAudits = 0L, borderProofDeterminismMatches = 0L;
+        long borderOutwardChecks = 0L, borderVisibilityMatches = 0L, borderReferenceMatches = 0L;
+        long borderExpectedVisibleFaces = 0L, borderUnsupportedBlockedFaces = 0L;
+        long borderBakedQuads = 0L, borderLightColorSamples = 0L;
+        long sharedBorderPairAudits = 0L, sharedBorderComparisons = 0L, sharedBorderMatches = 0L;
         String center = "unbound";
         boolean localSceneReady = false, productionWorkerIntegrationReady = false;
+        boolean borderSceneEvidenceReady = false;
         SectionLifecycleEvents.Cursor lifecycleCursor = null;
 
         if (probe != null) {
@@ -213,11 +219,25 @@ public final class FrameCoordinator implements AutoCloseable {
             sceneInstallAdmissionDeferrals = probe.installAdmissionDeferrals();
             synchronousSceneMeshBuilds = probe.synchronousSceneMeshBuilds();
             preinstallInvalidations = probe.preinstallInvalidations();
+            borderProofRecords = probe.borderProofRecords();
+            borderProofDeterminismAudits = probe.borderProofDeterminismAudits();
+            borderProofDeterminismMatches = probe.borderProofDeterminismMatches();
+            borderOutwardChecks = probe.borderOutwardChecks();
+            borderVisibilityMatches = probe.borderVisibilityMatches();
+            borderReferenceMatches = probe.borderReferenceMatches();
+            borderExpectedVisibleFaces = probe.borderExpectedVisibleFaces();
+            borderUnsupportedBlockedFaces = probe.borderUnsupportedBlockedFaces();
+            borderBakedQuads = probe.borderBakedQuads();
+            borderLightColorSamples = probe.borderLightColorSamples();
+            sharedBorderPairAudits = probe.sharedBorderPairAudits();
+            sharedBorderComparisons = probe.sharedBorderComparisons();
+            sharedBorderMatches = probe.sharedBorderMatches();
             lifecycleCursor = probe.lifecycleCursor();
             sceneGeneration = probe.sceneGeneration();
             center = probe.centerKnown() ? "(" + probe.centerSectionX() + "," + probe.centerSectionY() + "," + probe.centerSectionZ() + ")" : "unbound";
             localSceneReady = probe.localSceneReady();
             productionWorkerIntegrationReady = probe.productionWorkerIntegrationReady();
+            borderSceneEvidenceReady = probe.borderHaloCorrectnessEvidenceReady();
             probe.close();
             sceneProbe = null;
         }
@@ -228,6 +248,10 @@ public final class FrameCoordinator implements AutoCloseable {
         deferredReleases.close();
 
         long dirtyEvents = lifecycleCursor == null ? 0L : lifecycleCursor.sectionDirtyEvents();
+        long renderedCoreDirtyEvents = lifecycleCursor == null ? 0L : lifecycleCursor.renderedCoreDirtyEvents();
+        long haloOnlyDirtyEvents = lifecycleCursor == null ? 0L : lifecycleCursor.haloOnlyDirtyEvents();
+        long horizontalHaloDirtyEvents = lifecycleCursor == null ? 0L : lifecycleCursor.horizontalHaloDirtyEvents();
+        long verticalHaloDirtyEvents = lifecycleCursor == null ? 0L : lifecycleCursor.verticalHaloDirtyEvents();
         long playerDirtyEvents = lifecycleCursor == null ? 0L : lifecycleCursor.playerDirtyEvents();
         long chunkLoadEvents = lifecycleCursor == null ? 0L : lifecycleCursor.chunkLoadEvents();
         long chunkUnloadEvents = lifecycleCursor == null ? 0L : lifecycleCursor.chunkUnloadEvents();
@@ -506,6 +530,20 @@ public final class FrameCoordinator implements AutoCloseable {
                         resourcesClean);
         boolean repeatAwareGreedyEmissionEvidenceReady = repeatAwareGreedyEmission.ready();
 
+        boolean borderHaloCorrectnessEvidenceReady = repeatAwareGreedyEmissionEvidenceReady
+                && borderSceneEvidenceReady
+                && SectionLifecycleEvents.dirtyDependencyClassifierSelfTest()
+                && borderProofRecords > 0L
+                && borderProofRecords == recordInstallCount
+                && borderProofDeterminismMatches == borderProofDeterminismAudits
+                && borderVisibilityMatches == borderOutwardChecks
+                && borderReferenceMatches == borderOutwardChecks
+                && borderBakedQuads > 0L
+                && borderLightColorSamples > 0L
+                && sharedBorderPairAudits > 0L
+                && sharedBorderMatches == sharedBorderComparisons
+                && workersClean && stagingClean && arenaClean && resourcesClean;
+
         boolean phase2ChunkLifecycleEvidenceReady = phase3GateReady
                 && fixedAnchorChunkUnloadEvents > 0L
                 && fixedAnchorChunkLoadEvents > 0L
@@ -514,8 +552,8 @@ public final class FrameCoordinator implements AutoCloseable {
                 && unsafeStaleSceneInstalls == 0L
                 && workersClean && stagingClean && arenaClean && resourcesClean;
 
-        StringBuilder out = new StringBuilder(19456);
-        out.append("Phase 3 dev11 P3.4 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
+        StringBuilder out = new StringBuilder(21504);
+        out.append("Phase 3 dev12 P3.5 frame coordinator closed after ").append(frameIndex).append(" frame(s): ")
                 .append("phase3GateReady=").append(phase3GateReady)
                 .append(", schedulerEvidenceReady=").append(schedulerEvidenceReady)
                 .append(", binaryVisibilityEvidenceReady=").append(binaryVisibilityEvidenceReady)
@@ -526,14 +564,15 @@ public final class FrameCoordinator implements AutoCloseable {
                 .append(", repeatAwareUvEvidenceReady=").append(repeatAwareUvEvidenceReady)
                 .append(", repeatAwareTransportEvidenceReady=").append(repeatAwareTransportEvidenceReady)
                 .append(", repeatAwareGreedyEmissionEvidenceReady=").append(repeatAwareGreedyEmissionEvidenceReady)
+                .append(", borderHaloCorrectnessEvidenceReady=").append(borderHaloCorrectnessEvidenceReady)
                 .append(", phase2ChunkLifecycleEvidenceReady=").append(phase2ChunkLifecycleEvidenceReady)
                 .append(", fixedAnchorReturnSceneReady=").append(fixedAnchorReturnSceneReady)
                 .append(", productionWorkerIntegrationReady=").append(productionWorkerIntegrationReady)
                 .append(", hardFailure=").append(hardFailure)
                 .append(", productionSceneInstallStillSynchronous=false, productionWorkerSceneIntegration=true")
                 .append(", renderThreadCaptureOwnership=true, renderThreadGpuOwnership=true, workerWorldReadsAfterCapture=0")
-                .append(", binaryVisibilitySidecarIntegrated=true, greedyRectangleSidecarIntegrated=true, renderMergeKeySidecarIntegrated=true, renderMergeCandidateSidecarIntegrated=true, ordinaryQuadEmissionSafetySidecarIntegrated=true, repeatAwareUvDescriptorSidecarIntegrated=true, repeatAwareTransportSidecarIntegrated=true, repeatAwareGreedyMeshIntegrated=true")
-                .append(", repeatAwareGreedyGpuEmission=true, renderCorrectMergeKeyComplete=false")
+                .append(", binaryVisibilitySidecarIntegrated=true, greedyRectangleSidecarIntegrated=true, renderMergeKeySidecarIntegrated=true, renderMergeCandidateSidecarIntegrated=true, ordinaryQuadEmissionSafetySidecarIntegrated=true, repeatAwareUvDescriptorSidecarIntegrated=true, repeatAwareTransportSidecarIntegrated=true, repeatAwareGreedyMeshIntegrated=true, borderHaloProofIntegrated=true")
+                .append(", repeatAwareGreedyGpuEmission=true, borderHaloGeometryChanged=false, renderCorrectMergeKeyComplete=false")
                 .append(", synchronousSceneMeshBuilds=").append(synchronousSceneMeshBuilds)
                 .append(", workerCount=").append(meshWorkers == null ? 0 : meshWorkers.workerCount())
                 .append(", workerQueueCapacity=").append(meshWorkers == null ? 0 : meshWorkers.queueCapacity())
@@ -672,7 +711,22 @@ public final class FrameCoordinator implements AutoCloseable {
         repeatAwareUv.appendTo(out);
         repeatAwareTransport.appendTo(out);
         repeatAwareGreedyEmission.appendTo(out);
-        out.append(", sceneWorkerSubmitted=").append(sceneWorkerSubmitted)
+        out.append(", borderSceneEvidenceReady=").append(borderSceneEvidenceReady)
+                .append(", borderLifecycleClassifierSelfTest=").append(SectionLifecycleEvents.dirtyDependencyClassifierSelfTest())
+                .append(", borderProofRecords=").append(borderProofRecords)
+                .append(", borderProofDeterminismAudits=").append(borderProofDeterminismAudits)
+                .append(", borderProofDeterminismMatches=").append(borderProofDeterminismMatches)
+                .append(", borderOutwardChecks=").append(borderOutwardChecks)
+                .append(", borderVisibilityMatches=").append(borderVisibilityMatches)
+                .append(", borderReferenceMatches=").append(borderReferenceMatches)
+                .append(", borderExpectedVisibleFaces=").append(borderExpectedVisibleFaces)
+                .append(", borderUnsupportedBlockedFaces=").append(borderUnsupportedBlockedFaces)
+                .append(", borderBakedQuads=").append(borderBakedQuads)
+                .append(", borderLightColorSamples=").append(borderLightColorSamples)
+                .append(", sharedBorderPairAudits=").append(sharedBorderPairAudits)
+                .append(", sharedBorderComparisons=").append(sharedBorderComparisons)
+                .append(", sharedBorderMatches=").append(sharedBorderMatches)
+                .append(", sceneWorkerSubmitted=").append(sceneWorkerSubmitted)
                 .append(", sceneWorkerCompleted=").append(sceneWorkerCompleted)
                 .append(", sceneWorkerCancelled=").append(sceneWorkerCancelled)
                 .append(", sceneWorkerCancellationRequests=").append(sceneWorkerCancellationRequests)
@@ -699,6 +753,10 @@ public final class FrameCoordinator implements AutoCloseable {
                 .append(", invalidationBatches=").append(invalidationBatches)
                 .append(", coalescedEvents=").append(coalescedEvents)
                 .append(", dirtyEvents=").append(dirtyEvents)
+                .append(", renderedCoreDirtyEvents=").append(renderedCoreDirtyEvents)
+                .append(", haloOnlyDirtyEvents=").append(haloOnlyDirtyEvents)
+                .append(", horizontalHaloDirtyEvents=").append(horizontalHaloDirtyEvents)
+                .append(", verticalHaloDirtyEvents=").append(verticalHaloDirtyEvents)
                 .append(", playerDirtyEvents=").append(playerDirtyEvents)
                 .append(", chunkLoadEvents=").append(chunkLoadEvents)
                 .append(", chunkUnloadEvents=").append(chunkUnloadEvents)
