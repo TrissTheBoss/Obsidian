@@ -28,51 +28,62 @@ Last updated: 2026-08-29
 - Dev16 package A-0160 SUCCESS; reference runtime A-0161 FAILED on one shadow correctness mismatch plus insufficient evidence.
 - Dev17 diagnostic/correction A-0162/A-0163 corrected the two proven shadow proof defects. Runtime A-0164 closed correctness at `19/19` but remained PARTIAL for evidence volume; diagnostics showed pending/not-LIVE admission losses.
 - Dev18 pending-coalescing contract A-0165; package A-0166 SUCCESS. Canonical dev18 JAR SHA-256 `cb3065a172489f197ee3f3b988fe3f202a8079ee6bafb87516f24d65d7fdf8a1`.
-- First dev18 runtime A-0167 PARTIAL: exact `14/14`, pending fallbacks `0`, coalesced `1`, evidence `14/32`, one-slice `10/16`, two-slice `4/8`; upload P50/P95 `51/1000` permille. Dominant rejected population was X/Z halo/boundary `74` plus provenance `30`.
-- **Second dev18 runtime A-0168 PARTIAL:** exact `10/10`, zero correctness/unselected/determinism failures, coalesced `1`, pending fallbacks `0`, but only `10/32`, `7/16`, `3/8` retained. Fallbacks `144`: global `5`, **provenance `80`**, multi-section `0`, halo/boundary `42`, all-slices `0`, pending `0`, not-LIVE `17`. CPU P50/P95 `158/802`, upload P50/P95 `210/865`, selected-cell P50 `250`, inflation mean/max `4/8` permille. P95 misses are not closure-grade at only ten samples.
-- A third unchanged dev18 run is **not justified** because the aggregate provenance bucket cannot distinguish missing/empty exact provenance from off-render-thread or bounded-overflow conditions.
-- **A-0169 — dev19 provenance diagnostic contract: PLAN FROZEN.** Diagnostic-only; no admission relaxation, no provenance hook change, no threshold change, no renderer/GPU change.
-- **A-0170 — dev19 implementation/package: SUCCESS; short diagnostic runtime required.**
+- First dev18 runtime A-0167 PARTIAL: exact `14/14`, pending fallbacks `0`, coalesced `1`, evidence `14/32`, one-slice `10/16`, two-slice `4/8`; upload P50/P95 `51/1000` permille.
+- Second dev18 runtime A-0168 PARTIAL: exact `10/10`, zero correctness/unselected/determinism failures, coalesced `1`, pending fallbacks `0`, but only `10/32`, `7/16`, `3/8`. Fallbacks `144`: global `5`, provenance `80`, multi `0`, halo/boundary `42`, all-slices `0`, pending `0`, not-LIVE `17`.
+- A-0169 froze dev19 provenance diagnostics; A-0170 packaged dev19.
+- **A-0171 dev19 runtime: SUCCESS for diagnostic objective.** All `40/40` provenance fallbacks were `missingOrEmpty`; off-render-thread `0`, overflow flag/events `0/0`, other `0`. First fixture: scene `SCANNING`, center known, pending exact episode present, drain count/flags `0/0`. Inherited P3.5/P3.6/P3.7 and lifetime gates stayed green; P3.7 `389/389`, zero real mismatches, zero sync scene mesh builds, zero unsafe stale installs, clean shutdown/exit `0`.
+- **Do not rerun unchanged dev19.** The problem is lifecycle/provenance causal alignment, not capacity or thread ownership.
+- **A-0172 dev20 causal-correlation investigation: PLAN FROZEN.** No behavior change unless exact evidence supports a fail-closed rule.
+- **A-0173 exact Minecraft 26.2 call-shape: SUCCESS for Stage 1.** Hosted exact bytecode proves `ClientLevel.setBlocksDirty` synchronously delegates to `LevelExtractor.setBlockDirty`; one render-relevant block dirty expands to a 3x3x3 block neighborhood and emits exactly `27` section-dirty calls. Thus common `54` batches are exactly two synchronous callbacks before a frame drain. The later next-frame `+1` is a distinct section-dirty path and cannot be assumed correlated.
+- **A-0174 dev20 section-dirty origin tracer: PLAN FROZEN.** Diagnostic-only caller-origin classification; empty provenance still falls back exactly as before.
+- **A-0175 dev20 implementation/package: SUCCESS; short reference runtime required.**
 
-## Dev19 canonical runtime handoff
+## Dev20 canonical runtime handoff
 
 Implementation/package authority:
 
-- exact implementation head `510ce9b7986c84b5c2a951c681f3f1783b99518c`
-- tree `39542c3972772df5984b60d5f91ce8835ffe1b37`
-- hosted Build `33276352301`: Java 25 / Gradle 9.5.1 SUCCESS; Build SUCCESS; artifact upload SUCCESS; release SKIPPED
-- artifact id `9721614518`, wrapper digest `sha256:f26b3c68cf2637ee88761b7e93a92620232e5cf199673f1df0f5ca8c0b4d04e2`
-- canonical JAR `Obsidian-0.3.0-phase3-dev19.jar`
-- size `503,422` bytes
-- SHA-256 `3af4c0773627f1a74bc3c5f25746885b2051f535c68a079157aa9b549d747637`
-- sources JAR `257,321` bytes; SHA-256 `e826833e142c0a10de63a6cd89a118c64ae3dcd88a5ee801d61e98573f0bbe94`
+- exact implementation head `ffbe60535607a242ef6b2c03c8c44066e69a63ac`
+- tree `9131bd8d1edf5440ae8a52817b820b17866fa2e4`
+- hosted Build `33277303655`: Java 25 / Gradle 9.5.1 SUCCESS; Build SUCCESS; artifact upload SUCCESS; release SKIPPED
+- artifact id `9721898429`, wrapper digest `sha256:7d3c87000818b13f9ebc30265b865583f66864ebc882e19d75a8f2064f5bf647`
+- canonical JAR `Obsidian-0.3.0-phase3-dev20.jar`
+- size `511,074` bytes
+- SHA-256 `690b24cd6bb34e47b3b85159eda365da3e1f76f95d41b51f0b1298fc093ed2f3`
+- sources JAR `262,188` bytes; SHA-256 `fcec81638fd5ee20ed03d968fcec0665bac96887a13de3b24778306972cda71a`
 
-Dev19 implementation safety:
+Dev20 safety:
 
 - `AsyncMultiSectionSceneProbe.java` unchanged;
 - `PartialRemeshDirtyProvenance.java` unchanged;
 - `PartialRemeshExperimentTelemetry.java` unchanged;
 - `FrameCoordinator.java` unchanged;
-- therefore the actual P3.9 classifier/admission state machine and A-0159 `thresholdsPassed()` are byte-for-byte inherited from dev18;
-- dev19 adds only observational mixins plus fixed primitive provenance counters/one first fixture;
-- final diagnostic distinguishes missing/empty, off-render-thread, overflow flag/events, and other existing provenance fallback paths;
-- no mutable world/snapshot/block object is retained by diagnostics.
+- no worker/mesher/upload/arena/shader/pipeline/native Vulkan changes;
+- no A-0159 threshold changes;
+- an empty provenance drain still records `FALLBACK_PROVENANCE` and clears pending exactly as before;
+- dev20 only classifies tracked-scene-relevant `LevelExtractor.setSectionDirty(IIIZ)` calls by outermost origin: `EXACT_BLOCK`, `BLOCK_RANGE`, `NEIGHBOR_RANGE`, `SECTION_RANGE`, `SINGLE_SECTION`, or `UNCLASSIFIED`;
+- only fixed primitive counters/deltas/first fixtures are retained; no stack traces or unbounded history.
 
 Draft P3.9 PR: **#53**, keep DRAFT / DO NOT MERGE.
 
 ## Exact next action
 
-Run the exact canonical dev19 JAR. This is a **short diagnostic runtime**, not another 32-episode attempt:
+Run the exact canonical dev20 JAR. This is a **short caller-origin diagnostic**, not a 32-episode A-0159 closure attempt:
 
 1. wait for P3.9 windows to arm;
-2. perform about 8 safe-interior ordinary one-slice edits with READY recovery;
-3. perform about 4 safe-interior two-slice Y-boundary edits;
+2. perform about 6 safe-interior ordinary edits with READY recovery;
+3. perform about 3 safe-interior Y-slice-boundary edits;
 4. perform one quick same-section 3-5 edit burst;
 5. perform F3+T and recover READY;
 6. cause one real scene recenter and recover READY;
 7. quit normally and return the complete log.
 
-The decisive new line is `Phase 3 dev19 P3.9 final provenance diagnostics`. Classify the next correction from its subreason counts; do not alter A-0159 until that runtime evidence exists.
+Decisive lines:
+
+- `Phase 3 dev20 P3.9 final section-dirty origin totals`;
+- `Phase 3 dev20 P3.9 first section-dirty origin fixtures`;
+- `Phase 3 dev20 P3.9 final provenance-origin correlation`.
+
+Do not alter A-0159 admission behavior until those lines identify a fail-closed causal rule for the missing/empty next-frame dirty path.
 
 ## Public release / handoff policy
 
