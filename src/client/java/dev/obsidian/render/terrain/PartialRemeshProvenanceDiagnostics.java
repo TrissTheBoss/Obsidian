@@ -1,7 +1,7 @@
 package dev.obsidian.render.terrain;
 
 /**
- * P3.9 dev20 fixed-size primitive diagnostics for the already-existing
+ * P3.9 dev21 fixed-size primitive diagnostics for the already-existing
  * FALLBACK_PROVENANCE decision. This class is observational only: it never
  * changes admission, invalidation, meshing, upload, install, draw, or any
  * A-0159 threshold.
@@ -75,6 +75,7 @@ public final class PartialRemeshProvenanceDiagnostics {
         firstPendingProbeAvailable = false;
         firstLifecycleRelevantEventCount = 0;
         PartialRemeshSectionDirtyOriginDiagnostics.begin();
+        PartialRemeshSingleSectionCallerDiagnostics.begin();
     }
 
     public static synchronized void captureContext(
@@ -91,6 +92,7 @@ public final class PartialRemeshProvenanceDiagnostics {
         lastPendingProbeAvailable = pendingProbeAvailable;
         lastLifecycleRelevantEventCount = Math.max(0, lifecycleRelevantEventCount);
         PartialRemeshSectionDirtyOriginDiagnostics.captureLifecycleDrain(lastLifecycleRelevantEventCount);
+        PartialRemeshSingleSectionCallerDiagnostics.captureLifecycleDrain(lastLifecycleRelevantEventCount);
     }
 
     public static synchronized void captureDrain(int count, int fallbackFlags, long reportedOverflowEvents) {
@@ -128,17 +130,21 @@ public final class PartialRemeshProvenanceDiagnostics {
         PartialRemeshSectionDirtyOriginDiagnostics.observeProvenanceFallback(
                 lastDrainCount, lastFallbackFlags, lastSceneStateOrdinal,
                 lastCenterKnown, lastPendingEpisode);
+        PartialRemeshSingleSectionCallerDiagnostics.observeProvenanceFallback(
+                lastDrainCount, lastFallbackFlags, lastSceneStateOrdinal,
+                lastCenterKnown, lastPendingEpisode);
     }
 
     public static synchronized void logFinal() {
         if (!armed) return;
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev20 P3.9 final provenance diagnostics: provenanceFallbacksObserved={0}, missingOrEmpty={1}, offRenderThread={2}, overflowFlag={3}, overflowEvents={4}, other={5}, subreasonCountersMayOverlap=true, highLevelFallbackAccountingChanged=false, firstRetained={6}, firstFallbackIndex={7}, firstDrainCount={8}, firstFallbackFlags={9}, firstOverflowEvents={10}, firstSceneStateOrdinal={11}, firstSceneStateName={12}, firstCenterKnown={13}, firstPendingEpisode={14}, firstContextCaptured={15}, firstPendingProbeAvailable={16}, firstLifecycleRelevantEvents={17}, selfTest={18}, boundedPrimitiveState=true, productionRendererChanged=false, admissionPolicyChanged=false, thresholdsChanged=false.",
+                "Phase 3 dev21 P3.9 final provenance diagnostics: provenanceFallbacksObserved={0}, missingOrEmpty={1}, offRenderThread={2}, overflowFlag={3}, overflowEvents={4}, other={5}, subreasonCountersMayOverlap=true, highLevelFallbackAccountingChanged=false, firstRetained={6}, firstFallbackIndex={7}, firstDrainCount={8}, firstFallbackFlags={9}, firstOverflowEvents={10}, firstSceneStateOrdinal={11}, firstSceneStateName={12}, firstCenterKnown={13}, firstPendingEpisode={14}, firstContextCaptured={15}, firstPendingProbeAvailable={16}, firstLifecycleRelevantEvents={17}, selfTest={18}, boundedPrimitiveState=true, productionRendererChanged=false, admissionPolicyChanged=false, thresholdsChanged=false.",
                 provenanceFallbacks, missingOrEmpty, offRenderThread, overflowFlag, overflowEvents, other,
                 firstRetained, firstFallbackIndex, firstDrainCount, firstFallbackFlags, firstOverflowEvents,
                 firstSceneStateOrdinal, stateName(firstSceneStateOrdinal), firstCenterKnown, firstPendingEpisode,
                 firstContextCaptured, firstPendingProbeAvailable, firstLifecycleRelevantEventCount, selfTest());
         PartialRemeshSectionDirtyOriginDiagnostics.logFinal();
+        PartialRemeshSingleSectionCallerDiagnostics.logFinal();
     }
 
     private static int classify(int count, int flags) {
@@ -179,7 +185,8 @@ public final class PartialRemeshProvenanceDiagnostics {
                 && shouldRetainFirst(false)
                 && !shouldRetainFirst(true)
                 && highLevelIncrementForAnySubreasonMask(SUBREASON_OFF_RENDER_THREAD | SUBREASON_OVERFLOW) == 1
-                && PartialRemeshSectionDirtyOriginDiagnostics.selfTest();
+                && PartialRemeshSectionDirtyOriginDiagnostics.selfTest()
+                && PartialRemeshSingleSectionCallerDiagnostics.selfTest();
     }
 
     private static boolean shouldRetainFirst(boolean alreadyRetained) {

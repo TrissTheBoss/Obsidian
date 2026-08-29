@@ -1,6 +1,7 @@
 package dev.obsidian.mixin;
 
 import dev.obsidian.render.terrain.PartialRemeshSectionDirtyOriginDiagnostics;
+import dev.obsidian.render.terrain.PartialRemeshSingleSectionCallerDiagnostics;
 import dev.obsidian.render.terrain.SectionLifecycleEvents;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.extract.LevelExtractor;
@@ -97,6 +98,10 @@ public abstract class LevelExtractorMixin {
                     : obsidian$currentOrigin;
             PartialRemeshSectionDirtyOriginDiagnostics.observeRelevantSectionDirty(
                     origin, sectionX, sectionY, sectionZ, dirtyFromPlayer);
+            if (origin == PartialRemeshSectionDirtyOriginDiagnostics.ORIGIN_SINGLE_SECTION) {
+                PartialRemeshSingleSectionCallerDiagnostics.observeRelevantSingleSection(
+                        sectionX, sectionY, sectionZ);
+            }
         }
     }
 
