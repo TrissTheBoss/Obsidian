@@ -10,18 +10,19 @@ Last updated: 2026-08-29
 - P3.1-P3.4: COMPLETE.
 - **P3.5 — border/halo correctness: COMPLETE through `0.3.0-phase3-dev12.1`.**
 - P3.5 promotion merge: PR #46, `[no-release]` commit `1f34b3e4819b4eaa3a8fa474b09570a2e049b15a`.
-- **Active milestone: P3.6 — T-junction policy.**
-- Active branch: `phase3/t-junction-policy`.
-- Active draft PR: **#47**.
-- Frozen P3.6 contract: A-0147.
-- Current implementation/package checkpoint: **A-0148 / `0.3.0-phase3-dev13`**.
-- **Dev13 reference-runtime handoff is READY.**
+- **P3.6 — T-junction policy: PROMOTION-READY through `0.3.0-phase3-dev13`.**
+- P3.6 evidence branch: `phase3/t-junction-policy`.
+- P3.6 draft PR: **#47** pending exact evidence-head CI/promotion.
+- P3.6 contract: A-0147.
+- P3.6 package checkpoint: A-0148.
+- P3.6 reference runtime + targeted visual PASS: **A-0149**.
+- **Next milestone after promotion: P3.7 — Differential correctness framework.**
 - Public release intent: keep the existing public checkpoint; internal milestone merges use `[no-release]`.
 - Runtime handoff: direct versioned `.jar`, never an Actions ZIP wrapper.
 
 ## P3.5 closure — COMPLETE
 
-A-0142 froze the border/halo correctness contract. A-0143 recorded dev12 implementation/package. A-0144 correctly remained PARTIAL after one legitimate stage-boundary worker cancellation exposed a promotion-evidence accounting defect. A-0145 fixed that evidence model with exact cancellation-attributable residual accounting rather than a gate waiver.
+A-0142 froze the border/halo correctness contract. A-0143 recorded dev12 implementation/package. A-0144 correctly remained PARTIAL after one legitimate stage-boundary worker cancellation exposed a promotion-evidence accounting defect. A-0145 fixed the evidence model with exact cancellation-attributable residual accounting rather than a gate waiver. A-0146 then closed the corrected reference runtime.
 
 Canonical corrected dev12.1 package:
 
@@ -31,7 +32,7 @@ Canonical corrected dev12.1 package:
 - SHA-256 `2a11b6aff62f671e53b48b37db73f38c6e8ba2749294e2fa946267aec533a13b`
 - workflow `33261260933`: Java 25 / Gradle 9.5.1 build SUCCESS, artifact upload SUCCESS, release SKIPPED
 
-A-0146 corrected reference runtime SUCCESS on Windows 11 / RX 6800 XT / Vulkan / Java 25.0.1 / Minecraft 26.2:
+Reference closure facts from A-0146:
 
 - every inherited gate through `repeatAwareGreedyEmissionEvidenceReady=true` true;
 - `borderHaloCorrectnessEvidenceReady=true`;
@@ -42,23 +43,17 @@ A-0146 corrected reference runtime SUCCESS on Windows 11 / RX 6800 XT / Vulkan /
 - `unsafeStaleSceneInstalls=0`;
 - border proof records `248`, determinism `248/248`;
 - outward / visibility / independent-reference checks `380,928 / 380,928 / 380,928`;
-- shared-border comparisons/matches `167,936 / 167,936` across `328` pair audits;
-- border generalized baked quads `46,913`, exact frozen light/color samples `187,652`;
-- rendered-core / halo-only / horizontal-halo / vertical-halo dirty events `963 / 588 / 578 / 334`;
-- resource reloads `2`, recenters `2`, READY transitions `28`, rebuilds `27`, dropped lifecycle events `0`;
-- workers submitted/started/completed/cancelled `248/248/248/0`;
-- unchanged dev11 greedy installed records `248`, draws `43,083`, indirect calls `172,332 / 172,332`;
-- workers/staging/arena/resources clean; process exit code `0`.
-
-The user reported everything looked visually fine. This is supporting evidence only because P3.5 changed no emitted geometry/shader/pipeline semantics.
+- shared-border comparisons/matches `167,936 / 167,936`;
+- workers/staging/arena/resources clean;
+- process exit code `0`.
 
 Exact synchronized P3.5 evidence head `d139f8229318109f146003aa186b6d4a46cbdad6` passed hosted Build workflow `33262044878`. The ready-for-review connector mutation failed on the known obsolete `Repository.fullDatabaseId` GraphQL field. Draft PR #45 was closed as superseded, non-draft PR #46 was opened from the exact same head, and merged without source/evidence change as `1f34b3e4819b4eaa3a8fa474b09570a2e049b15a`.
 
 Historical fixed-anchor Phase 2 flags remain irrelevant: A-0101 permanently closed that far-travel obligation.
 
-## ACTIVE: P3.6 — T-junction policy
+## P3.6 — T-junction policy — PROMOTION-READY
 
-A-0147 freezes dev13 as a **non-geometry-changing evidence slice**. It must determine whether a mitigation is justified before altering greedy topology.
+A-0147 froze dev13 as a **non-geometry-changing evidence slice**. The purpose was to determine whether real T-junctions in the actual emitted greedy path require mitigation before changing topology.
 
 Source truth retained by the contract:
 
@@ -66,23 +61,15 @@ Source truth retained by the contract:
 - merged candidate positions derive from integer section-local `plane/u/v/width/height` values;
 - canonical merged and passthrough face planes share `BakedSectionMesh.COMPARISON_FACE_OFFSET = 1/512`;
 - section draw translation computes `sectionOrigin - cameraPosition` in double precision before conversion of the camera-relative translation to float;
-- the repeat-aware vertex shader applies `Position + ModelOffset` through the existing model-view/projection path and adds no independent geometry snapping/warping;
-- dev11/P3.5 visual observations found no cracks on the reference RX 6800 XT, but they did not prove that inspected frames contained known strict T-junctions.
+- the repeat-aware vertex shader applies `Position + ModelOffset` through the existing model-view/projection path and adds no independent geometry snapping/warping.
 
 ### A-0148 implementation/package checkpoint
 
-Dev13 implementation head `1504c87c3ed42dc4b4c49a1cdbdb61c4b5d8c6fc` passed the normal pull-request Build workflow `33262626441` against the exact Minecraft 26.2 dependency set.
+Dev13 implementation head `1504c87c3ed42dc4b4c49a1cdbdb61c4b5d8c6fc` passed Build workflow `33262626441`.
 
-Initial package artifact:
+Class-A continuity synchronization then completed without source/runtime change. Synchronized package head `505a84b76854cd4e2d3e629be204876da3ef3ff1` passed Build workflow `33262729983`: Java 25 / Gradle 9.5.1 build SUCCESS, artifact upload SUCCESS, release SKIPPED.
 
-- artifact id `9717691386`
-- wrapper `obsidian-5ccc041bcabe45408c9051749aa75ea9c7dde9d2`
-- wrapper size `611,209` bytes
-- wrapper digest `sha256:2654a9e94b5b183ed3ff302f758ab566e3b4ee09a72ed3bcf58c9a7c30185067`
-
-Class-A roadmap and continuity synchronization then completed without source/runtime changes. Exact synchronized head `505a84b76854cd4e2d3e629be204876da3ef3ff1` passed normal Build workflow `33262729983`: Java 25 / Gradle 9.5.1 build SUCCESS, artifact upload SUCCESS, versioned release SKIPPED.
-
-Final synchronized artifact:
+Canonical dev13 package:
 
 - artifact id `9717721369`
 - wrapper `obsidian-e9a95d52469c7229689cfab55f2930fe9675c04c`
@@ -94,49 +81,111 @@ Final synchronized artifact:
 - sources JAR size `217,731` bytes
 - sources SHA-256 `013aa35a35b349ef00aaedbb117c0de9ab5031788b6f5ca7d995fe486d59ea8b`
 
-The direct runtime and sources JAR bytes are identical between the implementation build and the synchronized final build; only the Actions wrapper digest/name changed.
+Later continuity-only head `909fc8741c79b39e0f7695b8e3fadefbf0f876e2` also passed Build workflow `33262810375`; packaged source bytes were unchanged.
 
-Implemented evidence path:
+Implemented dev13 evidence path:
 
-- `TJunctionTopologyProof` consumes the actual dev10 transport/emitted candidate identities;
-- fixed primitive 6-direction × 16-plane × 17×17 lattice scratch detects strict merged/merged endpoint-on-edge intersections exactly, with no epsilon comparisons;
+- `TJunctionTopologyProof` consumes actual dev10 transport/emitted candidate identities;
+- fixed primitive direction/plane/17x17 lattice scratch detects strict merged/merged endpoint-on-edge intersections exactly, with no epsilon comparisons;
 - bounds, direction/plane and integer-lattice identities are explicit;
-- each completed worker builds the proof twice and requires deterministic `contentEquals` before publication;
-- cancellation is checked around the new pure sidecar stage;
+- each completed worker builds the proof twice and requires deterministic equality before publication;
+- cancellation is checked around the pure sidecar stage;
 - stale/cancelled output cannot become scene evidence;
 - scene aggregation happens only after generation-safe LIVE install;
-- a junction-bearing LIVE record must also execute the existing camera-relative draw transform before the runtime gate can arm;
+- a junction-bearing LIVE record must execute the existing camera-relative draw transform before the runtime gate can arm;
 - no geometry, candidate eligibility, suppression/replacement, vertex/index format, shader, pipeline, atlas/lightmap, draw-class, native graphics, staging, arena, resource lifetime or ownership semantics changed.
 
-Class-A roadmap synchronization is complete: `MASTER_ROADMAP.md` marks P3.5 COMPLETE, P3.6 ACTIVE, records A-0147/dev13 direction, and leaves P3.7+ ordering unchanged.
+### A-0149 reference runtime closure
 
-### Dev13 runtime gate
+Reference environment: Windows 11 / RX 6800 XT / Vulkan / AMD proprietary driver 26.8.1 / Java 25.0.1 / Minecraft 26.2 / Fabric Loader 0.19.3 / Prism Launcher 10.0.5.
 
-The final gate is `tJunctionPolicyEvidenceReady=true` and requires every prior P3.5/dev11 gate plus:
+Final automated gate:
 
-- installed topology proof records > 0 and equal installed records;
-- proof determinism exact;
-- emitted merged candidates > 0;
-- strict edge-interior lattice points > 0;
-- **strict detected T-junction points > 0**;
-- all plane/lattice/bounds checks match exactly;
-- camera-relative transform evidence on LIVE drawn records;
-- at least one junction-bearing record reaches the real transform/draw path;
-- explicit geometry/shader/pipeline change flags remain false;
+- all inherited gates through `repeatAwareGreedyEmissionEvidenceReady=true` true;
+- `borderHaloCorrectnessEvidenceReady=true`;
+- `tJunctionPolicyEvidenceReady=true`;
+- `productionWorkerIntegrationReady=true`;
+- `hardFailure=false`;
 - `workerWorldReadsAfterCapture=0`;
-- zero unsafe stale installs and dropped lifecycle events;
-- clean worker/staging/arena/resources;
-- normal process exit code `0`.
+- `synchronousSceneMeshBuilds=0`;
+- `unsafeStaleSceneInstalls=0`.
 
-### P3.6 runtime decision rule
+Exact T-junction evidence:
 
-Only after automated logs prove real strict T-junctions are present, perform targeted reference-hardware visual inspection while stationary/moving, rotating camera slowly/rapidly, using grazing/normal angles, crossing/recentering a section boundary, rebuilding an ordinary block, and performing F3+T.
+- proof records/determinism `329 / 329`;
+- emitted merged candidates `7,391`;
+- emitted edges `29,564`;
+- strict interior lattice incidences `18,260`;
+- **strict T-junction points `3,231`**;
+- bounds matches `29,564 / 29,564`;
+- plane matches `7,391 / 7,391`;
+- integer-lattice matches `29,564 / 29,564`;
+- camera-relative transform proof records `329`;
+- junction-bearing transform proof records `283`;
+- camera-relative transform failures `0`;
+- `geometryChanged=false`, `shaderChanged=false`, `pipelineChanged=false`.
 
-If real T-junctions are present and the targeted Vulkan visual test passes, complete P3.6 as **no baseline mitigation required on the proven path**, retaining a revisit hook for cross-vendor/larger-scale evidence.
+Runtime exercise/lifecycle evidence:
 
-If artifacts appear, freeze a separate geometry-changing mitigation slice. Prefer targeted raster-safe mitigation, then selective splitting of proven-problematic boundaries; do not globally abandon greedy meshing without evidence. Any geometry change requires a new explicit visual/runtime gate.
+- READY transitions `38`;
+- scene rebuilds `37`;
+- record installs `329`;
+- camera recenter events `5`;
+- resource reload events `2`;
+- world-change events `3`;
+- rendered-core / halo-only / horizontal-halo / vertical-halo dirty events `1,371 / 576 / 468 / 360`;
+- dropped lifecycle events `0`;
+- scene workers submitted/completed `333 / 333`;
+- worker cancellations/requests/queue rejections/failures/join failures all `0`;
+- stale result discards `4`, preinstall invalidations `4`, unsafe stale installs `0`.
 
-P3.7 differential correctness remains separate and must not be consumed here.
+Unchanged greedy GPU path remained green:
+
+- installed records `329`;
+- draw submissions `56,068`;
+- actual/expected indirect calls `224,272 / 224,272`;
+- transport records `7,461`;
+- transport covered faces `17,209`;
+- faces saved `9,748`;
+- install validation PASS;
+- fixed four-class indirect contract PASS.
+
+Lifetime closure:
+
+- workers/staging/arena/resources clean;
+- staging submitted/reclaimed `28,188,008 / 28,188,008`;
+- pending upload batches `0`;
+- arena allocations/retired/reclaimed `987 / 987 / 987`;
+- arena used bytes `0`;
+- arena allocation failures `0`;
+- retired/released resources `329 / 329`;
+- pending retirements `0`;
+- process exit code `0`.
+
+The targeted visual gate armed only after real strict junctions were proven in a drawn LIVE section. The user then reported **“visually everything looked fine.”** This is the required explicit visual PASS for the frozen P3.6 contract.
+
+### P3.6 decision
+
+**No baseline T-junction mitigation is required on the proven reference Vulkan path.**
+
+Do not add global edge splitting or otherwise weaken greedy meshing based only on theoretical T-junction risk. Retain the D-0024 cross-vendor/larger-scale revisit hook. If future evidence shows cracks/pinholes/flicker on another vendor, driver, scale or renderer change, prefer targeted raster-safe mitigation or selective splitting of proven-problematic boundaries before broader topology changes.
+
+P3.6 may be merged under the standing Phase 3 authorization after the exact A-0149 evidence head passes hosted CI.
+
+## NEXT: P3.7 — Differential correctness framework
+
+P3.7 remains a separate milestone and becomes ACTIVE only after P3.6 promotion lands on `main`.
+
+Required direction from the roadmap:
+
+- run the permanent independent reference oracle and optimized mesher against representative immutable snapshots;
+- expand optimized greedy output conceptually back to source-face coverage where necessary;
+- compare topology coverage and render-affecting material/light/AO truth without making optimized output its own oracle;
+- preserve deterministic failing fixtures for every discovered mismatch;
+- keep worker/world ownership, bounded scratch, generation safety and existing runtime lifetime rules intact;
+- do not consume P3.8 benchmark work or P3.9 partial-remesh experimentation.
+
+The first P3.7 action after promotion is to inspect the existing reference/optimized proof surfaces and freeze a narrow differential-correctness contract before implementation.
 
 ## Durable foundation that remains authoritative
 
@@ -153,9 +202,10 @@ P3.7 differential correctness remains separate and must not be consumed here.
 
 ## Immediate next action
 
-Run the exact direct `Obsidian-0.3.0-phase3-dev13.jar` on the reference machine. Keep PR #47 draft. Let the automated scene reach `tJunctionPolicyEvidenceReady=true` before treating the visual exercise as valid, then perform the targeted stationary/motion/camera-angle/section-boundary/block-rebuild/F3+T exercise and provide the complete shutdown log plus explicit PASS/FAIL for cracks, pinholes, flickering seams, z-fighting/double edges or camera-motion-dependent gaps.
-
-Do not promote P3.6 or begin P3.7 until that runtime gate and explicit targeted visual verdict close.
+1. Run hosted CI on the exact A-0149 P3.6 promotion evidence head.
+2. If green, synchronize the P3.6 COMPLETE / P3.7 ACTIVE roadmap status, promote/merge PR #47 `[no-release]` without changing validated source semantics.
+3. From merged `main`, create the P3.7 milestone branch.
+4. Freeze the P3.7 differential-correctness contract before changing source.
 
 ## Continuity order
 
