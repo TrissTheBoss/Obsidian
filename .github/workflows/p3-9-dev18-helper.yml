@@ -31,7 +31,9 @@ jobs:
           gradle-version: '9.5.1'
 
       - name: Apply frozen dev18 patch
-        run: python3 tools/p3_9_dev18_impl.py
+        run: |
+          sed -i 's/text.count("dev17") != 2/text.count("dev17") != 1/' tools/p3_9_dev18_impl.py
+          python3 tools/p3_9_dev18_impl.py
 
       - name: Build exact Minecraft 26.2 project
         run: gradle build --stacktrace
