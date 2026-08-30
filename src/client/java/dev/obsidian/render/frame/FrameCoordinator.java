@@ -96,13 +96,13 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev15 P3.8 frame coordinator active. contextSlots=" + frameContexts.size()
+                    "Phase 3 dev24 P3.10 frame coordinator active. contextSlots=" + frameContexts.size()
                             + ", cpuTimingCapacity=" + cpuFrameTimings.capacity()
                             + ", meshWorkers=" + (meshWorkers == null ? 0 : meshWorkers.workerCount())
                             + ", meshQueueCapacity=" + (meshWorkers == null ? 0 : meshWorkers.queueCapacity())
                             + ", stagingCapacity=" + (stagingUploads == null ? 0 : stagingUploads.capacityBytes())
                             + ", deviceArenaCapacity=" + (deviceArena == null ? 0L : deviceArena.capacityBytes())
-                            + "; all proven P3.2-P3.7 correctness and dev11 repeat-aware greedy GPU emission remain armed unchanged. P3.8 dev15 adds only bounded production-worker benchmark telemetry: fixed primitive samples, workload identity, GC deltas and stage timing composition. Dev15 changes no geometry, shader, pipeline, vertex/index format, atlas/lightmap semantics, scheduling policy, rebuild granularity or native graphics behavior.");
+                            + "; inherited P3.2-P3.8 correctness/benchmark evidence remains armed. Dev24 adds only the bounded production SOLID/CUTOUT suppression/replacement plan at the exact Minecraft 26.2 public-Blaze3D OPAQUE seam; unsupported/unavailable terrain remains vanilla and native graphics ownership is unchanged.");
         }
     }
 

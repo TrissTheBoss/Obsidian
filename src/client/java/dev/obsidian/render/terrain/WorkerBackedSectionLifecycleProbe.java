@@ -426,9 +426,6 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
             batchOpen = false;
             uploadBatchOrdinal = staging.submittedBatches();
             usefulSubmissions++;
-            drawSubmissions++;
-            indirectCalls += INDIRECT_COMMAND_COUNT;
-            triangles += drawableMesh.indexBytes() / Integer.BYTES / 3L;
             emittedMergedQuads += drawableMesh.mergedQuadCount();
             emittedSuppressedSourceQuads += drawableMesh.suppressedSourceQuads();
             emittedFacesSaved += drawableMesh.facesSaved();
@@ -441,7 +438,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
             state = State.LIVE;
 
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev11 hybrid worker result installed on frame {0}: generation={1}, eventSequence={2}, priority={3}, section=({4},{5},{6}), oracleFingerprint={7}, hybridFingerprint={8}, sourceQuads={9}, suppressedSourceQuads={10}, passthroughQuads={11}, mergedQuads={12}, hybridQuads={13}, facesSaved={14}, sourceUploadBytes={15}, hybridUploadBytes={16}, synchronousSceneMeshBuilds=0, repeatAwareGreedyGpuEmission=true, renderThreadGpuOwnershipPreserved=true.",
+                    "Phase 3 dev24 production worker result installed on frame {0}: generation={1}, eventSequence={2}, priority={3}, section=({4},{5},{6}), oracleFingerprint={7}, hybridFingerprint={8}, sourceQuads={9}, suppressedSourceQuads={10}, passthroughQuads={11}, mergedQuads={12}, hybridQuads={13}, facesSaved={14}, sourceUploadBytes={15}, hybridUploadBytes={16}, synchronousSceneMeshBuilds=0, repeatAwareGreedyGpuEmission=true, productionCoordinatesExact=true, productionExactColor=true, postWorldComparisonDrawDisabled=true, renderThreadGpuOwnershipPreserved=true.",
                     frameSerial, generation, buildEventSequence, workerPriority,
                     snapshot.sectionX(), snapshot.sectionY(), snapshot.sectionZ(),
                     Long.toUnsignedString(oracleMesh.fingerprint()), Long.toUnsignedString(drawableMesh.fingerprint()),
@@ -495,13 +492,13 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         if (passthroughSolidPipeline != null && passthroughCutoutPipeline != null
                 && mergedSolidPipeline != null && mergedCutoutPipeline != null) return;
         passthroughSolidPipeline = buildPassthroughPipeline(
-                "obsidian_phase3_dev11_passthrough_solid", RenderPipelines.SOLID_BLOCK, RenderPipelines.SOLID_TERRAIN, false);
+                "obsidian_phase3_dev24_passthrough_solid", RenderPipelines.SOLID_BLOCK, RenderPipelines.SOLID_TERRAIN, false);
         passthroughCutoutPipeline = buildPassthroughPipeline(
-                "obsidian_phase3_dev11_passthrough_cutout", RenderPipelines.CUTOUT_BLOCK, RenderPipelines.CUTOUT_TERRAIN, true);
+                "obsidian_phase3_dev24_passthrough_cutout", RenderPipelines.CUTOUT_BLOCK, RenderPipelines.CUTOUT_TERRAIN, true);
         mergedSolidPipeline = buildMergedPipeline(
-                "obsidian_phase3_dev11_merged_solid", RenderPipelines.SOLID_BLOCK, RenderPipelines.SOLID_TERRAIN, false);
+                "obsidian_phase3_dev24_merged_solid", RenderPipelines.SOLID_BLOCK, RenderPipelines.SOLID_TERRAIN, false);
         mergedCutoutPipeline = buildMergedPipeline(
-                "obsidian_phase3_dev11_merged_cutout", RenderPipelines.CUTOUT_BLOCK, RenderPipelines.CUTOUT_TERRAIN, true);
+                "obsidian_phase3_dev24_merged_cutout", RenderPipelines.CUTOUT_BLOCK, RenderPipelines.CUTOUT_TERRAIN, true);
         CompiledRenderPipeline passthroughSolidCompiled = device.precompilePipeline(passthroughSolidPipeline);
         CompiledRenderPipeline passthroughCutoutCompiled = device.precompilePipeline(passthroughCutoutPipeline);
         CompiledRenderPipeline mergedSolidCompiled = device.precompilePipeline(mergedSolidPipeline);
