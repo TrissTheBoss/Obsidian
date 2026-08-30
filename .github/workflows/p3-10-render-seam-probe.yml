@@ -24,7 +24,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.5.1'
-      - name: Resolve exact Minecraft 26.2 client
+      - name: Resolve exact Minecraft 26.2 client and inspect terrain seam
         shell: bash
         run: |
           set -euo pipefail
@@ -32,33 +32,25 @@ jobs:
           JAR="$(find "$HOME/.gradle/caches/fabric-loom/26.2" -name 'minecraft-client-only.jar' -type f | head -n 1)"
           test -n "$JAR"
           echo "EXACT_MC_JAR=$JAR"
+          jar tf "$JAR" | grep '^net/minecraft/client/renderer/' | grep -E '(Section|Chunk|Terrain|Region|RenderList|RenderType)' | sort > /tmp/renderer-candidates.txt || true
           javap -classpath "$JAR" -p net.minecraft.client.renderer.LevelRenderer > /tmp/LevelRenderer.sig.txt
           javap -classpath "$JAR" -c -p net.minecraft.client.renderer.LevelRenderer > /tmp/LevelRenderer.bytecode.txt
-          javap -classpath "$JAR" -p net.minecraft.client.renderer.SectionRenderDispatcher > /tmp/SectionRenderDispatcher.sig.txt
-          javap -classpath "$JAR" -c -p net.minecraft.client.renderer.SectionRenderDispatcher > /tmp/SectionRenderDispatcher.bytecode.txt
-          javap -classpath "$JAR" -p 'net.minecraft.client.renderer.SectionRenderDispatcher$RenderSection' > /tmp/RenderSection.sig.txt
-          javap -classpath "$JAR" -c -p 'net.minecraft.client.renderer.SectionRenderDispatcher$RenderSection' > /tmp/RenderSection.bytecode.txt
+          grep -oE 'net/minecraft/client/renderer/[A-Za-z0-9_$]+' /tmp/LevelRenderer.bytecode.txt | sort -u > /tmp/LevelRenderer.refs.txt || true
+          echo '=== Exact renderer candidate classes ==='
+          cat /tmp/renderer-candidates.txt
           echo '=== LevelRenderer candidate signatures ==='
-          grep -nE 'render|section|Section|RenderType|terrain|Terrain|solid|cutout|transluc' /tmp/LevelRenderer.sig.txt | head -n 240 || true
+          grep -nE 'render|section|Section|RenderType|terrain|Terrain|solid|cutout|transluc|chunk|Chunk' /tmp/LevelRenderer.sig.txt | head -n 320 || true
+          echo '=== LevelRenderer renderer refs ==='
+          cat /tmp/LevelRenderer.refs.txt
           echo '=== LevelRenderer candidate bytecode references ==='
-          grep -nE 'SectionRenderDispatcher|RenderSection|RenderType|renderSection|draw|Draw|solid|cutout|transluc|Terrain' /tmp/LevelRenderer.bytecode.txt | head -n 320 || true
-          echo '=== SectionRenderDispatcher signatures ==='
-          cat /tmp/SectionRenderDispatcher.sig.txt
-          echo '=== RenderSection signatures ==='
-          cat /tmp/RenderSection.sig.txt
-          echo '=== SectionRenderDispatcher candidate bytecode references ==='
-          grep -nE 'draw|Draw|RenderType|Gpu|Buffer|section|Section' /tmp/SectionRenderDispatcher.bytecode.txt | head -n 320 || true
-          echo '=== RenderSection candidate bytecode references ==='
-          grep -nE 'draw|Draw|RenderType|Gpu|Buffer|compiled|Compiled|section|Section' /tmp/RenderSection.bytecode.txt | head -n 320 || true
+          grep -nE 'RenderType|renderSection|draw|Draw|solid|cutout|transluc|Terrain|Section|Chunk|Region|Buffer' /tmp/LevelRenderer.bytecode.txt | head -n 520 || true
       - name: Upload exact probe text
         uses: actions/upload-artifact@v4
         with:
           name: p3-10-render-seam-probe-${{ github.sha }}
           if-no-files-found: error
           path: |
+            /tmp/renderer-candidates.txt
             /tmp/LevelRenderer.sig.txt
             /tmp/LevelRenderer.bytecode.txt
-            /tmp/SectionRenderDispatcher.sig.txt
-            /tmp/SectionRenderDispatcher.bytecode.txt
-            /tmp/RenderSection.sig.txt
-            /tmp/RenderSection.bytecode.txt
+            /tmp/LevelRenderer.refs.txt
