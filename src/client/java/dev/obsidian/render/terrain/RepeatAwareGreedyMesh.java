@@ -1,7 +1,5 @@
 package dev.obsidian.render.terrain;
 
-import net.minecraft.core.Direction;
-
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
@@ -10,9 +8,10 @@ import java.util.Arrays;
  * P3.10 dev24 production-coordinate hybrid terrain mesh.
  *
  * <p>Every dev10 transport record suppresses its exact canonical source baked
- * quads and emits one repeat-aware large quad. Every other baked quad is kept
- * byte-for-byte equivalent to the existing {@link BakedSectionMesh} BLOCK
- * comparison path. This class owns no Minecraft live state and no GPU object.</p>
+ * quads and emits one repeat-aware large quad. Every other baked quad retains
+ * its exact frozen source geometry, ARGB, UV and packed light. Production output
+ * deliberately omits the old comparison-only face offset and RGB dimming. This
+ * class owns no Minecraft live state and no GPU object.</p>
  */
 public final class RepeatAwareGreedyMesh {
     public static final int PASSTHROUGH_BYTES_PER_VERTEX = BakedSectionMesh.BYTES_PER_VERTEX;
@@ -23,7 +22,6 @@ public final class RepeatAwareGreedyMesh {
 
     private static final long FNV_OFFSET_BASIS = 0xcbf29ce484222325L;
     private static final long FNV_PRIME = 0x100000001b3L;
-    private static final Direction[] DIRECTIONS = Direction.values();
 
     /** Bounded primitive workspace intended for reuse by exactly one worker. */
     public static final class BuildScratch {
@@ -290,6 +288,10 @@ public final class RepeatAwareGreedyMesh {
         int[] retainedDirectionCovered = Arrays.copyOf(scratch.directionCovered, scratch.directionCovered.length);
         int[] retainedDirectionSaved = Arrays.copyOf(scratch.directionSaved, scratch.directionSaved.length);
 
+        validateProductionPresentation(
+                baked, candidates, transport, passthroughBytes, mergedBytes,
+                retainedPassthrough, retainedMerged);
+
         long hash = FNV_OFFSET_BASIS;
         hash = hashLong(hash, snapshot.fingerprint());
         hash = hashLong(hash, baked.fingerprint());
@@ -522,6 +524,79 @@ public final class RepeatAwareGreedyMesh {
         out.put((byte) ((argb >>> 8) & 0xFF));
         out.put((byte) (argb & 0xFF));
         out.put((byte) ((argb >>> 24) & 0xFF));
+    }
+
+    private static void validateProductionPresentation(
+            SectionBakedQuadSnapshot baked,
+            RenderMergeCandidates candidates,
+            RepeatAwareTransportProof transport,
+            byte[] passthroughVertices,
+            byte[] mergedVertices,
+            int[] passthroughSources,
+            short[] mergedCandidates) {
+        ByteBuffer passthrough = ByteBuffer.wrap(passthroughVertices).order(ByteOrder.nativeOrder());
+        for (int quad = 0; quad < passthroughSources.length; quad++) {
+            int source = passthroughSources[quad];
+            for (int vertex = 0; vertex < VERTICES_PER_QUAD; vertex++) {
+                int base = (quad * VERTICES_PER_QUAD + vertex) * PASSTHROUGH_BYTES_PER_VERTEX;
+                for (int axis = 0; axis < 3; axis++) {
+                    int actual = Float.floatToRawIntBits(passthrough.getFloat(base + axis * Float.BYTES));
+                    int expected = Float.floatToRawIntBits(baked.position(source, vertex, axis));
+                    if (actual != expected) {
+                        throw new IllegalStateException("P3.10 passthrough production position mismatch");
+                    }
+                }
+                validateExactColorBytes(passthrough, base + 12, baked.exactArgbColor(source, vertex));
+            }
+        }
+
+        ByteBuffer merged = ByteBuffer.wrap(mergedVertices).order(ByteOrder.nativeOrder());
+        for (int quad = 0; quad < mergedCandidates.length; quad++) {
+            int candidate = Short.toUnsignedInt(mergedCandidates[quad]);
+            int record = -1;
+            for (int i = 0; i < transport.recordCount(); i++) {
+                if (transport.candidateIndex(i) == candidate) {
+                    record = i;
+                    break;
+                }
+            }
+            if (record < 0) throw new IllegalStateException("P3.10 merged candidate lost transport identity");
+            int packed = candidates.packedCandidate(candidate);
+            int direction = RenderMergeCandidates.direction(packed);
+            int plane = RenderMergeCandidates.plane(packed);
+            int u0 = RenderMergeCandidates.u(packed);
+            int v0 = RenderMergeCandidates.v(packed);
+            int width = RenderMergeCandidates.width(packed);
+            int height = RenderMergeCandidates.height(packed);
+            int representative = candidates.representativeSourceQuad(candidate);
+            int sourceOrder = transport.sourceCornerOrderSignature(record);
+            for (int vertex = 0; vertex < VERTICES_PER_QUAD; vertex++) {
+                int corner = (sourceOrder >>> (vertex * 2)) & 0x3;
+                int base = (quad * VERTICES_PER_QUAD + vertex) * MERGED_BYTES_PER_VERTEX;
+                for (int axis = 0; axis < 3; axis++) {
+                    int actual = Float.floatToRawIntBits(merged.getFloat(base + axis * Float.BYTES));
+                    int expected = Float.floatToRawIntBits(
+                            position(direction, plane, u0, v0, width, height, corner, axis));
+                    if (actual != expected) {
+                        throw new IllegalStateException("P3.10 merged production position mismatch");
+                    }
+                }
+                validateExactColorBytes(merged, base + 12, baked.exactArgbColor(representative, vertex));
+            }
+        }
+    }
+
+    private static void validateExactColorBytes(ByteBuffer data, int offset, int argb) {
+        int r = Byte.toUnsignedInt(data.get(offset));
+        int g = Byte.toUnsignedInt(data.get(offset + 1));
+        int b = Byte.toUnsignedInt(data.get(offset + 2));
+        int a = Byte.toUnsignedInt(data.get(offset + 3));
+        if (r != ((argb >>> 16) & 0xFF)
+                || g != ((argb >>> 8) & 0xFF)
+                || b != (argb & 0xFF)
+                || a != ((argb >>> 24) & 0xFF)) {
+            throw new IllegalStateException("P3.10 production exact ARGB mismatch");
+        }
     }
 
     private static void putLight(ByteBuffer out, int light) {
