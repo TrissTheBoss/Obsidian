@@ -46,10 +46,10 @@ import java.util.function.Supplier;
  */
 public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger("Obsidian/WorkerBackedSectionLifecycleProbe");
-    private static final Supplier<String> PASSTHROUGH_SOLID_PASS_LABEL = () -> "Obsidian Phase 3 dev11 passthrough SOLID";
-    private static final Supplier<String> PASSTHROUGH_CUTOUT_PASS_LABEL = () -> "Obsidian Phase 3 dev11 passthrough CUTOUT";
-    private static final Supplier<String> MERGED_SOLID_PASS_LABEL = () -> "Obsidian Phase 3 dev11 merged SOLID";
-    private static final Supplier<String> MERGED_CUTOUT_PASS_LABEL = () -> "Obsidian Phase 3 dev11 merged CUTOUT";
+    private static final Supplier<String> PASSTHROUGH_SOLID_PASS_LABEL = () -> "Obsidian Phase 3 dev24 production passthrough SOLID";
+    private static final Supplier<String> PASSTHROUGH_CUTOUT_PASS_LABEL = () -> "Obsidian Phase 3 dev24 production passthrough CUTOUT";
+    private static final Supplier<String> MERGED_SOLID_PASS_LABEL = () -> "Obsidian Phase 3 dev24 production merged SOLID";
+    private static final Supplier<String> MERGED_CUTOUT_PASS_LABEL = () -> "Obsidian Phase 3 dev24 production merged CUTOUT";
     private static final Supplier<String> INDIRECT_LABEL = () -> "Obsidian Phase 3 dev11 four-class indirect commands";
     private static final int INDIRECT_COMMAND_COUNT = 4;
     private static final long RETRY_DELAY_NS = 500_000_000L;
@@ -204,7 +204,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
                     requestInvalidate(SectionLifecycleEvents.REASON_RESOURCE_RELOAD, frameSerial);
                     return;
                 }
-                submitDraw(renderer);
+                captureTransformEvidence(renderer);
             }
         } catch (RuntimeException e) {
             validationFailure = e;
@@ -409,7 +409,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
                 throw new IllegalStateException("Phase 3 dev11 hybrid upload hit bounded staging backpressure");
             }
 
-            encodeLiveDraw(encoder, renderer);
+            captureTransformEvidence(renderer);
 
             if (SectionLifecycleEvents.latestSequence() != buildEventSequence
                     || SectionMaterialSnapshot.currentResourceEpoch() != bakedSnapshot.resourceEpoch()) {
@@ -494,15 +494,14 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
     private void ensurePipelines() {
         if (passthroughSolidPipeline != null && passthroughCutoutPipeline != null
                 && mergedSolidPipeline != null && mergedCutoutPipeline != null) return;
-        RenderPipeline depthTemplate = RenderPipelines.DEBUG_QUADS;
         passthroughSolidPipeline = buildPassthroughPipeline(
-                "obsidian_phase3_dev11_passthrough_solid", RenderPipelines.SOLID_BLOCK, depthTemplate, false);
+                "obsidian_phase3_dev11_passthrough_solid", RenderPipelines.SOLID_BLOCK, RenderPipelines.SOLID_TERRAIN, false);
         passthroughCutoutPipeline = buildPassthroughPipeline(
-                "obsidian_phase3_dev11_passthrough_cutout", RenderPipelines.CUTOUT_BLOCK, depthTemplate, true);
+                "obsidian_phase3_dev11_passthrough_cutout", RenderPipelines.CUTOUT_BLOCK, RenderPipelines.CUTOUT_TERRAIN, true);
         mergedSolidPipeline = buildMergedPipeline(
-                "obsidian_phase3_dev11_merged_solid", RenderPipelines.SOLID_BLOCK, depthTemplate, false);
+                "obsidian_phase3_dev11_merged_solid", RenderPipelines.SOLID_BLOCK, RenderPipelines.SOLID_TERRAIN, false);
         mergedCutoutPipeline = buildMergedPipeline(
-                "obsidian_phase3_dev11_merged_cutout", RenderPipelines.CUTOUT_BLOCK, depthTemplate, true);
+                "obsidian_phase3_dev11_merged_cutout", RenderPipelines.CUTOUT_BLOCK, RenderPipelines.CUTOUT_TERRAIN, true);
         CompiledRenderPipeline passthroughSolidCompiled = device.precompilePipeline(passthroughSolidPipeline);
         CompiledRenderPipeline passthroughCutoutCompiled = device.precompilePipeline(passthroughCutoutPipeline);
         CompiledRenderPipeline mergedSolidCompiled = device.precompilePipeline(mergedSolidPipeline);
@@ -547,7 +546,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
                 .withVertexShader(template.getVertexShader())
                 .withFragmentShader(template.getFragmentShader())
                 .withCull(false)
-                .withColorTargetState(template.getColorTargetState())
+                .withColorTargetState(depthTemplate.getColorTargetState())
                 .withDepthStencilState(depthTemplate.getDepthStencilState())
                 .withPrimitiveTopology(PrimitiveTopology.TRIANGLES);
         for (BindGroupLayout layout : template.getBindGroupLayouts()) builder.withBindGroupLayout(layout);
@@ -562,6 +561,114 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         drawSubmissions++;
         indirectCalls += INDIRECT_COMMAND_COUNT;
         triangles += drawableMesh.indexBytes() / Integer.BYTES / 3L;
+    }
+
+    private void captureTransformEvidence(GameRenderer renderer) {
+        if (firstTransformCaptured) return;
+        CameraRenderState camera = renderer.gameRenderState().levelRenderState.cameraRenderState;
+        if (camera == null || camera.pos == null || camera.viewRotationMatrix == null) {
+            throw new IllegalStateException("Minecraft world camera render state is unavailable");
+        }
+        double relativeX = requestedSectionX * (double) SectionSnapshot.INTERIOR_SIZE - camera.pos.x;
+        double relativeY = requestedSectionY * (double) SectionSnapshot.INTERIOR_SIZE - camera.pos.y;
+        double relativeZ = requestedSectionZ * (double) SectionSnapshot.INTERIOR_SIZE - camera.pos.z;
+        if (!Double.isFinite(relativeX) || !Double.isFinite(relativeY) || !Double.isFinite(relativeZ)) {
+            throw new IllegalStateException("Non-finite Phase 3 dev24 camera-relative section origin");
+        }
+        firstTransformCaptured = true;
+        firstCameraX = camera.pos.x;
+        firstCameraY = camera.pos.y;
+        firstCameraZ = camera.pos.z;
+        firstRelativeX = relativeX;
+        firstRelativeY = relativeY;
+        firstRelativeZ = relativeZ;
+    }
+
+    public boolean canClaimProductionReplacement(boolean cutout, long expectedGeneration, long expectedResourceEpoch) {
+        RenderSystem.assertOnRenderThread();
+        if (state != State.LIVE || generation != expectedGeneration || !initialSubmissionCompleted
+                || !pipelineValid || drawableMesh == null || bakedSnapshot == null
+                || differentialCorrectnessProof == null || !differentialCorrectnessProof.exact()
+                || indirectCommands == null || expectedResourceEpoch != bakedSnapshot.resourceEpoch()
+                || SectionMaterialSnapshot.currentResourceEpoch() != expectedResourceEpoch) {
+            return false;
+        }
+        return cutout ? drawableMesh.hybridCutoutQuads() > 0 : drawableMesh.hybridSolidQuads() > 0;
+    }
+
+    public void encodeProductionReplacement(RenderPass pass, GameRenderer renderer, boolean cutout) {
+        RenderSystem.assertOnRenderThread();
+        long epoch = SectionMaterialSnapshot.currentResourceEpoch();
+        if (!canClaimProductionReplacement(cutout, generation, epoch)) {
+            throw new IllegalStateException("P3.10 production replacement record is not claimable");
+        }
+        captureTransformEvidence(renderer);
+        CameraRenderState camera = renderer.gameRenderState().levelRenderState.cameraRenderState;
+        double relativeX = drawableMesh.originX() - camera.pos.x;
+        double relativeY = drawableMesh.originY() - camera.pos.y;
+        double relativeZ = drawableMesh.originZ() - camera.pos.z;
+        Matrix4f modelView = new Matrix4f(camera.viewRotationMatrix)
+                .translate((float) relativeX, (float) relativeY, (float) relativeZ);
+        GpuBufferSlice dynamicTransforms = RenderSystem.getDynamicUniforms().writeTransform(modelView);
+        GpuBufferSlice projection = RenderSystem.getProjectionMatrixBuffer();
+        GpuBufferSlice fog = RenderSystem.getShaderFog();
+        if (dynamicTransforms == null || projection == null || fog == null
+                || RenderSystem.getGlobalSettingsUniform() == null) {
+            throw new IllegalStateException("Minecraft world uniform buffers are unavailable for P3.10 replacement");
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        AbstractTexture blocksAtlas = minecraft.getTextureManager().getTexture(TextureAtlas.LOCATION_BLOCKS);
+        if (blocksAtlas == null || blocksAtlas.getTextureView() == null || blocksAtlas.getSampler() == null
+                || renderer.levelLightmap() == null) {
+            throw new IllegalStateException("Minecraft live atlas/lightmap is unavailable for P3.10 replacement");
+        }
+        GpuBufferSlice passthroughVertexSlice = arena.slice(passthroughVertexHandle);
+        GpuBufferSlice mergedVertexSlice = arena.slice(mergedVertexHandle);
+        GpuBufferSlice indexSlice = arena.slice(indexHandle);
+        if (cutout) {
+            encodeProductionClass(pass, passthroughCutoutPipeline, dynamicTransforms, projection, fog,
+                    blocksAtlas, renderer, passthroughVertexSlice, indexSlice,
+                    indirectCommands.buffer().slice(IndexedIndirectCommandBuffer.COMMAND_BYTES, IndexedIndirectCommandBuffer.COMMAND_BYTES));
+            encodeProductionClass(pass, mergedCutoutPipeline, dynamicTransforms, projection, fog,
+                    blocksAtlas, renderer, mergedVertexSlice, indexSlice,
+                    indirectCommands.buffer().slice(3L * IndexedIndirectCommandBuffer.COMMAND_BYTES, IndexedIndirectCommandBuffer.COMMAND_BYTES));
+            triangles += (drawableMesh.passthroughCutoutIndexCount() + drawableMesh.mergedCutoutIndexCount()) / 3L;
+        } else {
+            encodeProductionClass(pass, passthroughSolidPipeline, dynamicTransforms, projection, fog,
+                    blocksAtlas, renderer, passthroughVertexSlice, indexSlice,
+                    indirectCommands.buffer().slice(0L, IndexedIndirectCommandBuffer.COMMAND_BYTES));
+            encodeProductionClass(pass, mergedSolidPipeline, dynamicTransforms, projection, fog,
+                    blocksAtlas, renderer, mergedVertexSlice, indexSlice,
+                    indirectCommands.buffer().slice(2L * IndexedIndirectCommandBuffer.COMMAND_BYTES, IndexedIndirectCommandBuffer.COMMAND_BYTES));
+            triangles += (drawableMesh.passthroughSolidIndexCount() + drawableMesh.mergedSolidIndexCount()) / 3L;
+        }
+        drawSubmissions++;
+        indirectCalls += 2L;
+        resourceEpochChecks++;
+    }
+
+    private void encodeProductionClass(
+            RenderPass pass,
+            RenderPipeline pipeline,
+            GpuBufferSlice dynamicTransforms,
+            GpuBufferSlice projection,
+            GpuBufferSlice fog,
+            AbstractTexture blocksAtlas,
+            GameRenderer renderer,
+            GpuBufferSlice vertexSlice,
+            GpuBufferSlice indexSlice,
+            GpuBufferSlice commandSlice) {
+        pass.setPipeline(pipeline);
+        pass.setUniform("Globals", RenderSystem.getGlobalSettingsUniform());
+        pass.setUniform("Fog", fog);
+        pass.setUniform("DynamicTransforms", dynamicTransforms);
+        pass.setUniform("Projection", projection);
+        pass.bindTexture("Sampler0", blocksAtlas.getTextureView(), blocksAtlas.getSampler());
+        pass.bindTexture("Sampler2", renderer.levelLightmap(),
+                RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+        pass.setVertexBuffer(0, vertexSlice);
+        pass.setIndexBuffer(indexSlice.buffer(), IndexType.INT);
+        pass.drawIndexedIndirect(commandSlice, 1);
     }
 
     public void requestInvalidate(int reasons, long frameSerial) {

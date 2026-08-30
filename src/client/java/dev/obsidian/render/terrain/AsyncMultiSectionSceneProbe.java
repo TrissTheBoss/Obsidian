@@ -902,6 +902,23 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         return "(" + centerSectionX + "," + centerSectionY + "," + centerSectionZ + ")";
     }
 
+    public WorkerBackedSectionLifecycleProbe productionReplacementProbe(int x, int y, int z) {
+        RenderSystem.assertOnRenderThread();
+        if (closed || hardFailure || state != State.LIVE) return null;
+        for (SceneRecord record : records) {
+            if (record.sectionX != x || record.sectionY != y || record.sectionZ != z
+                    || record.eligibility != Eligibility.ELIGIBLE || record.probe == null
+                    || !record.installObserved || record.probe.state() != WorkerBackedSectionLifecycleProbe.State.LIVE
+                    || record.probe.generation() != sceneGeneration
+                    || record.probe.differentialCorrectnessProof() == null
+                    || !record.probe.differentialCorrectnessProof().exact()) {
+                continue;
+            }
+            return record.probe;
+        }
+        return null;
+    }
+
     public State state() { return state; }
     public boolean hardFailure() { return hardFailure; }
     public boolean centerKnown() { return centerKnown; }

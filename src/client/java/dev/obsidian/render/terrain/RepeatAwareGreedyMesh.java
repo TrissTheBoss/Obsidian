@@ -7,7 +7,7 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 
 /**
- * P3.4 dev11 pure hybrid comparison mesh.
+ * P3.10 dev24 production-coordinate hybrid terrain mesh.
  *
  * <p>Every dev10 transport record suppresses its exact canonical source baked
  * quads and emits one repeat-aware large quad. Every other baked quad is kept
@@ -363,21 +363,11 @@ public final class RepeatAwareGreedyMesh {
             ByteBuffer out,
             SectionBakedQuadSnapshot baked,
             int sourceQuad) {
-        float offsetX = 0.0f;
-        float offsetY = 0.0f;
-        float offsetZ = 0.0f;
-        int directionOrdinal = baked.direction(sourceQuad);
-        if (directionOrdinal >= 0 && directionOrdinal < DIRECTIONS.length) {
-            Direction direction = DIRECTIONS[directionOrdinal];
-            offsetX = direction.getStepX() * BakedSectionMesh.COMPARISON_FACE_OFFSET;
-            offsetY = direction.getStepY() * BakedSectionMesh.COMPARISON_FACE_OFFSET;
-            offsetZ = direction.getStepZ() * BakedSectionMesh.COMPARISON_FACE_OFFSET;
-        }
         for (int vertex = 0; vertex < VERTICES_PER_QUAD; vertex++) {
-            out.putFloat(baked.position(sourceQuad, vertex, 0) + offsetX);
-            out.putFloat(baked.position(sourceQuad, vertex, 1) + offsetY);
-            out.putFloat(baked.position(sourceQuad, vertex, 2) + offsetZ);
-            putComparisonColor(out, baked.exactArgbColor(sourceQuad, vertex));
+            out.putFloat(baked.position(sourceQuad, vertex, 0));
+            out.putFloat(baked.position(sourceQuad, vertex, 1));
+            out.putFloat(baked.position(sourceQuad, vertex, 2));
+            putExactColor(out, baked.exactArgbColor(sourceQuad, vertex));
             out.putFloat(baked.u(sourceQuad, vertex));
             out.putFloat(baked.v(sourceQuad, vertex));
             putLight(out, baked.packedLight(sourceQuad, vertex));
@@ -427,7 +417,7 @@ public final class RepeatAwareGreedyMesh {
             out.putFloat(position(direction, plane, u0, v0, width, height, corner, 0));
             out.putFloat(position(direction, plane, u0, v0, width, height, corner, 1));
             out.putFloat(position(direction, plane, u0, v0, width, height, corner, 2));
-            putComparisonColor(out, baked.exactArgbColor(representative, vertex));
+            putExactColor(out, baked.exactArgbColor(representative, vertex));
             out.putFloat((corner & 1) == 0 ? 0.0f : width);
             out.putFloat((corner & 2) == 0 ? 0.0f : height);
             putLight(out, baked.packedLight(representative, vertex));
@@ -467,27 +457,27 @@ public final class RepeatAwareGreedyMesh {
         float z;
         switch (direction) {
             case BinarySectionVisibility.WEST -> {
-                fixed = plane - BakedSectionMesh.COMPARISON_FACE_OFFSET;
+                fixed = plane;
                 x = fixed; y = v; z = u;
             }
             case BinarySectionVisibility.EAST -> {
-                fixed = plane + 1.0f + BakedSectionMesh.COMPARISON_FACE_OFFSET;
+                fixed = plane + 1.0f;
                 x = fixed; y = v; z = u;
             }
             case BinarySectionVisibility.DOWN -> {
-                fixed = plane - BakedSectionMesh.COMPARISON_FACE_OFFSET;
+                fixed = plane;
                 x = u; y = fixed; z = v;
             }
             case BinarySectionVisibility.UP -> {
-                fixed = plane + 1.0f + BakedSectionMesh.COMPARISON_FACE_OFFSET;
+                fixed = plane + 1.0f;
                 x = u; y = fixed; z = v;
             }
             case BinarySectionVisibility.NORTH -> {
-                fixed = plane - BakedSectionMesh.COMPARISON_FACE_OFFSET;
+                fixed = plane;
                 x = u; y = v; z = fixed;
             }
             case BinarySectionVisibility.SOUTH -> {
-                fixed = plane + 1.0f + BakedSectionMesh.COMPARISON_FACE_OFFSET;
+                fixed = plane + 1.0f;
                 x = u; y = v; z = fixed;
             }
             default -> throw new IllegalArgumentException("Invalid dev11 direction " + direction);
@@ -527,18 +517,11 @@ public final class RepeatAwareGreedyMesh {
         };
     }
 
-    private static void putComparisonColor(ByteBuffer out, int argb) {
-        int a = (argb >>> 24) & 0xFF;
-        int r = ((argb >>> 16) & 0xFF) * BakedSectionMesh.COMPARISON_COLOR_NUMERATOR
-                / BakedSectionMesh.COMPARISON_COLOR_DENOMINATOR;
-        int g = ((argb >>> 8) & 0xFF) * BakedSectionMesh.COMPARISON_COLOR_NUMERATOR
-                / BakedSectionMesh.COMPARISON_COLOR_DENOMINATOR;
-        int b = (argb & 0xFF) * BakedSectionMesh.COMPARISON_COLOR_NUMERATOR
-                / BakedSectionMesh.COMPARISON_COLOR_DENOMINATOR;
-        out.put((byte) r);
-        out.put((byte) g);
-        out.put((byte) b);
-        out.put((byte) a);
+    private static void putExactColor(ByteBuffer out, int argb) {
+        out.put((byte) ((argb >>> 16) & 0xFF));
+        out.put((byte) ((argb >>> 8) & 0xFF));
+        out.put((byte) (argb & 0xFF));
+        out.put((byte) ((argb >>> 24) & 0xFF));
     }
 
     private static void putLight(ByteBuffer out, int light) {
