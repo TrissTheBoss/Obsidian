@@ -32,25 +32,39 @@ jobs:
           JAR="$(find "$HOME/.gradle/caches/fabric-loom/26.2" -name 'minecraft-client-only.jar' -type f | head -n 1)"
           test -n "$JAR"
           echo "EXACT_MC_JAR=$JAR"
-          jar tf "$JAR" | grep '^net/minecraft/client/renderer/' | grep -E '(Section|Chunk|Terrain|Region|RenderList|RenderType)' | sort > /tmp/renderer-candidates.txt || true
-          javap -classpath "$JAR" -p net.minecraft.client.renderer.LevelRenderer > /tmp/LevelRenderer.sig.txt
           javap -classpath "$JAR" -c -p net.minecraft.client.renderer.LevelRenderer > /tmp/LevelRenderer.bytecode.txt
-          grep -oE 'net/minecraft/client/renderer/[A-Za-z0-9_$]+' /tmp/LevelRenderer.bytecode.txt | sort -u > /tmp/LevelRenderer.refs.txt || true
-          echo '=== Exact renderer candidate classes ==='
-          cat /tmp/renderer-candidates.txt
-          echo '=== LevelRenderer candidate signatures ==='
-          grep -nE 'render|section|Section|RenderType|terrain|Terrain|solid|cutout|transluc|chunk|Chunk' /tmp/LevelRenderer.sig.txt | head -n 320 || true
-          echo '=== LevelRenderer renderer refs ==='
-          cat /tmp/LevelRenderer.refs.txt
-          echo '=== LevelRenderer candidate bytecode references ==='
-          grep -nE 'RenderType|renderSection|draw|Draw|solid|cutout|transluc|Terrain|Section|Chunk|Region|Buffer' /tmp/LevelRenderer.bytecode.txt | head -n 520 || true
+          for C in \
+            net.minecraft.client.renderer.chunk.ChunkSectionLayer \
+            net.minecraft.client.renderer.chunk.ChunkSectionLayerGroup \
+            net.minecraft.client.renderer.chunk.ChunkSectionsToRender \
+            net.minecraft.client.renderer.chunk.SectionMesh \
+            'net.minecraft.client.renderer.chunk.SectionMesh$SectionDraw' \
+            'net.minecraft.client.renderer.chunk.SectionRenderDispatcher$RenderSection'; do
+            N="$(printf '%s' "$C" | tr '$.' '__')"
+            javap -classpath "$JAR" -p "$C" > "/tmp/${N}.sig.txt"
+            javap -classpath "$JAR" -c -p "$C" > "/tmp/${N}.bytecode.txt"
+          done
+          echo '=== prepareChunkRenders exact body ==='
+          sed -n '923,1200p' /tmp/LevelRenderer.bytecode.txt
+          echo '=== addMainPass exact runnable body ==='
+          sed -n '2414,2540p' /tmp/LevelRenderer.bytecode.txt
+          echo '=== ChunkSectionLayer ==='
+          cat /tmp/net_minecraft_client_renderer_chunk_ChunkSectionLayer.sig.txt
+          cat /tmp/net_minecraft_client_renderer_chunk_ChunkSectionLayer.bytecode.txt
+          echo '=== ChunkSectionLayerGroup ==='
+          cat /tmp/net_minecraft_client_renderer_chunk_ChunkSectionLayerGroup.sig.txt
+          cat /tmp/net_minecraft_client_renderer_chunk_ChunkSectionLayerGroup.bytecode.txt
+          echo '=== ChunkSectionsToRender ==='
+          cat /tmp/net_minecraft_client_renderer_chunk_ChunkSectionsToRender.sig.txt
+          cat /tmp/net_minecraft_client_renderer_chunk_ChunkSectionsToRender.bytecode.txt
+          echo '=== SectionMesh / SectionDraw signatures ==='
+          cat /tmp/net_minecraft_client_renderer_chunk_SectionMesh.sig.txt
+          cat /tmp/net_minecraft_client_renderer_chunk_SectionMesh_SectionDraw.sig.txt
+          echo '=== RenderSection signatures ==='
+          cat /tmp/net_minecraft_client_renderer_chunk_SectionRenderDispatcher_RenderSection.sig.txt
       - name: Upload exact probe text
         uses: actions/upload-artifact@v4
         with:
           name: p3-10-render-seam-probe-${{ github.sha }}
           if-no-files-found: error
-          path: |
-            /tmp/renderer-candidates.txt
-            /tmp/LevelRenderer.sig.txt
-            /tmp/LevelRenderer.bytecode.txt
-            /tmp/LevelRenderer.refs.txt
+          path: /tmp/*.txt
