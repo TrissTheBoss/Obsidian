@@ -130,3 +130,7 @@ P3.9 is no longer on the critical path. Partial GPU patching is not required bef
 Next active engineering target: **production opaque/cutout terrain rendering replacement using the already-proven full-section async greedy path**, while preserving the permanent P3.7 differential oracle, bounded workers/uploads/arena lifetime, Vulkan-only ownership boundary, and full-section fallback semantics where applicable.
 
 PR #53 must close without merge after continuity is synchronized; the experimental branch is evidence history, not a promotion path.
+
+## Continuity synchronization
+
+`ai/ATTEMPT_LOG.md` and `ai/MASTER_ROADMAP.md` were synchronized by descendant commit `6b9020f77b0b1ef0a284639a258655f444862497`; this record update is a connector-authored same-source validation marker before closing the experimental PR.
