@@ -1,0 +1,47 @@
+name: P3.10 dev24 presentation proof
+
+on:
+  push:
+    branches: [phase3/p3.10-production-terrain-replacement]
+    paths:
+      - '.github/workflows/p3-10-dev24-presentation-proof.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: phase3/p3.10-production-terrain-replacement
+      - name: Add exact production presentation byte proof and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/client/java/dev/obsidian/render/terrain/RepeatAwareGreedyMesh.java')
+          t = p.read_text()
+          t = t.replace('import net.minecraft.core.Direction;\n\n', '')
+          t = t.replace('    private static final Direction[] DIRECTIONS = Direction.values();\n', '')
+          t = t.replace(' * quads and emits one repeat-aware large quad. Every other baked quad is kept\n * byte-for-byte equivalent to the existing {@link BakedSectionMesh} BLOCK\n * comparison path. This class owns no Minecraft live state and no GPU object.',
+                        ' * quads and emits one repeat-aware large quad. Every other baked quad retains\n * its exact frozen source geometry, ARGB, UV and packed light. Production output\n * deliberately omits the old comparison-only face offset and RGB dimming. This\n * class owns no Minecraft live state and no GPU object.')
+          anchor = '''        int[] retainedDirectionMerged = Arrays.copyOf(scratch.directionMerged, scratch.directionMerged.length);\n        int[] retainedDirectionCovered = Arrays.copyOf(scratch.directionCovered, scratch.directionCovered.length);\n        int[] retainedDirectionSaved = Arrays.copyOf(scratch.directionSaved, scratch.directionSaved.length);\n\n        long hash = FNV_OFFSET_BASIS;'''
+          repl = '''        int[] retainedDirectionMerged = Arrays.copyOf(scratch.directionMerged, scratch.directionMerged.length);\n        int[] retainedDirectionCovered = Arrays.copyOf(scratch.directionCovered, scratch.directionCovered.length);\n        int[] retainedDirectionSaved = Arrays.copyOf(scratch.directionSaved, scratch.directionSaved.length);\n\n        validateProductionPresentation(\n                baked, candidates, transport, passthroughBytes, mergedBytes,\n                retainedPassthrough, retainedMerged);\n\n        long hash = FNV_OFFSET_BASIS;'''
+          if anchor not in t: raise SystemExit('missing presentation validation call anchor')
+          t = t.replace(anchor, repl, 1)
+          anchor = '''    private static void putExactColor(ByteBuffer out, int argb) {\n        out.put((byte) ((argb >>> 16) & 0xFF));\n        out.put((byte) ((argb >>> 8) & 0xFF));\n        out.put((byte) (argb & 0xFF));\n        out.put((byte) ((argb >>> 24) & 0xFF));\n    }\n\n'''
+          addition = '''    private static void validateProductionPresentation(\n            SectionBakedQuadSnapshot baked,\n            RenderMergeCandidates candidates,\n            RepeatAwareTransportProof transport,\n            byte[] passthroughVertices,\n            byte[] mergedVertices,\n            int[] passthroughSources,\n            short[] mergedCandidates) {\n        ByteBuffer passthrough = ByteBuffer.wrap(passthroughVertices).order(ByteOrder.nativeOrder());\n        for (int quad = 0; quad < passthroughSources.length; quad++) {\n            int source = passthroughSources[quad];\n            for (int vertex = 0; vertex < VERTICES_PER_QUAD; vertex++) {\n                int base = (quad * VERTICES_PER_QUAD + vertex) * PASSTHROUGH_BYTES_PER_VERTEX;\n                for (int axis = 0; axis < 3; axis++) {\n                    int actual = Float.floatToRawIntBits(passthrough.getFloat(base + axis * Float.BYTES));\n                    int expected = Float.floatToRawIntBits(baked.position(source, vertex, axis));\n                    if (actual != expected) {\n                        throw new IllegalStateException("P3.10 passthrough production position mismatch");\n                    }\n                }\n                validateExactColorBytes(passthrough, base + 12, baked.exactArgbColor(source, vertex));\n            }\n        }\n\n        ByteBuffer merged = ByteBuffer.wrap(mergedVertices).order(ByteOrder.nativeOrder());\n        for (int quad = 0; quad < mergedCandidates.length; quad++) {\n            int candidate = Short.toUnsignedInt(mergedCandidates[quad]);\n            int record = -1;\n            for (int i = 0; i < transport.recordCount(); i++) {\n                if (transport.candidateIndex(i) == candidate) {\n                    record = i;\n                    break;\n                }\n            }\n            if (record < 0) throw new IllegalStateException("P3.10 merged candidate lost transport identity");\n            int packed = candidates.packedCandidate(candidate);\n            int direction = RenderMergeCandidates.direction(packed);\n            int plane = RenderMergeCandidates.plane(packed);\n            int u0 = RenderMergeCandidates.u(packed);\n            int v0 = RenderMergeCandidates.v(packed);\n            int width = RenderMergeCandidates.width(packed);\n            int height = RenderMergeCandidates.height(packed);\n            int representative = candidates.representativeSourceQuad(candidate);\n            int sourceOrder = transport.sourceCornerOrderSignature(record);\n            for (int vertex = 0; vertex < VERTICES_PER_QUAD; vertex++) {\n                int corner = (sourceOrder >>> (vertex * 2)) & 0x3;\n                int base = (quad * VERTICES_PER_QUAD + vertex) * MERGED_BYTES_PER_VERTEX;\n                for (int axis = 0; axis < 3; axis++) {\n                    int actual = Float.floatToRawIntBits(merged.getFloat(base + axis * Float.BYTES));\n                    int expected = Float.floatToRawIntBits(\n                            position(direction, plane, u0, v0, width, height, corner, axis));\n                    if (actual != expected) {\n                        throw new IllegalStateException("P3.10 merged production position mismatch");\n                    }\n                }\n                validateExactColorBytes(merged, base + 12, baked.exactArgbColor(representative, vertex));\n            }\n        }\n    }\n\n    private static void validateExactColorBytes(ByteBuffer data, int offset, int argb) {\n        int r = Byte.toUnsignedInt(data.get(offset));\n        int g = Byte.toUnsignedInt(data.get(offset + 1));\n        int b = Byte.toUnsignedInt(data.get(offset + 2));\n        int a = Byte.toUnsignedInt(data.get(offset + 3));\n        if (r != ((argb >>> 16) & 0xFF)\n                || g != ((argb >>> 8) & 0xFF)\n                || b != (argb & 0xFF)\n                || a != ((argb >>> 24) & 0xFF)) {\n            throw new IllegalStateException("P3.10 production exact ARGB mismatch");\n        }\n    }\n\n'''
+          if anchor not in t: raise SystemExit('missing exact color anchor')
+          t = t.replace(anchor, anchor + addition, 1)
+          p.write_text(t)
+          Path('.github/workflows/p3-10-dev24-presentation-proof.yml').unlink()
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m '[no-release] Prove dev24 exact production presentation bytes'
+          git push origin HEAD:phase3/p3.10-production-terrain-replacement
