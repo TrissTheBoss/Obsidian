@@ -1,0 +1,64 @@
+name: P3.10 exact Minecraft render seam probe
+
+on:
+  push:
+    branches: [phase3/p3.10-production-terrain-replacement]
+    paths:
+      - '.github/workflows/p3-10-render-seam-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Set up Gradle 9.5.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+      - name: Resolve exact Minecraft 26.2 client
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle classes --stacktrace >/tmp/gradle-resolve.log 2>&1
+          JAR="$(find "$HOME/.gradle/caches/fabric-loom/26.2" -name 'minecraft-client-only.jar' -type f | head -n 1)"
+          test -n "$JAR"
+          echo "EXACT_MC_JAR=$JAR"
+          javap -classpath "$JAR" -p net.minecraft.client.renderer.LevelRenderer > /tmp/LevelRenderer.sig.txt
+          javap -classpath "$JAR" -c -p net.minecraft.client.renderer.LevelRenderer > /tmp/LevelRenderer.bytecode.txt
+          javap -classpath "$JAR" -p net.minecraft.client.renderer.SectionRenderDispatcher > /tmp/SectionRenderDispatcher.sig.txt
+          javap -classpath "$JAR" -c -p net.minecraft.client.renderer.SectionRenderDispatcher > /tmp/SectionRenderDispatcher.bytecode.txt
+          javap -classpath "$JAR" -p 'net.minecraft.client.renderer.SectionRenderDispatcher$RenderSection' > /tmp/RenderSection.sig.txt
+          javap -classpath "$JAR" -c -p 'net.minecraft.client.renderer.SectionRenderDispatcher$RenderSection' > /tmp/RenderSection.bytecode.txt
+          echo '=== LevelRenderer candidate signatures ==='
+          grep -nE 'render|section|Section|RenderType|terrain|Terrain|solid|cutout|transluc' /tmp/LevelRenderer.sig.txt | head -n 240 || true
+          echo '=== LevelRenderer candidate bytecode references ==='
+          grep -nE 'SectionRenderDispatcher|RenderSection|RenderType|renderSection|draw|Draw|solid|cutout|transluc|Terrain' /tmp/LevelRenderer.bytecode.txt | head -n 320 || true
+          echo '=== SectionRenderDispatcher signatures ==='
+          cat /tmp/SectionRenderDispatcher.sig.txt
+          echo '=== RenderSection signatures ==='
+          cat /tmp/RenderSection.sig.txt
+          echo '=== SectionRenderDispatcher candidate bytecode references ==='
+          grep -nE 'draw|Draw|RenderType|Gpu|Buffer|section|Section' /tmp/SectionRenderDispatcher.bytecode.txt | head -n 320 || true
+          echo '=== RenderSection candidate bytecode references ==='
+          grep -nE 'draw|Draw|RenderType|Gpu|Buffer|compiled|Compiled|section|Section' /tmp/RenderSection.bytecode.txt | head -n 320 || true
+      - name: Upload exact probe text
+        uses: actions/upload-artifact@v4
+        with:
+          name: p3-10-render-seam-probe-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            /tmp/LevelRenderer.sig.txt
+            /tmp/LevelRenderer.bytecode.txt
+            /tmp/SectionRenderDispatcher.sig.txt
+            /tmp/SectionRenderDispatcher.bytecode.txt
+            /tmp/RenderSection.sig.txt
+            /tmp/RenderSection.bytecode.txt
