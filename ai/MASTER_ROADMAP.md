@@ -330,9 +330,13 @@ A-0153 closes the frozen A-0150 dev14 runtime contract on the reference RX 6800 
 
 A-0158 closes the frozen A-0154 full-section production-mesher baseline on `0.3.0-phase3-dev15`: 305 coherent measured samples with zero collector overflow, queue P50/P95/P99/max `25.7 / 50.5 / 80.0 / 3,683.9 us`, full-ticket execution P50/P95/P99/max `1.001 / 2.664 / 4.432 / 14.408 ms`, real merged workload, measured reload/recenter/rebuild/worker pressure, portable GC/scratch evidence, every inherited P3.7 gate green and clean lifetime. No numerical threshold was retrofitted after measurement. Exact promotion head `144875e71069f7377a97c78947883592e5c88913` passed Build `33271895037`; PR #52 merged `[no-release]` as `49385aedff74f2382fcd9a9bb44e59cf559e63c4`.
 
-#### P3.9 — Partial remeshing — ACTIVE / EXPERIMENTAL
+#### P3.9 — Partial remeshing — REJECTED / DEFERRED
 
-A-0159 freezes the first experiment as `0.3.0-phase3-dev16`: a **shadow-only fixed four-Y-slice decomposition** over the existing full-section production control. Exact block-local dirty provenance is required; unavailable/global lifecycle causes fall back to full-section. Selected slices are expanded by the proven one-block Y dependency, shadow output must pass permanent source/reference differential checks and prove unselected slices unchanged, and matched per-generation CPU/work/upload ratios are judged against pre-frozen thresholds. Dev16 changes no production GPU geometry/install path. Partial GPU patching is a later P3.9 slice only if this experiment proves sufficient benefit while keeping fixed metadata <=1 KiB/section and bounded geometry inflation.
+A-0159 froze the experiment as a **shadow-only fixed four-Y-slice decomposition** over the existing full-section production control. After dev16-dev23 diagnostics/corrections, A-0188 closes the strategy at full safe volume: 32/32 completed localized episodes were exact with zero correctness/unselected/determinism failures, one-slice 19, two-slice 13, coalesced 3, CPU P50/P95 24/256 permille, projected upload P50 300 permille, metadata 96 bytes and inflation 0/0. The final projected-upload P95 was **807 permille**, above the pre-frozen `<=800` threshold. A-0159 forbids post-measurement retuning, so the fixed four-slice strategy is formally **REJECTED/DEFERRED**. Partial GPU patching was never implemented and is not a Phase 3 prerequisite.
+
+#### P3.10 — Production opaque/cutout terrain replacement — ACTIVE
+
+Replace the supported vanilla/Fabric opaque/cutout terrain draw path with Obsidian's already-proven full-section asynchronous greedy output. Freeze a new immutable contract before source changes. Preserve the permanent P3.7 reference/differential oracle, exact supported render semantics, conservative passthrough for unsupported/generalized geometry, bounded worker/upload/arena lifetime, generation-safe stale rejection, Vulkan-only vendor-neutral ownership boundaries, and targeted visual/lifecycle/reload/recenter evidence. The production gate must prove Obsidian replaces the corresponding terrain draw path rather than merely rendering a comparison copy.
 
 Phase 3 exits only when the greedy mesher is default for supported terrain, permanent differential correctness passes, the worker system remains bounded/cancellation-safe, hot paths avoid routine allocation and throughput supports large-scale scene testing.
 
@@ -497,6 +501,15 @@ Newer durable decisions override stale roadmap text until synchronized. Always p
 ---
 
 ## 16. Roadmap revision log
+
+### 2026-08-30 — P3.9 terminal decision and production replacement activation
+
+- A-0188 closed dev23 with 32/32 exact safe localized episodes and zero completed-episode correctness failures;
+- the A-0186 safety fallback routed 5 deterministic unselected-truth changes to authoritative full-section fallback;
+- all frozen volume/CPU/complexity requirements passed, but projected-upload P95 was 807 permille against the frozen <=800 threshold;
+- no threshold retuning or additional four-slice rerun is permitted; P3.9 is REJECTED/DEFERRED;
+- production opaque/cutout terrain replacement is now the active Phase 3 target; partial GPU patching is not a prerequisite.
+
 
 ### 2026-08-29 — P3.8 completion and P3.9 activation
 

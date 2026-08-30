@@ -568,3 +568,12 @@ Copy this section and replace placeholders. Do not edit previous entries.
 **Why:** FrameCoordinator arms the benchmark/P3.9 window only after `differentialCorrectnessEvidenceReady()`. That readiness inherits the P3.6 requirement for at least one strict T-junction and one junction-bearing transform proof. The selected scene supplied neither witness.
 **Side effects / lessons:** This is scene-selection/gate-population failure, not a dev22 correction failure. No source change, threshold change or new JAR is justified. Do not begin the closure workload until the two P3.9 arming log lines are visible.
 **Next action:** Rerun the same dev22 JAR in a geometrically richer section, establish P3.6 readiness first, wait for both P3.9 arming lines, then perform the full >=32/16/8/coalesced/reload/recenter closure workload. PASS or formal benefit REJECT/DEFER then moves directly to production opaque/cutout terrain replacement.
+
+
+---
+
+## A-0188 - dev23 final P3.9 runtime decision
+
+**Date:** 2026-08-30
+**Result:** `FINAL DECISION SUCCESS / FIXED FOUR-SLICE P3.9 REJECTED-DEFERRED`. Dev23 routed 5 deterministic unselected-truth changes to mandatory full-section fallback and closed 32/32 exact localized episodes with zero correctness/unselected/determinism failures. Volume passed: one-slice 19, two-slice 13, coalesced 3. CPU P50/P95 24/256 permille and projected upload P50 300 permille passed, but projected upload P95 was **807 permille**, missing the frozen `<=800` A-0159 threshold by 7 permille. Metadata 96 bytes, identities 4, inflation 0/0. No threshold/oracle/slice retuning or rerun is permitted. P3.9 is formally REJECTED/DEFERRED and the next active target is production opaque/cutout terrain replacement using the proven full-section async greedy path. PR #53 closes without merge.
+**Evidence:** `ai/attempts/A-0188-phase3-p3.9-dev23-final-runtime-reject-defer.md`.
