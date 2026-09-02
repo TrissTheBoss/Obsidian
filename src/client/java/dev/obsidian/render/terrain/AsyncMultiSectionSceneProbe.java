@@ -392,7 +392,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 scanCursor--;
                 return;
             }
-            if (baked.solidQuads() > 0 && baked.cutoutQuads() > 0) {
+            if (baked.solidQuads() > 0 || baked.cutoutQuads() > 0) {
                 record.eligibility = Eligibility.ELIGIBLE;
             } else {
                 record.eligibility = Eligibility.SKIPPED;
