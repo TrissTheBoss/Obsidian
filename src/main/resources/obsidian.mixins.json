@@ -4,6 +4,7 @@
   "package": "dev.obsidian.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
+    "ClientChunkCacheMixin",
     "ClientLevelMixin",
     "ChunkSectionsToRenderMixin",
     "CommandEncoderAccessor",
