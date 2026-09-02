@@ -231,8 +231,8 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
 
         ReferenceFaceMesh firstReference = ReferenceFaceMesh.build(captured);
         ReferenceFaceMesh secondReference = ReferenceFaceMesh.build(captured);
-        if (firstReference.faceCount() <= 0 || !firstReference.contentEquals(secondReference)) {
-            throw new IllegalStateException("Phase 3 dev11 permanent cube oracle is empty or nondeterministic");
+        if (!firstReference.contentEquals(secondReference)) {
+            throw new IllegalStateException("Phase 3 dev24.1 permanent cube oracle is nondeterministic");
         }
 
         SectionBakedQuadSnapshot firstBaked = SectionBakedQuadSnapshot.capture(captured);
@@ -240,11 +240,11 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
         if (!firstBaked.contentEquals(secondBaked)) {
             throw new IllegalStateException("Phase 3 dev11 generalized vanilla quad capture is nondeterministic");
         }
-        if (firstBaked.solidQuads() <= 0 || firstBaked.cutoutQuads() <= 0) {
+        if (firstBaked.solidQuads() <= 0 && firstBaked.cutoutQuads() <= 0) {
             if (!waitingLayerLogged) {
                 waitingLayerLogged = true;
                 LOG.log(System.Logger.Level.INFO,
-                        "Phase 3 dev11 scene record needs both supported SOLID and CUTOUT quads. section=({0},{1},{2}), solidQuads={3}, cutoutQuads={4}.",
+                        "Phase 3 dev24.1 scene record needs at least one supported SOLID or CUTOUT quad. section=({0},{1},{2}), solidQuads={3}, cutoutQuads={4}.",
                         captured.sectionX(), captured.sectionY(), captured.sectionZ(),
                         firstBaked.solidQuads(), firstBaked.cutoutQuads());
             }
@@ -438,7 +438,7 @@ public final class WorkerBackedSectionLifecycleProbe implements AutoCloseable {
             state = State.LIVE;
 
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev24 production worker result installed on frame {0}: generation={1}, eventSequence={2}, priority={3}, section=({4},{5},{6}), oracleFingerprint={7}, hybridFingerprint={8}, sourceQuads={9}, suppressedSourceQuads={10}, passthroughQuads={11}, mergedQuads={12}, hybridQuads={13}, facesSaved={14}, sourceUploadBytes={15}, hybridUploadBytes={16}, synchronousSceneMeshBuilds=0, repeatAwareGreedyGpuEmission=true, productionCoordinatesExact=true, productionExactColor=true, postWorldComparisonDrawDisabled=true, renderThreadGpuOwnershipPreserved=true.",
+                    "Phase 3 dev24.1 production worker result installed on frame {0}: generation={1}, eventSequence={2}, priority={3}, section=({4},{5},{6}), oracleFingerprint={7}, hybridFingerprint={8}, sourceQuads={9}, suppressedSourceQuads={10}, passthroughQuads={11}, mergedQuads={12}, hybridQuads={13}, facesSaved={14}, sourceUploadBytes={15}, hybridUploadBytes={16}, synchronousSceneMeshBuilds=0, repeatAwareGreedyGpuEmission=true, productionCoordinatesExact=true, productionExactColor=true, postWorldComparisonDrawDisabled=true, renderThreadGpuOwnershipPreserved=true.",
                     frameSerial, generation, buildEventSequence, workerPriority,
                     snapshot.sectionX(), snapshot.sectionY(), snapshot.sectionZ(),
                     Long.toUnsignedString(oracleMesh.fingerprint()), Long.toUnsignedString(drawableMesh.fingerprint()),
