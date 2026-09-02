@@ -6,38 +6,30 @@ Last updated: 2026-09-02
 
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
-- Production-replacement work branch: `phase3/p3.10-production-terrain-replacement`
+- Active promotion branch: `phase3/p3.10-production-terrain-replacement`
 - Product phase: **Phase 3 — production asynchronous CPU mesher / greedy meshing**.
-- P3.1-P3.4: COMPLETE.
-- P3.5 border/halo correctness: COMPLETE through `0.3.0-phase3-dev12.1`.
-- P3.6 T-junction policy: COMPLETE through `0.3.0-phase3-dev13`.
-- P3.7 differential correctness: COMPLETE through `0.3.0-phase3-dev14`.
-- P3.8 meshing benchmark: COMPLETE through `0.3.0-phase3-dev15`.
-- Synchronized P3.8-complete `main`: `169274b468d2a278d39043938efff19844bec9ba`.
+- P3.1-P3.8: COMPLETE.
+- P3.9 fixed four-Y-slice partial remeshing experiment: **REJECTED / DEFERRED** by A-0188; projected-upload P95 was `807` permille versus frozen `<=800`.
+- P3.10 production opaque/cutout terrain replacement: **PROMOTION READY** after A-0201; exact evidence-head hosted CI + merge remain before Phase 3 can be marked COMPLETE.
 
-## P3.9 partial remeshing — REJECTED / DEFERRED
-
-P3.9 completed as a fixed four-Y-slice shadow experiment and was rejected/deferred by A-0188: projected-upload P95 was `807` permille versus the frozen `<=800` threshold. Do not weaken that threshold, revive the same experiment, merge the P3.9 branch wholesale, or treat partial GPU patching as a prerequisite for production replacement.
-
-## P3.10 production opaque/cutout terrain replacement — ACTIVE
-
-Continuity authority:
+## P3.10 continuity authority
 
 - A-0189 — P3.10 parent contract.
-- A-0190 — exact Minecraft 26.2 terrain seam result.
-- A-0191 — frozen dev24 production replacement canary contract.
+- A-0190 — exact Minecraft 26.2 terrain seam.
+- A-0191 — frozen dev24 replacement canary contract.
 - A-0192 — dev24 hosted-CI/package handoff.
-- A-0193 — dev24 reference runtime FAILED on recenter.
-- A-0194 — frozen dev24.1 recenter/admission correction contract.
+- A-0193 — dev24 reference runtime FAILED on deterministic-empty-reference recenter path.
+- A-0194 — frozen dev24.1 correction.
 - A-0195 — dev24.1 hosted-CI/package handoff.
 - A-0196 — dev24.1 reference runtime FAILED visual + vertical-scene gates.
-- A-0197 — frozen dev24.2 vertical/capture-completeness correction contract.
-- A-0198 — dev24.2 hosted-CI/package runtime handoff.
-- A-0199 — dev24.2 reference runtime PARTIAL SUCCESS: leaves/kelp and same-column vertical tracking fixed; automated accounting/correctness/lifetime clean; F3+T evidence missing.
-- A-0200 — dev24.2 focused F3+T run PARTIAL SUCCESS: automated reload/recovery gate PASS; explicit post-reload human visual verdict pending.
-- PR #55 — remains DRAFT / **DO NOT MERGE** until the final human post-F3+T visual verdict closes.
+- A-0197 — frozen dev24.2 vertical/capture-completeness correction.
+- A-0198 — dev24.2 hosted-CI/package handoff.
+- A-0199 — dev24.2 reference runtime PARTIAL SUCCESS: leaves/kelp + same-column vertical tracking fixed; F3+T evidence missing.
+- A-0200 — focused F3+T automated PASS; human post-reload visual verdict pending.
+- A-0201 — **SUCCESS**: tester supplied explicit post-F3+T visual PASS; frozen P3.10 runtime + visual contract is closed.
+- PR #55 remains the promotion vehicle until exact final evidence-head CI passes and it is merged `[no-release]`.
 
-## Dev24.2 package authority
+## Canonical P3.10 package authority
 
 Source version: `0.3.0-phase3-dev24.2`.
 
@@ -45,9 +37,7 @@ Exact renderer-source/package authority:
 
 `debe41eb3b6fdc7e975e904ae913f1a0f18ebb28`
 
-Later continuity-only commits do not change renderer source or package authority.
-
-Hosted Build run `33648273131` / #723 passed on that exact source head.
+Hosted Build run `33648273131` / #723 passed on that exact renderer source.
 
 Canonical direct runtime JAR:
 
@@ -55,127 +45,84 @@ Canonical direct runtime JAR:
 - size **466,654 bytes**
 - SHA-256 **`7146efd6be8faf5f926eee094a65a149a6187764631abbe4fb8926f2dedbdba4`**
 
-Use the direct versioned JAR, not the Actions ZIP wrapper.
+Later continuity-only commits do not change renderer/package authority.
 
-## Dev24.2 correction and product behavior
+## P3.10 proven production behavior
 
-A-0197 changed only two behaviors plus version/banner metadata:
+Production replacement uses the exact Minecraft 26.2 public-Blaze3D OPAQUE seam proven by A-0190:
 
-1. same-column section-Y transitions now trigger the existing safe scene recenter/invalidation path;
-2. production suppression/revalidation requires a non-null immutable generalized capture with `rejectedBlocks() == 0`.
+- claim exact vanilla SOLID/CUTOUT `SectionDraw` units only when the matching Obsidian record is LIVE, generation/resource-current, P3.7 exact, GPU-installed and non-empty for the requested layer;
+- suppress that exact vanilla unit during `prepareChunkRenders`;
+- encode the matching Obsidian command into the same active OPAQUE `RenderPass` before close;
+- keep native graphics ownership unchanged;
+- keep unsupported/incomplete content on vanilla fallback.
 
-This is deliberately conservative. Dev24.2 does **not** add native Obsidian rendering for leaves, kelp/fluids, block entities, translucent output, unsupported materials/layers, missing models or non-block-atlas geometry. Any section containing rejected capture content stays vanilla rather than suppressing vanilla with an incomplete replacement.
+Dev24.2 adds two narrow safety corrections only:
 
-No mesher algorithm, P3.7 proof, shader, pipeline, same-OPAQUE-pass seam, native Vulkan graphics ownership, lifetime rule, partial remeshing or partial GPU patching changed.
+1. the managed 3x3x1 scene recenters whenever player section Y differs from the current center, even if X/Z stay inside the horizontal window;
+2. production suppression/revalidation additionally requires a non-null immutable generalized capture with `rejectedBlocks() == 0`.
 
-## A-0199 reference runtime — demonstrated blockers closed
+This does **not** add native Obsidian rendering for leaves, kelp/fluids, block entities, translucent geometry, unsupported materials/layers, missing models or non-block-atlas output. Such sections remain vanilla.
 
-The exact dev24.2 JAR ran on the reference Vulkan/AMD environment.
+## Final runtime evidence — PASS
 
-Human targeted visual verdict:
+A-0199 proved the previously demonstrated dev24.1 blockers were closed:
 
-- **kelp: PASS — visible / fine**;
-- **leaves: PASS — visible / fine**.
-
-Same-column vertical section tracking also passed: the scene first reached READY at `(67,4,-19)` and later reached READY at `(67,3,-19)` while retaining center X/Z `(67,-19)`. Final `cameraRecenterEvents=20`, `sceneReadyTransitions=106`, `sceneRebuilds=105`, and `unsafeStaleSceneInstalls=0`.
-
-A-0199 production replacement accounting was exact at scale:
-
+- leaves visible / fine — PASS;
+- kelp visible / fine — PASS;
+- same-column vertical scene tracking moved from center `(67,4,-19)` to `(67,3,-19)` while retaining X/Z `(67,-19)` and returned READY;
 - SOLID suppressions/executions `63,376 / 63,376`;
 - CUTOUT suppressions/executions `30,386 / 30,386`;
+- all production-plan failure counters `0`;
+- P3.7 exact across `974` proof records;
+- worker world reads after capture `0`;
+- synchronous scene mesh builds `0`;
+- unsafe stale installs `0`;
+- worker/staging/arena/resource lifetime clean;
+- process exit `0`.
+
+A-0200 then exercised a real post-startup F3+T cycle:
+
+- Minecraft logged `Reloaded resource packs`;
+- Obsidian observed a second `resource-reload` invalidation;
+- final `resourceReloadEvents=2`;
+- scene rebuilt through bounded workers and returned READY;
+- SOLID suppressions/executions `8,852 / 8,852`;
+- CUTOUT suppressions/executions `1,912 / 1,912`;
 - duplicate/overflow/stale-plan/unclaimed/revalidation failures all `0`;
 - `suppressionExecutionAccountingCoherent=true`;
 - `completeCaptureRequired=true`;
-- production coordinates/color exact;
-- same OPAQUE pass true;
-- native graphics expansion false.
-
-P3.7 closed exact across `974` proof records with missing/duplicate/optimized-without-reference/real mismatches all `0`; worker world reads after capture `0`; synchronous scene mesh builds `0`; unsafe stale installs `0`. Workers/staging/arena/resources drained cleanly and process exit was `0`.
-
-A-0199 remained partial only because final `resourceReloadEvents=1` showed no post-startup F3+T cycle.
-
-## A-0200 focused F3+T runtime — automated gate PASS
-
-The exact same dev24.2 JAR was used for a focused reload test.
-
-The scene reached READY before reload. Minecraft then logged the explicit debug message `Reloaded resource packs` and started a second resource-manager reload. Obsidian observed a new `resource-reload` invalidation at generation `7`, invalidated the active scene, rescanned eligibility, rebuilt through bounded workers, and returned READY afterward.
-
-Final lifecycle telemetry:
-
-- `resourceReloadEvents=2` — startup plus required in-world F3+T reload;
-- `sceneReadyTransitions=29`;
-- `sceneRebuilds=28`;
-- `recordInstalls=261`;
-- `unsafeStaleSceneInstalls=0`;
-- process exit `0`.
-
-Final P3.10 production accounting after the reload:
-
-- `prepareCalls=3,537`;
-- `supportedVanillaCandidates=3,298,206`;
-- `vanillaFallbacks=3,287,442`;
-- SOLID suppressions/executions `8,852 / 8,852`;
-- CUTOUT suppressions/executions `1,912 / 1,912`;
-- `framesWithReplacement=2,466`;
-- duplicate claims `0`;
-- claim overflows `0`;
-- stale-plan failures `0`;
-- execution without claim `0`;
-- execution revalidation failures `0`;
-- `suppressionExecutionAccountingCoherent=true`;
-- `completeCaptureRequired=true`;
-- production coordinates/color exact;
-- post-world comparison disabled;
-- same OPAQUE pass true;
-- `sameOpaquePassExecutions=10,764`;
-- native graphics expansion false;
-- partial remeshing false;
-- partial GPU patch false.
-
-Final correctness after F3+T:
-
-- P3.5 `borderHaloCorrectnessEvidenceReady=true`;
-- P3.6 `tJunctionPolicyEvidenceReady=true`, determinism `261/261`, camera-relative transform failures `0`;
-- P3.7 `differentialCorrectnessEvidenceReady=true`, determinism `261/261`;
-- P3.7 material/direction/geometry `5,302/5,302`;
-- P3.7 UV/color/light `21,208/21,208`;
-- P3.7 missing `0`;
-- P3.7 duplicate `0`;
-- P3.7 optimized-without-reference `0`;
-- P3.7 real mismatches `0`;
-- fixture self-tests `261/261`;
+- P3.7 determinism `261/261`, all mismatch counters `0`;
 - worker world reads after capture `0`;
 - synchronous scene mesh builds `0`;
-- unsafe stale installs `0`.
-
-Final lifetime after F3+T:
-
-- worker submitted/started/completed `261/261/261`;
-- worker failures/rejections/shutdown-join failures `0`;
-- `workersClean=true`;
-- `stagingClean=true`;
-- `arenaClean=true`;
-- `resourcesClean=true`;
-- staging submitted/reclaimed `12,850,392 / 12,850,392` bytes;
-- arena allocations/retired/reclaimed `783/783/783`;
-- no pending upload, arena-retirement or deferred-resource batches;
+- workers/staging/arena/resources clean;
 - process exit `0`.
 
-A-0200 therefore closes the **automated** F3+T invalidation/fallback/rebuild/replacement-recovery gate. No renderer source change is justified.
+A-0201 closes the only remaining gate: the tester explicitly reported **visual PASS** after F3+T recovery. No new holes/missing terrain or faces, unexpected duplicates/z-fighting beyond the previously accepted thin/coplanar 2D behavior, texture/tint/light/AO regressions, cracks/pinholes, cutout/depth artifacts or stale popping were reported.
 
-## Remaining promotion gate — human post-F3+T visual verdict only
+## Current handoff point — P3.10 promotion
 
-The log cannot prove visual correctness. The only remaining frozen P3.10 runtime gate is an explicit tester verdict that terrain looked correct after the F3+T reload and recovery.
+Do **not** change renderer source. P3.10 runtime/visual evidence is complete.
 
-A PASS means no new blocker such as holes/missing terrain or faces, unexpected duplicates/z-fighting beyond the already-known thin/coplanar 2D behavior, wrong textures, tint/light/AO regression, cracks/pinholes, cutout/depth artifact, or stale popping attributable to reload/recovery.
+Required promotion sequence:
 
-Do **not** infer this verdict from automated counters.
+1. run hosted CI on the exact final evidence/continuity head containing A-0201 and this state synchronization;
+2. if CI passes, update PR #55 to promotion-ready and merge `[no-release]` into `main`;
+3. verify synchronized `main` contains the P3.10 renderer and continuity evidence;
+4. update the roadmap status so P3.9 is REJECTED/DEFERRED, P3.10 and Phase 3 are COMPLETE, and Phase 4 becomes ACTIVE;
+5. create a new Phase 4 feature branch from synchronized `main`;
+6. freeze the first Phase 4 GPU-driven-visibility-at-scale contract before any source change.
 
-## Current handoff point
+## Next phase direction
 
-Ask only for the tester's post-F3+T visual verdict from the A-0200 focused run.
+The roadmap's next product phase is **Phase 4 — GPU-driven visibility at real-world scale**.
 
-- If visual PASS: create a new immutable final runtime-closure attempt, synchronize continuity, then run hosted CI on the exact evidence/continuity head and prepare P3.10 promotion. Do not change renderer source.
-- If visual FAIL: keep PR #55 draft, record the defect, and freeze a narrow correction contract before changing renderer source.
+Existing durable constraints already apply:
 
-PR #55 remains DRAFT / **DO NOT MERGE** until the human visual verdict is explicit.
+- D-0004: large render distance is a core workload; avoid frame-critical CPU work linear in every loaded/visible section when GPU/hierarchy can replace it.
+- D-0008: long-term terrain direction is async CPU meshing + large GPU arenas + GPU visibility/culling + draw compaction + indirect rendering.
+- D-0025: native Vulkan interop remains narrow and justified only for compute/storage capability absent from public Blaze3D.
+- D-0026: compute-written indirect data requires an explicit compute-write -> indirect-read synchronization edge.
+- D-0027: baseline graphics stays public fixed-count indexed indirect with zeroed tail until measured evidence justifies native indirect-count graphics consumption.
+
+Do not widen native graphics ownership, introduce Hi-Z, change the proven production mesher, revive P3.9 partial remeshing, or add optional LOD in the first Phase 4 slice without a separately frozen evidence-driven contract.
