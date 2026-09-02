@@ -27,88 +27,95 @@ Continuity authority:
 - A-0190 — exact Minecraft 26.2 terrain seam result.
 - A-0191 — frozen dev24 production replacement canary contract.
 - A-0192 — dev24 hosted-CI/package handoff.
-- A-0193 — dev24 reference runtime **FAILED** on real recenter.
+- A-0193 — dev24 reference runtime FAILED on recenter.
 - A-0194 — frozen dev24.1 recenter/admission correction contract.
-- A-0195 — dev24.1 hosted-CI/package runtime handoff.
+- A-0195 — dev24.1 hosted-CI/package handoff.
+- A-0196 — dev24.1 reference runtime FAILED visual + vertical-scene gates.
+- A-0197 — frozen dev24.2 vertical/capture-completeness correction contract.
+- A-0198 — dev24.2 hosted-CI/package runtime handoff.
 - PR #55 — remains DRAFT / **DO NOT MERGE** until runtime + visual gates close.
 
-### A-0193 dev24 runtime failure
+### A-0196 dev24.1 runtime failure
 
-The exact dev24 JAR reached READY and executed real production replacement, but after the tester moved out of the starting managed window a real recenter changed the scene center from section Y=4 to Y=3. Section `(62,3,-16)` captured `663` generalized vanilla quads and then failed with:
+Dev24.1 fixed the prior deterministic-empty-reference crash and single-layer admission issue, and its automated replacement/proof accounting remained coherent. The reference runtime nevertheless produced two blocking visual/runtime defects:
 
-`Phase 3 dev11 permanent cube oracle is empty or nondeterministic`
+1. leaves and kelp became invisible near claimed production sections;
+2. crossing from one vertical section to another while remaining inside the same X/Z chunk column did not switch the managed 3x3x1 scene to the player's new section Y.
 
-Final replacement accounting before shutdown was otherwise coherent:
+The tester also observed z-fighting on thin/coplanar 2D geometry such as grass/leaf litter and considered it expected for this canary. A-0197 does not change that behavior.
 
-- SOLID suppressions/executions `13,529 / 13,529`;
-- CUTOUT suppressions/executions `13,529 / 13,529`;
-- duplicate/overflow/stale/unclaimed/revalidation failures all `0`;
-- same-OPAQUE-pass execution true;
-- P3.7 missing/duplicate/optimized-without-reference/real mismatches all `0`;
-- worker world reads after capture `0`;
-- synchronous scene mesh builds `0`;
-- unsafe stale scene installs `0`.
+Root causes are now explicit:
 
-Promotion of dev24 is blocked.
+- `SectionBakedQuadSnapshot.capture(...)` intentionally rejects every `LeavesBlock` and every block with a non-empty fluid state before tessellation. Kelp is covered by the fluid-state exclusion. Those exclusions were safe for comparison/proof use but are not sufficient to authorize suppression of a whole vanilla section/layer.
+- `AsyncMultiSectionSceneProbe.tryRecenterIfPlayerLeftWindow(...)` previously used only X/Z distance for its early-return, so a same-column Y transition could leave the 3x3x1 scene at a stale vertical section.
 
-The same review found an implementation mismatch with A-0191: scene eligibility and worker capture required each section to contain **both** SOLID and CUTOUT quads. Frozen production claims are per-layer, so SOLID-only and CUTOUT-only exact records must be legal while the absent layer remains vanilla.
+Dev24.1 is not promotable.
 
-Production mode intentionally has **no comparison overlay**. Correctly replaced ordinary full blocks should look like vanilla because the comparison-only face offset and dim tint were removed in dev24.
+### Dev24.2 correction
 
-### Dev24.1 correction
-
-Source version: `0.3.0-phase3-dev24.1`.
+Source version: `0.3.0-phase3-dev24.2`.
 
 Exact renderer-source/package authority:
 
-`61f90ddc48d654edee2cbd87b7a9d1a7f461e54e`
+`debe41eb3b6fdc7e975e904ae913f1a0f18ebb28`
 
-Later A-0195 / `CURRENT_STATE` continuity-only commits do not change the renderer source or canonical runtime package.
+Later A-0198 / `CURRENT_STATE` continuity-only commits do not change the renderer source or canonical runtime package.
 
-A-0194 permits only these behavioral corrections:
+A-0197 freezes only these behavioral corrections:
 
-1. build the permanent `ReferenceFaceMesh` twice and still require deterministic equality, but do not hard-fail merely because the deterministic reference has zero canonical full-cube faces;
-2. scene eligibility accepts `solidQuads > 0 || cutoutQuads > 0`;
-3. worker capture waits/skips only when `solidQuads <= 0 && cutoutQuads <= 0`;
-4. production claim remains unchanged and strictly per-layer, requiring non-empty output for the claimed layer.
+1. the existing scene recenter path now runs whenever `playerSection.y() != centerSectionY`, even if X/Z remain within the current horizontal 3x3 window;
+2. production suppression/revalidation requires a non-null immutable baked capture with `rejectedBlocks() == 0`;
+3. existing per-layer non-empty output, LIVE/generation/resource-current, P3.7-exact and same-OPAQUE-pass requirements remain mandatory.
 
-No P3.7 exactness rule, draw seam, pipeline, 3x3x1 scene footprint, native graphics ownership, lifetime rule, partial-remeshing behavior or GPU patching changed.
+The production completeness rule is intentionally conservative. It does **not** add native Obsidian support for leaves, kelp/fluids, block entities, translucent output, unsupported materials, missing models or non-block-atlas geometry. If any such block was rejected by capture, that section/layer remains vanilla rather than suppressing vanilla with an incomplete replacement.
 
-Static compare from A-0194 to the exact source head touches only four files: two narrow behavioral conditions, the version line, and runtime banner.
+No mesher algorithm, P3.7 proof, shader, pipeline, 3x3x1 footprint, completion-gated lifetime rule, native Vulkan graphics ownership, partial remeshing or partial GPU patching changed.
 
-### Dev24.1 hosted CI/package
+Static compare from frozen A-0197 (`2bac0e8be0f3974ca68f1e5fecc81901b4944f3b`) to the exact source head changes exactly four files and 15 lines total: vertical recenter condition, production completeness/revalidation gates, version, and bootstrap banner.
 
-GitHub Actions Build run `33646088370` / run #709 passed on exact source head `61f90ddc48d654edee2cbd87b7a9d1a7f461e54e`.
+### Dev24.2 hosted CI/package
 
-Artifact `9852848319` contains the canonical direct runtime JAR:
+GitHub Actions Build run `33648273131` / run #723 passed on exact source head `debe41eb3b6fdc7e975e904ae913f1a0f18ebb28`.
 
-- `Obsidian-0.3.0-phase3-dev24.1.jar`
-- size **466,295 bytes**
-- SHA-256 **`c6c624da8aed061030db1c0791955ae2efa456eb970de9115da516b207920af9`**
+Artifact `9853678809` contains the canonical direct runtime JAR:
+
+- `Obsidian-0.3.0-phase3-dev24.2.jar`
+- size **466,654 bytes**
+- SHA-256 **`7146efd6be8faf5f926eee094a65a149a6187764631abbe4fb8926f2dedbdba4`**
+
+Sources JAR:
+
+- `Obsidian-0.3.0-phase3-dev24.2-sources.jar`
+- size `240,261` bytes
+- SHA-256 `2aa38383e5b3bddb150cedc942d329247accd06e8999664aab71a7fe7c89484a`.
 
 Use the direct JAR, not the Actions ZIP wrapper.
 
-## Current handoff point — dev24.1 reference retest required
+## Current handoff point — dev24.2 reference retest required
 
-First reproduce the exact path that failed dev24:
+First prove the two demonstrated dev24.1 failures are closed:
 
-1. load a normal world and wait for P3.10 replacement activity;
-2. move horizontally far enough to leave the managed 3x3 window and trigger a real scene recenter, preferably across terrain/elevation so the center section Y changes;
-3. verify no permanent-cube-oracle hard failure occurs;
-4. allow the recentered scene to return READY and keep moving/looking.
+1. load a normal world and wait for P3.10 activity;
+2. inspect leaves in/near managed terrain — they must remain visible;
+3. inspect kelp in/near managed terrain — it must remain visible;
+4. while staying in the same X/Z chunk column, cross upward through a 16-block section-Y boundary and verify the logged scene center Y follows the player and returns READY;
+5. cross downward through a section-Y boundary and verify the same behavior if practical.
 
-Then complete the inherited canary:
+Then verify:
 
-5. ordinary block break/place -> rebuild -> replacement recovery;
-6. `F3+T` -> vanilla fallback during invalidation -> replacement recovery;
-7. another real recenter -> replacement recovery;
-8. normal exit.
+6. horizontal scene recenter still works;
+7. clean supported sections still produce real SOLID/CUTOUT replacement;
+8. sections with rejected/unsupported capture content visibly stay vanilla with no holes;
+9. ordinary block edit and `F3+T` fallback/recovery still work;
+10. normal exit.
 
 Automated gates must retain:
 
-- SOLID suppressions/executions > 0 and equal;
-- CUTOUT suppressions/executions > 0 and equal;
+- SOLID suppressions/executions > 0 and equal where clean supported sections exist;
+- CUTOUT suppressions/executions > 0 and equal where clean supported sections exist;
+- vanilla fallback > 0 is expected, especially in incomplete sections;
 - duplicate/overflow/stale-plan/unclaimed/revalidation failures `0`;
+- complete-capture-required flag true in the dev24.2 final production log;
 - production coordinates/color exact;
 - same OPAQUE pass true;
 - native graphics expansion false;
@@ -119,8 +126,8 @@ Automated gates must retain:
 - clean worker/staging/arena/deferred-resource lifetime;
 - process exit `0`.
 
-Human visual PASS remains mandatory. Report actual holes, missing terrain/faces, duplicates/z-fighting, UV/tint/light/AO regressions, cracks/pinholes, cutout-alpha problems, depth artifacts or stale popping. Do not use presence/absence of an overlay as the oracle: dev24+ production replacement is intentionally visually identical to vanilla when correct.
+Human visual PASS remains mandatory. Leaves/kelp visibility in dev24.2 is expected to come from conservative vanilla fallback, not new Obsidian leaf/fluid support. Continue reporting actual holes, missing terrain/faces, unexpected duplicate/z-fighting, UV/tint/light/AO regressions, cracks/pinholes, cutout-alpha problems, depth artifacts or stale popping.
 
 ## Next action after runtime
 
-Return the complete relevant dev24.1 runtime log plus the visual verdict. Record the result in a new immutable attempt. If every frozen gate passes, synchronize continuity, validate the exact evidence head in hosted CI, and only then prepare P3.10 promotion. If any gate fails, keep PR #55 draft and correct only the demonstrated defect without weakening P3.7 or fallback safety.
+Return the complete relevant dev24.2 runtime log plus the visual verdict. Record the result in a new immutable attempt. If every frozen gate passes, synchronize continuity, validate the exact evidence head in hosted CI, and only then prepare P3.10 promotion. If any gate fails, keep PR #55 draft and correct only the demonstrated defect without weakening P3.7 or fallback safety.
