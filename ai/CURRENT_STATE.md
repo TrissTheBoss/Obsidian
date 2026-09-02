@@ -6,123 +6,99 @@ Last updated: 2026-09-02
 
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
-- Active promotion branch: `phase3/p3.10-production-terrain-replacement`
-- Product phase: **Phase 3 — production asynchronous CPU mesher / greedy meshing**.
+- Synchronized Phase 3 merge: `01547b55f68690a5d0aac8405fc0fe91cdf440f9`
+- Active branch: `phase4/p4.1-persistent-scene-visibility`
+- Active draft PR: #57 `Phase 4 P4.1: persistent large-scene GPU visibility`
+- Product phase: **Phase 4 — GPU-driven visibility at real-world scale**.
+
+## Phase 3 status — COMPLETE
+
 - P3.1-P3.8: COMPLETE.
-- P3.9 fixed four-Y-slice partial remeshing experiment: **REJECTED / DEFERRED** by A-0188; projected-upload P95 was `807` permille versus frozen `<=800`.
-- P3.10 production opaque/cutout terrain replacement: **PROMOTION READY** after A-0201; exact evidence-head hosted CI + merge remain before Phase 3 can be marked COMPLETE.
+- P3.9 fixed four-Y-slice partial remeshing: **REJECTED / DEFERRED** by A-0188 (`807` permille projected-upload P95 vs frozen `<=800`). Do not retune or revive the same experiment as baseline.
+- P3.10 production opaque/cutout replacement: **COMPLETE**.
 
-## P3.10 continuity authority
+P3.10 final continuity:
 
-- A-0189 — P3.10 parent contract.
-- A-0190 — exact Minecraft 26.2 terrain seam.
-- A-0191 — frozen dev24 replacement canary contract.
-- A-0192 — dev24 hosted-CI/package handoff.
-- A-0193 — dev24 reference runtime FAILED on deterministic-empty-reference recenter path.
-- A-0194 — frozen dev24.1 correction.
-- A-0195 — dev24.1 hosted-CI/package handoff.
-- A-0196 — dev24.1 reference runtime FAILED visual + vertical-scene gates.
-- A-0197 — frozen dev24.2 vertical/capture-completeness correction.
-- A-0198 — dev24.2 hosted-CI/package handoff.
-- A-0199 — dev24.2 reference runtime PARTIAL SUCCESS: leaves/kelp + same-column vertical tracking fixed; F3+T evidence missing.
-- A-0200 — focused F3+T automated PASS; human post-reload visual verdict pending.
-- A-0201 — **SUCCESS**: tester supplied explicit post-F3+T visual PASS; frozen P3.10 runtime + visual contract is closed.
-- PR #55 remains the promotion vehicle until exact final evidence-head CI passes and it is merged `[no-release]`.
+- A-0199 — dev24.2 reference runtime closed leaves/kelp visibility and same-column vertical-scene tracking; production/P3.7/lifetime accounting clean; F3+T still pending.
+- A-0200 — exact same dev24.2 JAR passed a real post-startup F3+T automated reload/rebuild/replacement cycle with `resourceReloadEvents=2` and clean accounting/lifetime.
+- A-0201 — explicit human post-F3+T **visual PASS**; final frozen runtime + visual contract closed.
+- final evidence head `f29c0adceb99b572f9d4066342ffdc034ec1e81e` passed hosted Build #736.
+- connector draft-to-ready mutation for PR #55 failed internally on an unsupported GitHub GraphQL field; no repository/source gate was weakened. PR #55 was closed, replacement non-draft PR #56 used the exact unchanged tested head, promotion Build #739 passed, and PR #56 merged `[no-release]`.
+- merge commit `01547b55f68690a5d0aac8405fc0fe91cdf440f9` passed post-merge Build #741 / run `33650990847`; versioned release was intentionally skipped.
+- A-0202 records the promotion/tooling transition and Phase 4 branch activation.
 
-## Canonical P3.10 package authority
+### Canonical P3.10 runtime package
 
-Source version: `0.3.0-phase3-dev24.2`.
-
-Exact renderer-source/package authority:
+Renderer/package source authority remains:
 
 `debe41eb3b6fdc7e975e904ae913f1a0f18ebb28`
-
-Hosted Build run `33648273131` / #723 passed on that exact renderer source.
 
 Canonical direct runtime JAR:
 
 - `Obsidian-0.3.0-phase3-dev24.2.jar`
-- size **466,654 bytes**
-- SHA-256 **`7146efd6be8faf5f926eee094a65a149a6187764631abbe4fb8926f2dedbdba4`**
+- size `466,654` bytes
+- SHA-256 `7146efd6be8faf5f926eee094a65a149a6187764631abbe4fb8926f2dedbdba4`
 
-Later continuity-only commits do not change renderer/package authority.
+Do not treat later continuity/Phase 4 commits as the source authority for that package.
 
-## P3.10 proven production behavior
+## Phase 4 P4.1 — ACTIVE / CONTRACT FROZEN
 
-Production replacement uses the exact Minecraft 26.2 public-Blaze3D OPAQUE seam proven by A-0190:
+Immutable contract:
 
-- claim exact vanilla SOLID/CUTOUT `SectionDraw` units only when the matching Obsidian record is LIVE, generation/resource-current, P3.7 exact, GPU-installed and non-empty for the requested layer;
-- suppress that exact vanilla unit during `prepareChunkRenders`;
-- encode the matching Obsidian command into the same active OPAQUE `RenderPass` before close;
-- keep native graphics ownership unchanged;
-- keep unsupported/incomplete content on vanilla fallback.
+`ai/attempts/A-0203-phase4-p4.1-persistent-scene-gpu-visibility-contract.md`
 
-Dev24.2 adds two narrow safety corrections only:
+P4.1 is a correctness-first **shadow large-scene visibility** milestone. It deliberately does not change P3.10 production draw ownership yet.
 
-1. the managed 3x3x1 scene recenters whenever player section Y differs from the current center, even if X/Z stay inside the horizontal window;
-2. production suppression/revalidation additionally requires a non-null immutable generalized capture with `rejectedBlocks() == 0`.
+Purpose:
 
-This does **not** add native Obsidian rendering for leaves, kelp/fluids, block entities, translucent geometry, unsupported materials/layers, missing models or non-block-atlas output. Such sections remain vanilla.
+1. maintain a bounded renderer-owned persistent section metadata database at real render-distance scale using incremental lifecycle events rather than per-camera-frame reconstruction;
+2. classify real 16x16x16 section AABBs against the authoritative Minecraft world camera/frustum on GPU;
+3. compact visible identities/templates and retain a GPU visible count using the proven Phase 1 native-compute/public-graphics ownership model;
+4. compare sampled GPU results against an independent conservative CPU oracle;
+5. prove scale/correctness/lifetime before a later Phase 4 slice connects GPU-visible production records to the P3.10 same-OPAQUE-pass draw seam.
 
-## Final runtime evidence — PASS
+Inherited constraints:
 
-A-0199 proved the previously demonstrated dev24.1 blockers were closed:
+- D-0004: camera-only frames must not Java-walk/rebuild all loaded sections.
+- D-0008: long-term scene path is async CPU mesh + GPU scene + visibility/compaction + indirect rendering.
+- D-0025: native Vulkan interop remains narrow; no separate device/graphics takeover.
+- D-0026: producer/consumer synchronization is explicit Synchronization2.
+- D-0027: public fixed-count indexed indirect + zero unused tail remains the graphics baseline; no native indirect-count graphics expansion without later measured justification.
+- P3.10 replacement/fallback semantics, P3.7 oracle, zero worker live-world reads, zero synchronous scene builds and completion-gated lifetime remain mandatory.
 
-- leaves visible / fine — PASS;
-- kelp visible / fine — PASS;
-- same-column vertical scene tracking moved from center `(67,4,-19)` to `(67,3,-19)` while retaining X/Z `(67,-19)` and returned READY;
-- SOLID suppressions/executions `63,376 / 63,376`;
-- CUTOUT suppressions/executions `30,386 / 30,386`;
-- all production-plan failure counters `0`;
-- P3.7 exact across `974` proof records;
-- worker world reads after capture `0`;
-- synchronous scene mesh builds `0`;
-- unsafe stale installs `0`;
-- worker/staging/arena/resource lifetime clean;
-- process exit `0`.
+P4.1 explicit non-goals: production GPU-driven terrain draw ownership, native graphics expansion, indirect-count consumption, Hi-Z, temporal occlusion, async-compute queue ownership, mesh shaders, LOD, translucency/fluids, entities/block entities/particles, mesher changes and P3.9 partial remeshing.
 
-A-0200 then exercised a real post-startup F3+T cycle:
+## Proven Phase 1 visibility foundation being reused
 
-- Minecraft logged `Reloaded resource packs`;
-- Obsidian observed a second `resource-reload` invalidation;
-- final `resourceReloadEvents=2`;
-- scene rebuilt through bounded workers and returned READY;
-- SOLID suppressions/executions `8,852 / 8,852`;
-- CUTOUT suppressions/executions `1,912 / 1,912`;
-- duplicate/overflow/stale-plan/unclaimed/revalidation failures all `0`;
-- `suppressionExecutionAccountingCoherent=true`;
-- `completeCaptureRequired=true`;
-- P3.7 determinism `261/261`, all mismatch counters `0`;
-- worker world reads after capture `0`;
-- synchronous scene mesh builds `0`;
-- workers/staging/arena/resources clean;
-- process exit `0`.
+A-0048/A-0049/A-0050/A-0052 proved the small-scale architecture on the RX 6800 XT:
 
-A-0201 closes the only remaining gate: the tester explicitly reported **visual PASS** after F3+T recovery. No new holes/missing terrain or faces, unexpected duplicates/z-fighting beyond the previously accepted thin/coplanar 2D behavior, texture/tint/light/AO regressions, cracks/pinholes, cutout/depth artifacts or stale popping were reported.
+`GPU scene records -> compute visibility -> atomic front compaction -> GPU visible count -> zero unused indirect tail -> public Blaze3D fixed-count indexed-indirect -> deterministic readback`
 
-## Current handoff point — P3.10 promotion
+The existing `VulkanVisibilityCompactor` is deliberately fixed to four validation candidates and one workgroup. P4.1 must generalize its ownership/synchronization model rather than simply increasing constants. In particular, the dev9 workgroup-local reset/barrier cannot serve as a global N-candidate reset mechanism.
 
-Do **not** change renderer source. P3.10 runtime/visual evidence is complete.
+## Current exact API-inspection step
 
-Required promotion sequence:
+A-0203 requires exact Minecraft 26.2 grounding before renderer-source implementation.
 
-1. run hosted CI on the exact final evidence/continuity head containing A-0201 and this state synchronization;
-2. if CI passes, update PR #55 to promotion-ready and merge `[no-release]` into `main`;
-3. verify synchronized `main` contains the P3.10 renderer and continuity evidence;
-4. update the roadmap status so P3.9 is REJECTED/DEFERRED, P3.10 and Phase 3 are COMPLETE, and Phase 4 becomes ACTIVE;
-5. create a new Phase 4 feature branch from synchronized `main`;
-6. freeze the first Phase 4 GPU-driven-visibility-at-scale contract before any source change.
+Already-known exact evidence from prior attempts:
 
-## Next phase direction
+- A-0054: `ClientLevel.getChunkSource()`, non-loading `ClientChunkCache.getChunk(..., ChunkStatus.FULL, false)`, `ChunkAccess.getSections()`, `LevelHeightAccessor.getMinSectionY/getMaxSectionY/...` and exact section access.
+- A-0060: authoritative world `CameraRenderState` exposes `pos`, `projectionMatrix`, `viewRotationMatrix`; `GameRenderer.gameRenderState().levelRenderState.cameraRenderState` supplies the live world camera state.
 
-The roadmap's next product phase is **Phase 4 — GPU-driven visibility at real-world scale**.
+Temporary workflow `Phase 4 P4.1 API Inspect` was added only to close remaining exact seams: active view distance, loaded chunk/section enumeration suitable for incremental population, Frustum API/plane behavior and relevant LevelRenderer/GameRenderer bytecode.
 
-Existing durable constraints already apply:
+Current inspection workflow:
 
-- D-0004: large render distance is a core workload; avoid frame-critical CPU work linear in every loaded/visible section when GPU/hierarchy can replace it.
-- D-0008: long-term terrain direction is async CPU meshing + large GPU arenas + GPU visibility/culling + draw compaction + indirect rendering.
-- D-0025: native Vulkan interop remains narrow and justified only for compute/storage capability absent from public Blaze3D.
-- D-0026: compute-written indirect data requires an explicit compute-write -> indirect-read synchronization edge.
-- D-0027: baseline graphics stays public fixed-count indexed indirect with zeroed tail until measured evidence justifies native indirect-count graphics consumption.
+- branch head containing temporary workflow: `5e3b080967b677b02de2adf69b96a4a5c1bba25f`;
+- run `33651565582` / #1 — in progress at the time of this state update.
 
-Do not widen native graphics ownership, introduce Hi-Z, change the proven production mesher, revive P3.9 partial remeshing, or add optional LOD in the first Phase 4 slice without a separately frozen evidence-driven contract.
+The temporary workflow must be removed after evidence is recorded and before any runtime package handoff.
+
+## Immediate handoff
+
+1. finish run `33651565582` and inspect its artifact;
+2. record the exact Minecraft 26.2 large-scene/frustum seam in a new immutable attempt;
+3. remove the temporary inspection workflow;
+4. only then implement P4.1 persistent metadata + scalable GPU shadow visibility under A-0203;
+5. run exact hosted CI and package a dedicated Phase 4 dev build only after the source implementation is statically reviewed against the frozen contract;
+6. keep PR #57 DRAFT / DO NOT MERGE until real render-distance-scale runtime correctness, lifecycle, performance-baseline and human visual gates close.
