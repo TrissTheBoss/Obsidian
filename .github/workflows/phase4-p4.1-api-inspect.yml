@@ -1,0 +1,73 @@
+name: Phase 4 P4.1 API Inspect
+
+on:
+  push:
+    branches: [phase4/p4.1-persistent-scene-visibility]
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle 9.5.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+
+      - name: Resolve exact Minecraft 26.2 artifacts
+        shell: bash
+        run: gradle classes --stacktrace
+
+      - name: Inspect large-scene and frustum APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t JARS < <(find "$HOME/.gradle/caches/fabric-loom" -type f -name '*.jar' | grep '/26.2/' | sort)
+          if [ "${#JARS[@]}" -eq 0 ]; then
+            echo 'No Loom Minecraft 26.2 jars found' >&2
+            find "$HOME/.gradle/caches/fabric-loom" -type f -name '*.jar' | sort | tail -100 >&2
+            exit 1
+          fi
+          CP=$(IFS=:; echo "${JARS[*]}")
+          {
+            echo '=== RESOLVED JARS ==='
+            printf '%s\n' "${JARS[@]}"
+            echo
+            for CLASS in \
+              net.minecraft.client.Minecraft \
+              net.minecraft.client.Options \
+              net.minecraft.client.multiplayer.ClientChunkCache \
+              net.minecraft.client.multiplayer.ClientLevel \
+              net.minecraft.world.level.LevelHeightAccessor \
+              net.minecraft.world.level.chunk.LevelChunk \
+              net.minecraft.world.level.chunk.LevelChunkSection \
+              net.minecraft.client.renderer.culling.Frustum \
+              net.minecraft.client.renderer.state.level.CameraRenderState \
+              net.minecraft.client.renderer.LevelRenderer \
+              net.minecraft.client.renderer.GameRenderer; do
+              echo
+              echo "=== JAVAP PUBLIC $CLASS ==="
+              javap -classpath "$CP" -public "$CLASS" || true
+              echo
+              echo "=== JAVAP BYTECODE $CLASS ==="
+              javap -classpath "$CP" -c -p "$CLASS" || true
+            done
+          } > phase4-p4.1-api-inspect.txt
+
+      - name: Upload inspection artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-p4.1-api-inspect-${{ github.sha }}
+          path: phase4-p4.1-api-inspect.txt
+          if-no-files-found: error
