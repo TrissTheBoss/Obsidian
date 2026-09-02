@@ -63,6 +63,8 @@ Exact renderer-source/package authority:
 
 `61f90ddc48d654edee2cbd87b7a9d1a7f461e54e`
 
+Later A-0195 / `CURRENT_STATE` continuity-only commits do not change the renderer source or canonical runtime package.
+
 A-0194 permits only these behavioral corrections:
 
 1. build the permanent `ReferenceFaceMesh` twice and still require deterministic equality, but do not hard-fail merely because the deterministic reference has zero canonical full-cube faces;
