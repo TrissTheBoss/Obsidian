@@ -304,7 +304,8 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null) return false;
         SectionPos playerSection = SectionPos.of(minecraft.player.blockPosition());
-        if (Math.abs(playerSection.x() - centerSectionX) <= SectionLifecycleEvents.SCENE_SECTION_RADIUS
+        if (playerSection.y() == centerSectionY
+                && Math.abs(playerSection.x() - centerSectionX) <= SectionLifecycleEvents.SCENE_SECTION_RADIUS
                 && Math.abs(playerSection.z() - centerSectionZ) <= SectionLifecycleEvents.SCENE_SECTION_RADIUS) {
             return false;
         }
@@ -392,7 +393,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
                 scanCursor--;
                 return;
             }
-            if (baked.solidQuads() > 0 && baked.cutoutQuads() > 0) {
+            if (baked.solidQuads() > 0 || baked.cutoutQuads() > 0) {
                 record.eligibility = Eligibility.ELIGIBLE;
             } else {
                 record.eligibility = Eligibility.SKIPPED;
@@ -900,6 +901,23 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
 
     private String centerString() {
         return "(" + centerSectionX + "," + centerSectionY + "," + centerSectionZ + ")";
+    }
+
+    public WorkerBackedSectionLifecycleProbe productionReplacementProbe(int x, int y, int z) {
+        RenderSystem.assertOnRenderThread();
+        if (closed || hardFailure || state != State.LIVE) return null;
+        for (SceneRecord record : records) {
+            if (record.sectionX != x || record.sectionY != y || record.sectionZ != z
+                    || record.eligibility != Eligibility.ELIGIBLE || record.probe == null
+                    || !record.installObserved || record.probe.state() != WorkerBackedSectionLifecycleProbe.State.LIVE
+                    || record.probe.generation() != sceneGeneration
+                    || record.probe.differentialCorrectnessProof() == null
+                    || !record.probe.differentialCorrectnessProof().exact()) {
+                continue;
+            }
+            return record.probe;
+        }
+        return null;
     }
 
     public State state() { return state; }

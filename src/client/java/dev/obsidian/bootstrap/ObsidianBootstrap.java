@@ -6,6 +6,8 @@ import dev.obsidian.render.GpuCapabilities;
 import dev.obsidian.render.MojangVulkanBridge;
 import dev.obsidian.render.RendererBridge;
 import dev.obsidian.render.frame.FrameCoordinator;
+import com.mojang.blaze3d.systems.RenderPass;
+import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.renderer.GameRenderer;
 
@@ -73,7 +75,7 @@ public final class ObsidianBootstrap {
             LOG.log(System.Logger.Level.DEBUG, "Backend description: {0}", caps.backendDescription());
         }
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 3 dev15 P3.8 meshing benchmark instrumentation armed. The fully validated P3.7 differential oracle, P3.6 T-junction policy, P3.5 border/halo path and dev11 repeat-aware greedy GPU emission remain unchanged. Dev15 adds only a fixed-capacity primitive production-worker benchmark window over the existing full-section path, with coherent queue/execution percentiles, workload/output identity, scratch high-water evidence, worker pressure and JVM GC deltas. It does not change greedy eligibility, source suppression, vertex positions, shaders, pipelines, atlas/lightmap semantics, queue policy, worker count, rebuild granularity or native graphics scope; meshingBenchmarkInstrumentation=true, benchmarkCollectorBounded=true, benchmarkGeometryChanged=false, benchmarkShaderChanged=false, benchmarkPipelineChanged=false, workerWorldReadsAfterCapture=0.");
+                "Obsidian Phase 3 dev24.2 P3.10 production opaque/cutout replacement canary armed. Dev24.2 keeps the exact Minecraft 26.2 same-OPAQUE-RenderPass replacement seam, per-layer LIVE/P3.7-exact claim rules, deterministic-empty-reference allowance and single-layer record admission from dev24.1. The 3x3x1 scene now recenters whenever the player crosses a vertical section boundary even if X/Z remain inside the horizontal window. Production suppression additionally requires a complete generalized capture with zero rejected blocks; sections containing leaves, fluid-bearing blocks such as kelp, block entities, unsupported materials, translucent output, missing models or non-block-atlas output remain vanilla rather than being replaced by an incomplete mesh. This does not add leaf/fluid rendering support or change P3.7, production positions/color/light/material/UV truth, bounded workers/staging/arena lifetime, native graphics ownership, partial remeshing or GPU patching; workerWorldReadsAfterCapture=0.");
     }
 
     public static void onFrameStart() {
@@ -89,6 +91,23 @@ public final class ObsidianBootstrap {
     public static void onFrameEnd() {
         FrameCoordinator coordinator = frameCoordinator;
         if (coordinator != null) coordinator.endFrame();
+    }
+
+    public static void beginProductionTerrainPreparation() {
+        FrameCoordinator coordinator = frameCoordinator;
+        if (coordinator != null) coordinator.beginProductionTerrainPreparation();
+    }
+
+    public static boolean tryClaimProductionTerrainReplacement(
+            int sectionX, int sectionY, int sectionZ, ChunkSectionLayer layer) {
+        FrameCoordinator coordinator = frameCoordinator;
+        return coordinator != null
+                && coordinator.tryClaimProductionTerrainReplacement(sectionX, sectionY, sectionZ, layer);
+    }
+
+    public static void encodeProductionTerrainReplacements(RenderPass pass, GameRenderer renderer) {
+        FrameCoordinator coordinator = frameCoordinator;
+        if (coordinator != null) coordinator.encodeProductionTerrainReplacements(pass, renderer);
     }
 
     public static void shutdown() {

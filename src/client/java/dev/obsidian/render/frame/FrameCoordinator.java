@@ -2,6 +2,7 @@ package dev.obsidian.render.frame;
 
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.systems.RenderPass;
 import dev.obsidian.render.memory.DeviceGeometryArena;
 import dev.obsidian.render.mesh.MeshingBenchmarkTelemetry;
 import dev.obsidian.render.mesh.SectionMeshWorkerPool;
@@ -10,9 +11,11 @@ import dev.obsidian.render.terrain.AsyncMultiSectionSceneProbe;
 import dev.obsidian.render.terrain.BinarySectionVisibility;
 import dev.obsidian.render.terrain.CanonicalFaceRenderKeys;
 import dev.obsidian.render.terrain.RenderMergeCandidates;
+import dev.obsidian.render.terrain.ProductionTerrainReplacementPlan;
 import dev.obsidian.render.terrain.SectionLifecycleEvents;
 import dev.obsidian.render.upload.StagingUploadArena;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 
 /** Render-thread lifecycle root for active Phase 3 P3.8 dev15 meshing benchmark evidence. */
 public final class FrameCoordinator implements AutoCloseable {
@@ -27,6 +30,7 @@ public final class FrameCoordinator implements AutoCloseable {
     private final StagingUploadArena stagingUploads;
     private final DeviceGeometryArena deviceArena;
     private final SectionMeshWorkerPool meshWorkers;
+    private final ProductionTerrainReplacementPlan terrainReplacement = new ProductionTerrainReplacementPlan();
 
     private AsyncMultiSectionSceneProbe sceneProbe;
     private FrameContext activeFrame;
@@ -84,6 +88,7 @@ public final class FrameCoordinator implements AutoCloseable {
         if (closed) return;
         frameIndex++;
         activeFrame = frameContexts.begin(frameIndex, System.nanoTime());
+        if (terrainReplacement.hardFailure()) hardFailure = true;
         if (sceneProbe != null) {
             sceneProbe.beginFrame(frameIndex);
             if (sceneProbe.hardFailure()) hardFailure = true;
@@ -91,13 +96,13 @@ public final class FrameCoordinator implements AutoCloseable {
         if (!firstFrameLogged) {
             firstFrameLogged = true;
             LOG.log(System.Logger.Level.INFO,
-                    "Phase 3 dev15 P3.8 frame coordinator active. contextSlots=" + frameContexts.size()
+                    "Phase 3 dev24 P3.10 frame coordinator active. contextSlots=" + frameContexts.size()
                             + ", cpuTimingCapacity=" + cpuFrameTimings.capacity()
                             + ", meshWorkers=" + (meshWorkers == null ? 0 : meshWorkers.workerCount())
                             + ", meshQueueCapacity=" + (meshWorkers == null ? 0 : meshWorkers.queueCapacity())
                             + ", stagingCapacity=" + (stagingUploads == null ? 0 : stagingUploads.capacityBytes())
                             + ", deviceArenaCapacity=" + (deviceArena == null ? 0L : deviceArena.capacityBytes())
-                            + "; all proven P3.2-P3.7 correctness and dev11 repeat-aware greedy GPU emission remain armed unchanged. P3.8 dev15 adds only bounded production-worker benchmark telemetry: fixed primitive samples, workload identity, GC deltas and stage timing composition. Dev15 changes no geometry, shader, pipeline, vertex/index format, atlas/lightmap semantics, scheduling policy, rebuild granularity or native graphics behavior.");
+                            + "; inherited P3.2-P3.8 correctness/benchmark evidence remains armed. Dev24 adds only the bounded production SOLID/CUTOUT suppression/replacement plan at the exact Minecraft 26.2 public-Blaze3D OPAQUE seam; unsupported/unavailable terrain remains vanilla and native graphics ownership is unchanged.");
         }
     }
 
@@ -225,6 +230,28 @@ public final class FrameCoordinator implements AutoCloseable {
                 && meshWorkers.maxRepeatAwareTransportScratchRecords() > 0L;
     }
 
+    public void beginProductionTerrainPreparation() {
+        RenderSystem.assertOnRenderThread();
+        if (closed) return;
+        terrainReplacement.beginPrepare(frameIndex);
+        if (terrainReplacement.hardFailure()) hardFailure = true;
+    }
+
+    public boolean tryClaimProductionTerrainReplacement(int x, int y, int z, ChunkSectionLayer layer) {
+        RenderSystem.assertOnRenderThread();
+        if (closed || hardFailure || sceneProbe == null) return false;
+        boolean claimed = terrainReplacement.tryClaim(sceneProbe, x, y, z, layer);
+        if (terrainReplacement.hardFailure()) hardFailure = true;
+        return claimed;
+    }
+
+    public void encodeProductionTerrainReplacements(RenderPass pass, GameRenderer renderer) {
+        RenderSystem.assertOnRenderThread();
+        if (closed || hardFailure) return;
+        terrainReplacement.encodeOpaque(pass, renderer);
+        if (terrainReplacement.hardFailure()) hardFailure = true;
+    }
+
     public long frameIndex() { return frameIndex; }
     public long latestCpuFrameTimeNs() { return cpuFrameTimings.latestNs(); }
     public FrameTimings cpuFrameTimings() { return cpuFrameTimings; }
@@ -243,6 +270,8 @@ public final class FrameCoordinator implements AutoCloseable {
         RenderSystem.assertOnRenderThread();
         if (closed) return;
         closed = true;
+        terrainReplacement.close();
+        if (terrainReplacement.hardFailure()) hardFailure = true;
 
         AsyncMultiSectionSceneProbe probe = sceneProbe;
         long usefulSubmissions = 0L, comparisonDraws = 0L, indirectCalls = 0L, resourceEpochChecks = 0L;

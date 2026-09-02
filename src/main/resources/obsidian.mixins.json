@@ -5,10 +5,12 @@
   "compatibilityLevel": "JAVA_25",
   "client": [
     "ClientLevelMixin",
+    "ChunkSectionsToRenderMixin",
     "CommandEncoderAccessor",
     "GameRendererMixin",
     "GpuDeviceAccessor",
     "LevelExtractorMixin",
+    "LevelRendererTerrainReplacementMixin",
     "MinecraftBootstrapMixin",
     "MinecraftFrameMixin",
     "ModelManagerMixin"
