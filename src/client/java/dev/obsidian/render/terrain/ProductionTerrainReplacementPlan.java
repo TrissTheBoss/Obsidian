@@ -75,7 +75,10 @@ public final class ProductionTerrainReplacementPlan implements AutoCloseable {
         supportedVanillaCandidates++;
         WorkerBackedSectionLifecycleProbe probe = scene.productionReplacementProbe(x, y, z);
         long epoch = SectionMaterialSnapshot.currentResourceEpoch();
+        SectionBakedQuadSnapshot baked = probe == null ? null : probe.bakedSnapshot();
         if (probe == null
+                || baked == null
+                || baked.rejectedBlocks() != 0
                 || epoch != preparedResourceEpoch
                 || !probe.canClaimProductionReplacement(targetCutout, scene.sceneGeneration(), epoch)) {
             vanillaFallbacks++;
@@ -133,7 +136,10 @@ public final class ProductionTerrainReplacementPlan implements AutoCloseable {
         for (int i = 0; i < claimCount; i++) {
             WorkerBackedSectionLifecycleProbe probe = probes[i];
             boolean targetCutout = cutout[i];
+            SectionBakedQuadSnapshot baked = probe == null ? null : probe.bakedSnapshot();
             if (probe == null
+                    || baked == null
+                    || baked.rejectedBlocks() != 0
                     || probe.generation() != generations[i]
                     || currentEpoch != resourceEpochs[i]
                     || !probe.canClaimProductionReplacement(targetCutout, generations[i], currentEpoch)) {
@@ -198,7 +204,7 @@ public final class ProductionTerrainReplacementPlan implements AutoCloseable {
             hardFailure = true;
         }
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 dev24 P3.10 final production terrain replacement: prepareCalls={0}, supportedVanillaCandidates={1}, vanillaFallbacks={2}, solidSuppressions={3}, cutoutSuppressions={4}, solidExecutions={5}, cutoutExecutions={6}, framesWithReplacement={7}, maxClaimsPerPrepare={8}, duplicateClaims={9}, claimOverflows={10}, stalePlanFailures={11}, executionWithoutClaim={12}, executionRevalidationFailures={13}, suppressionExecutionAccountingCoherent={14}, productionCoordinatesExact=true, productionExactColor=true, postWorldComparisonDrawDisabled=true, sameOpaquePass=true, sameOpaquePassExecutions={15}, nativeGraphicsExpansion=false, partialRemeshing=false, partialGpuPatch=false.",
+                "Phase 3 dev24.2 P3.10 final production terrain replacement: prepareCalls={0}, supportedVanillaCandidates={1}, vanillaFallbacks={2}, solidSuppressions={3}, cutoutSuppressions={4}, solidExecutions={5}, cutoutExecutions={6}, framesWithReplacement={7}, maxClaimsPerPrepare={8}, duplicateClaims={9}, claimOverflows={10}, stalePlanFailures={11}, executionWithoutClaim={12}, executionRevalidationFailures={13}, suppressionExecutionAccountingCoherent={14}, completeCaptureRequired=true, productionCoordinatesExact=true, productionExactColor=true, postWorldComparisonDrawDisabled=true, sameOpaquePass=true, sameOpaquePassExecutions={15}, nativeGraphicsExpansion=false, partialRemeshing=false, partialGpuPatch=false.",
                 prepareCalls, supportedVanillaCandidates, vanillaFallbacks,
                 solidSuppressions, cutoutSuppressions, solidExecutions, cutoutExecutions,
                 framesWithReplacement, maxClaimsPerPrepare, duplicateClaims, claimOverflows,
