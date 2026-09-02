@@ -17,7 +17,7 @@ Last updated: 2026-09-02
 
 ## P3.9 partial remeshing — REJECTED / DEFERRED
 
-P3.9 completed as a fixed four-Y-slice shadow experiment on `phase3/partial-remeshing` and was rejected/deferred by A-0188: projected-upload P95 was `807` permille versus the pre-frozen `<=800` threshold. Do not retune that threshold, revive the same experiment as another dev24 attempt, merge the P3.9 branch wholesale, or treat partial GPU patching as a prerequisite for production replacement.
+P3.9 completed as a fixed four-Y-slice shadow experiment on `phase3/partial-remeshing` and was rejected/deferred by A-0188: projected-upload P95 was `807` permille versus the pre-frozen `<=800` threshold. Do not retune that threshold, revive the same experiment, merge the P3.9 branch wholesale, or treat partial GPU patching as a prerequisite for production replacement.
 
 ## P3.10 production opaque/cutout terrain replacement — ACTIVE
 
@@ -51,9 +51,9 @@ Final replacement accounting before shutdown was otherwise coherent:
 
 Promotion of dev24 is blocked.
 
-The same review found an implementation mismatch with A-0191: both scene eligibility and worker capture required each section to contain **both** SOLID and CUTOUT quads. Frozen production claims are per-layer, so SOLID-only and CUTOUT-only exact records must be legal while the absent layer remains vanilla.
+The same review found an implementation mismatch with A-0191: scene eligibility and worker capture required each section to contain **both** SOLID and CUTOUT quads. Frozen production claims are per-layer, so SOLID-only and CUTOUT-only exact records must be legal while the absent layer remains vanilla.
 
-Note: production mode intentionally has **no comparison overlay**. Correctly replaced ordinary full blocks should look like vanilla because the comparison-only face offset and dim tint were removed in dev24.
+Production mode intentionally has **no comparison overlay**. Correctly replaced ordinary full blocks should look like vanilla because the comparison-only face offset and dim tint were removed in dev24.
 
 ### Dev24.1 correction
 
