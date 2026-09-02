@@ -41,64 +41,130 @@ Canonical direct runtime JAR:
 
 Do not treat later continuity/Phase 4 commits as the source authority for that package.
 
-## Phase 4 P4.1 — ACTIVE / CONTRACT FROZEN
+## Phase 4 P4.1 — ACTIVE / DEV1 REFERENCE RUNTIME REQUIRED
 
 Immutable contract:
 
 `ai/attempts/A-0203-phase4-p4.1-persistent-scene-gpu-visibility-contract.md`
 
+Exact Minecraft 26.2 seam:
+
+`ai/attempts/A-0204-phase4-p4.1-exact-mc26.2-large-scene-frustum-seam.md`
+
+Canonical dev1 package/runtime handoff:
+
+`ai/attempts/A-0205-phase4-p4.1-dev1-ci-package-runtime-handoff.md`
+
 P4.1 is a correctness-first **shadow large-scene visibility** milestone. It deliberately does not change P3.10 production draw ownership yet.
 
-Purpose:
+### Exact P4.1 seam now proven
 
-1. maintain a bounded renderer-owned persistent section metadata database at real render-distance scale using incremental lifecycle events rather than per-camera-frame reconstruction;
-2. classify real 16x16x16 section AABBs against the authoritative Minecraft world camera/frustum on GPU;
-3. compact visible identities/templates and retain a GPU visible count using the proven Phase 1 native-compute/public-graphics ownership model;
-4. compare sampled GPU results against an independent conservative CPU oracle;
-5. prove scale/correctness/lifetime before a later Phase 4 slice connects GPU-visible production records to the P3.10 same-OPAQUE-pass draw seam.
+A-0204 closed the required exact Minecraft 26.2 API/bytecode inspection before renderer-source implementation. Important grounded facts include:
 
-Inherited constraints:
+- authoritative world camera state is `GameRenderer.gameRenderState().levelRenderState.cameraRenderState`;
+- frustum construction uses the live world camera view-rotation and culling projection and is prepared at the exact camera position;
+- `ClientChunkCache.getChunk(x,z,ChunkStatus.FULL,false)` provides safe non-loading lookup;
+- world min/max section Y and section count are available from the exact level height APIs;
+- Minecraft 26.2 exposes double-buffered loaded-chunk and empty-section lifecycle changes used during level extraction;
+- section-empty transitions are driven from the real `LevelChunkSection.hasOnlyAir()` state, giving P4.1 an incremental membership seam rather than camera-frame polling.
 
-- D-0004: camera-only frames must not Java-walk/rebuild all loaded sections.
-- D-0008: long-term scene path is async CPU mesh + GPU scene + visibility/compaction + indirect rendering.
-- D-0025: native Vulkan interop remains narrow; no separate device/graphics takeover.
-- D-0026: producer/consumer synchronization is explicit Synchronization2.
-- D-0027: public fixed-count indexed indirect + zero unused tail remains the graphics baseline; no native indirect-count graphics expansion without later measured justification.
-- P3.10 replacement/fallback semantics, P3.7 oracle, zero worker live-world reads, zero synchronous scene builds and completion-gated lifetime remain mandatory.
+Temporary API-inspection workflow code was removed before the dev1 runtime package.
 
-P4.1 explicit non-goals: production GPU-driven terrain draw ownership, native graphics expansion, indirect-count consumption, Hi-Z, temporal occlusion, async-compute queue ownership, mesh shaders, LOD, translucency/fluids, entities/block entities/particles, mesher changes and P3.9 partial remeshing.
+## P4.1 dev1 implementation
 
-## Proven Phase 1 visibility foundation being reused
+P4.1 dev1 adds a shadow subsystem beside the promoted P3.10 renderer:
 
-A-0048/A-0049/A-0050/A-0052 proved the small-scale architecture on the RX 6800 XT:
+- fixed/bounded primitive persistent section metadata database;
+- hard capacity ceiling `2,500,000` section slots;
+- stable per-record validation identity and bounded free-slot reuse;
+- exact chunk load/unload and section empty/non-empty observation hooks;
+- lifecycle event ring with explicit overflow detection and conservative bounded resync;
+- bounded initial/full resync of `128` chunk columns per frame;
+- changed-scene candidate snapshot construction of at most `16,384` slots per frame;
+- camera-relative integer-section AABB transport to avoid huge world-coordinate float precision loss;
+- scalable native Vulkan compute visibility classification with workgroup size `128` and arbitrary workgroup count;
+- transfer reset -> compute and compute -> transfer/readback Synchronization2 edges;
+- atomic compacted visible identity list plus GPU visible count;
+- asynchronous zero-timeout normal readback polling;
+- independent CPU visibility oracle bounded to `8,192` slots per frame;
+- conservative `1e-3` plane epsilon where boundary-ambiguous CPU records remain visible;
+- exact sampled identity-set accounting for missing/unexpected/duplicate records and GPU false culls;
+- explicit final evidence that camera-only frames do not full-scan the Java scene and that production draw ownership/native graphics ownership did not expand.
 
-`GPU scene records -> compute visibility -> atomic front compaction -> GPU visible count -> zero unused indirect tail -> public Blaze3D fixed-count indexed-indirect -> deterministic readback`
+A P4.1 shadow failure is isolated from the production terrain renderer. P3.10 remains the sole SOLID/CUTOUT production replacement authority for this milestone.
 
-The existing `VulkanVisibilityCompactor` is deliberately fixed to four validation candidates and one workgroup. P4.1 must generalize its ownership/synchronization model rather than simply increasing constants. In particular, the dev9 workgroup-local reset/barrier cannot serve as a global N-candidate reset mechanism.
+## Canonical P4.1 dev1 package authority
 
-## Current exact API-inspection step
+Version:
 
-A-0203 requires exact Minecraft 26.2 grounding before renderer-source implementation.
+`0.4.0-phase4-dev1`
 
-Already-known exact evidence from prior attempts:
+Exact source/package authority:
 
-- A-0054: `ClientLevel.getChunkSource()`, non-loading `ClientChunkCache.getChunk(..., ChunkStatus.FULL, false)`, `ChunkAccess.getSections()`, `LevelHeightAccessor.getMinSectionY/getMaxSectionY/...` and exact section access.
-- A-0060: authoritative world `CameraRenderState` exposes `pos`, `projectionMatrix`, `viewRotationMatrix`; `GameRenderer.gameRenderState().levelRenderState.cameraRenderState` supplies the live world camera state.
+`fd58b9f2e915462f665b7d85f5d993456d5f930e`
 
-Temporary workflow `Phase 4 P4.1 API Inspect` was added only to close remaining exact seams: active view distance, loaded chunk/section enumeration suitable for incremental population, Frustum API/plane behavior and relevant LevelRenderer/GameRenderer bytecode.
+The previous fully integrated source head `8c63c478691605dddc577b572b461e83a1384a8c` passed Build #756. The final package head only adds the dev1 version identity.
 
-Current inspection workflow:
+Canonical package CI:
 
-- branch head containing temporary workflow: `5e3b080967b677b02de2adf69b96a4a5c1bba25f`;
-- run `33651565582` / #1 — in progress at the time of this state update.
+- Build run `33653778087` / **#757** — SUCCESS;
+- Java 25 / Gradle 9.5.1 build — SUCCESS;
+- artifact upload — SUCCESS;
+- source branch head `fd58b9f2e915462f665b7d85f5d993456d5f930e`;
+- PR synthetic merge commit `c6fa00d824beec44d5010103c38478306d2c0d43`;
+- branch head and synthetic merge use identical tree SHA `ab82fd3908d174df668754c80ddec633da3bfb00`, so the hosted artifact source tree exactly matches the package-authority tree.
 
-The temporary workflow must be removed after evidence is recorded and before any runtime package handoff.
+Hosted artifact:
 
-## Immediate handoff
+- artifact ID `9855845429`;
+- wrapper name `obsidian-c6fa00d824beec44d5010103c38478306d2c0d43`;
+- wrapper size `718,756` bytes;
+- wrapper digest `sha256:b480c700f6b2b88ab1b0aa57136b43d55f9bd1d6d6fb99295f8abfbfc4f2ef9b`.
 
-1. finish run `33651565582` and inspect its artifact;
-2. record the exact Minecraft 26.2 large-scene/frustum seam in a new immutable attempt;
-3. remove the temporary inspection workflow;
-4. only then implement P4.1 persistent metadata + scalable GPU shadow visibility under A-0203;
-5. run exact hosted CI and package a dedicated Phase 4 dev build only after the source implementation is statically reviewed against the frozen contract;
-6. keep PR #57 DRAFT / DO NOT MERGE until real render-distance-scale runtime correctness, lifecycle, performance-baseline and human visual gates close.
+Canonical direct runtime JAR:
+
+- `Obsidian-0.4.0-phase4-dev1.jar`;
+- size **493,377 bytes**;
+- SHA-256 **`39c4bb4932bd6e7c00a4190c3514ef29eb926c337bba488f9a04bbef27120458`**.
+
+Sources JAR from the same hosted artifact:
+
+- `Obsidian-0.4.0-phase4-dev1-sources.jar`;
+- size `255,354` bytes;
+- SHA-256 `55b9a7ce230db01b74c38d58023f91739ec74a0262344b4d6b40eaab4c17e03d`.
+
+Later continuity-only commits do not change dev1 package authority.
+
+## Current handoff — reference P4.1 dev1 runtime
+
+Use the exact canonical `Obsidian-0.4.0-phase4-dev1.jar` on the reference Windows 11 / RX 6800 XT / Minecraft 26.2 / Fabric Loader 0.19.3 / Java 25 Vulkan setup.
+
+Exercise:
+
+1. enter a world and allow the persistent scene to populate/resync;
+2. hold a stable camera long enough for sampled visibility evidence to appear;
+3. perform rapid 360-degree camera turns;
+4. traverse horizontally enough to cause real chunk load/unload churn;
+5. move vertically across section boundaries;
+6. break/place ordinary blocks while P3.10 remains active;
+7. perform F3+T and allow recovery;
+8. leave/re-enter the world if practical;
+9. exit normally.
+
+Because P4.1 is shadow-only, the required human visual verdict is simple but strict: **the world must look the same as the promoted P3.10 baseline**. Any new holes, missing terrain, duplicate terrain, texture/light/cutout/depth regressions, stale popping or other visual difference is a failure.
+
+Useful dev1 log anchors:
+
+- `Obsidian 0.4.0-phase4-dev1`;
+- `P4.1 shadow large-scene visibility configured`;
+- `P4.1 bounded scene resync complete`;
+- `P4.1 shadow visibility sample PASS`;
+- `P4.1 final shadow visibility evidence`.
+
+Promotion remains blocked until runtime evidence shows real scale, zero missing/unexpected/duplicate visibility identities, `gpuFalseCullCount=0`, no capacity failure, nonblocking readback/lifetime, `cameraOnlyFullSceneScan=false`, `productionDrawOwnershipChanged=false`, `nativeGraphicsExpansion=false`, inherited P3.10/P3.7/worker/lifetime gates clean, normal exit and explicit human visual PASS.
+
+PR #57 stays **DRAFT / DO NOT MERGE** until those gates close.
+
+## After the dev1 runtime
+
+If the reference run passes, record the runtime result immutably and decide the next Phase 4 slice from measured evidence. Do not connect GPU-visible records to production draw submission in P4.1 itself and do not weaken A-0203 after seeing runtime data.
