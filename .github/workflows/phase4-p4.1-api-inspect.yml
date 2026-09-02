@@ -47,13 +47,18 @@ jobs:
             for CLASS in \
               net.minecraft.client.Minecraft \
               net.minecraft.client.Options \
+              net.minecraft.client.Camera \
               net.minecraft.client.multiplayer.ClientChunkCache \
+              'net.minecraft.client.multiplayer.ClientChunkCache$Storage' \
               net.minecraft.client.multiplayer.ClientLevel \
               net.minecraft.world.level.LevelHeightAccessor \
               net.minecraft.world.level.chunk.LevelChunk \
               net.minecraft.world.level.chunk.LevelChunkSection \
+              net.minecraft.client.renderer.extract.LevelExtractor \
               net.minecraft.client.renderer.culling.Frustum \
               net.minecraft.client.renderer.state.level.CameraRenderState \
+              net.minecraft.client.renderer.ViewArea \
+              'net.minecraft.client.renderer.chunk.SectionRenderDispatcher$RenderSection' \
               net.minecraft.client.renderer.LevelRenderer \
               net.minecraft.client.renderer.GameRenderer; do
               echo
