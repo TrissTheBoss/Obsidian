@@ -75,7 +75,7 @@ public final class ObsidianBootstrap {
             LOG.log(System.Logger.Level.DEBUG, "Backend description: {0}", caps.backendDescription());
         }
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 3 dev24 P3.10 production opaque/cutout replacement canary armed. Exact Minecraft 26.2 bytecode authorizes per-section SOLID/CUTOUT suppression at prepareChunkRenders and same-OPAQUE-RenderPass replacement before later world depth consumers. Only LIVE generation/resource-current P3.7-exact full-section records may suppress vanilla; every unavailable or ambiguous unit stays vanilla. Dev24 removes the old comparison-only 1/512 face offset and 75% RGB tint, uses exact frozen positions/color/light/material/UV truth, disables post-world comparison copies, retains bounded workers/staging/arena and completion-gated lifetime, expands no native Vulkan graphics ownership, and does not implement partial remeshing or partial GPU patching; workerWorldReadsAfterCapture=0.");
+                "Obsidian Phase 3 dev24.1 P3.10 production opaque/cutout replacement canary armed. Dev24.1 keeps the exact Minecraft 26.2 same-OPAQUE-RenderPass replacement seam and per-layer LIVE/P3.7-exact claim rules, while correcting only recenter/record admission: a deterministic empty canonical cube reference is non-fatal and sections with either supported SOLID or CUTOUT geometry may become exact records. Unavailable, empty, ambiguous or stale layers stay vanilla. Production positions/color/light/material/UV truth, bounded workers/staging/arena lifetime, no native graphics expansion, and no partial remeshing/GPU patching remain unchanged; workerWorldReadsAfterCapture=0.");
     }
 
     public static void onFrameStart() {
