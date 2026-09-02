@@ -1,6 +1,7 @@
 package dev.obsidian.mixin;
 
 import dev.obsidian.render.terrain.SectionLifecycleEvents;
+import dev.obsidian.render.visibility.LargeSceneLifecycleEvents;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.extract.LevelExtractor;
 import org.spongepowered.asm.mixin.Mixin;
@@ -23,5 +24,6 @@ public abstract class LevelExtractorMixin {
     @Inject(method = "setLevel", at = @At("TAIL"))
     private void obsidian$levelChanged(ClientLevel level, CallbackInfo ci) {
         SectionLifecycleEvents.worldChanged();
+        LargeSceneLifecycleEvents.worldChanged();
     }
 }
