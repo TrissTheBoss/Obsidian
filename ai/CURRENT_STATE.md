@@ -33,8 +33,9 @@ Continuity authority:
 - A-0196 — dev24.1 reference runtime FAILED visual + vertical-scene gates.
 - A-0197 — frozen dev24.2 vertical/capture-completeness correction contract.
 - A-0198 — dev24.2 hosted-CI/package runtime handoff.
-- A-0199 — dev24.2 reference runtime PARTIAL SUCCESS: demonstrated blockers closed; F3+T evidence still missing.
-- PR #55 — remains DRAFT / **DO NOT MERGE** until the final reload/recovery + visual gate closes.
+- A-0199 — dev24.2 reference runtime PARTIAL SUCCESS: leaves/kelp and same-column vertical tracking fixed; automated accounting/correctness/lifetime clean; F3+T evidence missing.
+- A-0200 — dev24.2 focused F3+T run PARTIAL SUCCESS: automated reload/recovery gate PASS; explicit post-reload human visual verdict pending.
+- PR #55 — remains DRAFT / **DO NOT MERGE** until the final human post-F3+T visual verdict closes.
 
 ## Dev24.2 package authority
 
@@ -56,48 +57,66 @@ Canonical direct runtime JAR:
 
 Use the direct versioned JAR, not the Actions ZIP wrapper.
 
-## A-0199 dev24.2 runtime result — PARTIAL SUCCESS
+## Dev24.2 correction and product behavior
 
-The exact dev24.2 JAR ran on the reference Vulkan/AMD environment and closed both demonstrated dev24.1 blockers.
+A-0197 changed only two behaviors plus version/banner metadata:
 
-### Targeted visual blockers
+1. same-column section-Y transitions now trigger the existing safe scene recenter/invalidation path;
+2. production suppression/revalidation requires a non-null immutable generalized capture with `rejectedBlocks() == 0`.
 
-Tester verdict:
+This is deliberately conservative. Dev24.2 does **not** add native Obsidian rendering for leaves, kelp/fluids, block entities, translucent output, unsupported materials/layers, missing models or non-block-atlas geometry. Any section containing rejected capture content stays vanilla rather than suppressing vanilla with an incomplete replacement.
+
+No mesher algorithm, P3.7 proof, shader, pipeline, same-OPAQUE-pass seam, native Vulkan graphics ownership, lifetime rule, partial remeshing or partial GPU patching changed.
+
+## A-0199 reference runtime — demonstrated blockers closed
+
+The exact dev24.2 JAR ran on the reference Vulkan/AMD environment.
+
+Human targeted visual verdict:
 
 - **kelp: PASS — visible / fine**;
 - **leaves: PASS — visible / fine**.
 
-This is the expected conservative result. Dev24.2 does not add native Obsidian leaf/fluid rendering support. Production suppression now requires a generalized capture with `rejectedBlocks() == 0`, so sections containing leaves, kelp/fluid-bearing blocks, block entities, unsupported materials/layers, missing models, translucent output or non-block-atlas output remain vanilla instead of being replaced by an incomplete mesh.
+Same-column vertical section tracking also passed: the scene first reached READY at `(67,4,-19)` and later reached READY at `(67,3,-19)` while retaining center X/Z `(67,-19)`. Final `cameraRecenterEvents=20`, `sceneReadyTransitions=106`, `sceneRebuilds=105`, and `unsafeStaleSceneInstalls=0`.
 
-The earlier thin/coplanar 2D grass/leaf-litter z-fighting observation remains outside this correction and was not promoted to a new blocker.
+A-0199 production replacement accounting was exact at scale:
 
-### Same-column vertical section tracking — PASS
-
-The runtime first reached READY at center `(67,4,-19)`.
-
-Later, while retaining center X/Z `(67,-19)`, generation 31 submitted Y=3 records and reached READY at center `(67,3,-19)`. This directly proves the managed 3x3x1 scene now follows same-column section-Y transitions instead of remaining stuck on the prior vertical section.
-
-Final scene evidence:
-
-- `cameraRecenterEvents=20`;
-- `sceneReadyTransitions=106`;
-- `sceneRebuilds=105`;
-- `observedReasons=section-dirty|world-change|resource-reload|scene-recenter`;
-- `unsafeStaleSceneInstalls=0`.
-
-The dev24.1 stale-Y defect is closed.
-
-### Production replacement accounting — PASS
-
-Final dev24.2 P3.10 telemetry:
-
-- `prepareCalls=16,738`;
-- `supportedVanillaCandidates=14,901,944`;
-- `vanillaFallbacks=14,808,182`;
 - SOLID suppressions/executions `63,376 / 63,376`;
 - CUTOUT suppressions/executions `30,386 / 30,386`;
-- `framesWithReplacement=13,517`;
-- `maxClaimsPerPrepare=15`;
+- duplicate/overflow/stale-plan/unclaimed/revalidation failures all `0`;
+- `suppressionExecutionAccountingCoherent=true`;
+- `completeCaptureRequired=true`;
+- production coordinates/color exact;
+- same OPAQUE pass true;
+- native graphics expansion false.
+
+P3.7 closed exact across `974` proof records with missing/duplicate/optimized-without-reference/real mismatches all `0`; worker world reads after capture `0`; synchronous scene mesh builds `0`; unsafe stale installs `0`. Workers/staging/arena/resources drained cleanly and process exit was `0`.
+
+A-0199 remained partial only because final `resourceReloadEvents=1` showed no post-startup F3+T cycle.
+
+## A-0200 focused F3+T runtime — automated gate PASS
+
+The exact same dev24.2 JAR was used for a focused reload test.
+
+The scene reached READY before reload. Minecraft then logged the explicit debug message `Reloaded resource packs` and started a second resource-manager reload. Obsidian observed a new `resource-reload` invalidation at generation `7`, invalidated the active scene, rescanned eligibility, rebuilt through bounded workers, and returned READY afterward.
+
+Final lifecycle telemetry:
+
+- `resourceReloadEvents=2` — startup plus required in-world F3+T reload;
+- `sceneReadyTransitions=29`;
+- `sceneRebuilds=28`;
+- `recordInstalls=261`;
+- `unsafeStaleSceneInstalls=0`;
+- process exit `0`.
+
+Final P3.10 production accounting after the reload:
+
+- `prepareCalls=3,537`;
+- `supportedVanillaCandidates=3,298,206`;
+- `vanillaFallbacks=3,287,442`;
+- SOLID suppressions/executions `8,852 / 8,852`;
+- CUTOUT suppressions/executions `1,912 / 1,912`;
+- `framesWithReplacement=2,466`;
 - duplicate claims `0`;
 - claim overflows `0`;
 - stale-plan failures `0`;
@@ -105,77 +124,58 @@ Final dev24.2 P3.10 telemetry:
 - execution revalidation failures `0`;
 - `suppressionExecutionAccountingCoherent=true`;
 - `completeCaptureRequired=true`;
-- `productionCoordinatesExact=true`;
-- `productionExactColor=true`;
-- `postWorldComparisonDrawDisabled=true`;
-- `sameOpaquePass=true`;
-- `sameOpaquePassExecutions=93,762`;
-- `nativeGraphicsExpansion=false`;
-- `partialRemeshing=false`;
-- `partialGpuPatch=false`.
+- production coordinates/color exact;
+- post-world comparison disabled;
+- same OPAQUE pass true;
+- `sameOpaquePassExecutions=10,764`;
+- native graphics expansion false;
+- partial remeshing false;
+- partial GPU patch false.
 
-This proves real production replacement still occurs on clean supported sections while incomplete/unsupported sections fall back to vanilla conservatively.
-
-### Correctness and lifetime — PASS
-
-Final evidence:
+Final correctness after F3+T:
 
 - P3.5 `borderHaloCorrectnessEvidenceReady=true`;
-- P3.6 `tJunctionPolicyEvidenceReady=true`;
-- P3.6 camera-relative transform failures `0`;
-- P3.7 `differentialCorrectnessEvidenceReady=true`;
-- P3.7 proof records/determinism `974 / 974`;
-- P3.7 material/direction/geometry/UV/color/light all exact;
+- P3.6 `tJunctionPolicyEvidenceReady=true`, determinism `261/261`, camera-relative transform failures `0`;
+- P3.7 `differentialCorrectnessEvidenceReady=true`, determinism `261/261`;
+- P3.7 material/direction/geometry `5,302/5,302`;
+- P3.7 UV/color/light `21,208/21,208`;
 - P3.7 missing `0`;
 - P3.7 duplicate `0`;
 - P3.7 optimized-without-reference `0`;
 - P3.7 real mismatches `0`;
-- fixture self-tests `974 / 974`;
+- fixture self-tests `261/261`;
 - worker world reads after capture `0`;
 - synchronous scene mesh builds `0`;
-- unsafe stale scene installs `0`.
+- unsafe stale installs `0`.
 
-The run also exercised substantial dirty/rebuild traffic (`playerDirtyEvents=2,241`, `renderedCoreDirtyEvents=5,011`) and repeatedly returned READY.
+Final lifetime after F3+T:
 
-Lifetime closed cleanly:
-
-- workers submitted/started/completed `999 / 999 / 999`;
-- worker failed jobs `0`;
-- worker queue rejections `0`;
-- worker shutdown join failures `0`;
+- worker submitted/started/completed `261/261/261`;
+- worker failures/rejections/shutdown-join failures `0`;
 - `workersClean=true`;
 - `stagingClean=true`;
 - `arenaClean=true`;
 - `resourcesClean=true`;
-- staging submitted/reclaimed bytes `45,629,616 / 45,629,616`;
-- arena allocations/retired/reclaimed `2,922 / 2,922 / 2,922`;
-- pending upload batches `0`;
-- pending arena retirement batches `0`;
-- pending deferred retirements `0`;
+- staging submitted/reclaimed `12,850,392 / 12,850,392` bytes;
+- arena allocations/retired/reclaimed `783/783/783`;
+- no pending upload, arena-retirement or deferred-resource batches;
 - process exit `0`.
 
-## Remaining promotion gate — focused F3+T run required
+A-0200 therefore closes the **automated** F3+T invalidation/fallback/rebuild/replacement-recovery gate. No renderer source change is justified.
 
-The dev24.2 run is **not yet promotion-complete** because the frozen runtime resource-reload gate was not exercised.
+## Remaining promotion gate — human post-F3+T visual verdict only
 
-Final lifecycle telemetry reports `resourceReloadEvents=1`. One resource reload already occurs at startup before world entry. The runtime log contains no second post-startup `resource-reload` invalidation, so there is no evidence that F3+T was performed after production replacement became active.
+The log cannot prove visual correctness. The only remaining frozen P3.10 runtime gate is an explicit tester verdict that terrain looked correct after the F3+T reload and recovery.
 
-Therefore the required sequence remains unproven:
+A PASS means no new blocker such as holes/missing terrain or faces, unexpected duplicates/z-fighting beyond the already-known thin/coplanar 2D behavior, wrong textures, tint/light/AO regression, cracks/pinholes, cutout/depth artifact, or stale popping attributable to reload/recovery.
 
-1. production replacement active;
-2. press `F3+T`;
-3. resource invalidation forces safe vanilla fallback;
-4. reload completes;
-5. scene rebuilds and returns READY;
-6. production replacement resumes with exact accounting and no visual regression;
-7. normal exit.
-
-This is an evidence gap, not a demonstrated renderer defect. **Do not change renderer source to address it.**
+Do **not** infer this verdict from automated counters.
 
 ## Current handoff point
 
-Run the exact same canonical dev24.2 JAR for one focused reload test. Wait until P3.10 replacement is active, press `F3+T`, let the reload finish, verify terrain remains visually correct through fallback and recovery, keep playing until the scene returns READY/replacement, then exit normally.
+Ask only for the tester's post-F3+T visual verdict from the A-0200 focused run.
 
-Return the complete relevant log and a short visual verdict. The log must show at least one post-startup resource reload (final `resourceReloadEvents >= 2`) plus clean P3.10 accounting, P3.7 exactness, bounded lifetime and process exit `0`.
+- If visual PASS: create a new immutable final runtime-closure attempt, synchronize continuity, then run hosted CI on the exact evidence/continuity head and prepare P3.10 promotion. Do not change renderer source.
+- If visual FAIL: keep PR #55 draft, record the defect, and freeze a narrow correction contract before changing renderer source.
 
-If that focused run passes, record the final immutable runtime attempt, synchronize continuity, validate the evidence head in hosted CI, and only then prepare P3.10 promotion. Keep PR #55 DRAFT / DO NOT MERGE until that gate closes.
+PR #55 remains DRAFT / **DO NOT MERGE** until the human visual verdict is explicit.
