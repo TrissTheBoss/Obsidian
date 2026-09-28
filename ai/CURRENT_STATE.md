@@ -23,6 +23,18 @@ Last updated: 2026-09-28
 - Publish Preview run `36400684893` / #1 passed from audited `/publish-preview` on PR #57 and published `v0.4.0-phase4-dev1` as a GitHub prerelease targeting `6af5174f054b272c65174fbf0c37d981a66aff31`.
 - Preview runtime JAR: 493,355 bytes, SHA-256 `8bf25f3aa6bfe6fb4392044ba0973692fc6a24fd9948f3fea51cf55b12e157f3`. Its target differs from A-0205 package authority only by `/ai` continuity files; no renderer/source/resource file changed. Keep this Preview binary identity separate from the original A-0205 Actions-handoff hash.
 - A-0207 records final cleanup/build/release evidence. P4.1 runtime validation remains pending and PR #57 stays draft.
+## LLM Context Governor — INTEGRATION VALIDATION
+
+- New reusable skill: `ai/skills/context-governor/SKILL.md`.
+- New compact bootstrap: `ai/context/ACTIVE_CONTEXT.json`; it is a validated cache/index and **not** source authority.
+- D-0029 makes tiered/recoverable context and least-data external calls durable process policy.
+- Automatic compaction is two-phase: preserve critical knowledge + recovery pointers, validate, then discard only re-fetchable/transient bulk. Critical-over-budget cases fail closed.
+- External API/tool/MCP calls use call-specific allowlisted fields/records/ranges. OAuth uses least-privilege action/resource scopes and incremental authorization where supported; credentials stay out of durable/model context.
+- Deterministic local regression suite: **7/7 PASS**; active capsule validation PASS; standalone Skill validation PASS.
+- A-0208 records the design, research, integration and local test evidence.
+- Hosted Build CI + Context Governor CI on the exact integration head and `[no-release]` merge remain before activation is final.
+- This process work does **not** change the P4.1 renderer, runtime package, draft status, or frozen validation gates.
+
 ## Phase 3 status — COMPLETE
 
 - P3.1-P3.8: COMPLETE.
