@@ -1,0 +1,3 @@
+interface:
+  display_name: "Context Governor"
+  short_description: "Compress context safely and minimize API/OAuth data"

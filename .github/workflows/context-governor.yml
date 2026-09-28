@@ -1,0 +1,46 @@
+name: Context Governor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ai/context/**'
+      - 'ai/skills/context-governor/**'
+      - 'ai/README.md'
+      - 'ai/OPERATING_MANUAL.md'
+      - 'ai/DECISIONS.md'
+      - 'AGENTS.md'
+      - '.github/workflows/context-governor.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ai/context/**'
+      - 'ai/skills/context-governor/**'
+      - 'ai/README.md'
+      - 'ai/OPERATING_MANUAL.md'
+      - 'ai/DECISIONS.md'
+      - 'AGENTS.md'
+      - '.github/workflows/context-governor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate context compression and minimization
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Run Context Governor tests
+        run: python3 ai/skills/context-governor/scripts/test_context_governor.py
+
+      - name: Validate active context capsule
+        run: python3 ai/skills/context-governor/scripts/context_governor.py validate-checkpoint ai/context/ACTIVE_CONTEXT.json

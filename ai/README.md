@@ -4,19 +4,20 @@ This directory is the persistent operating memory for AI agents and humans worki
 
 Its purpose is to make the project resumable across conversations, models, agents, machines, and long gaps in development without relying on hidden chat context.
 
-## Required reading order
+## Progressive required reading order
 
-Every agent taking over Obsidian should read these files before making changes:
+Every agent must preserve the same authority hierarchy without preloading the entire history.
 
-1. `ai/CURRENT_STATE.md` - what exists right now, what is validated, what branch/PR/version is active, and what the immediate next action is.
-2. `ai/MASTER_ROADMAP.md` - the canonical long-range product plan: phases, planned features, architecture direction, validation gates, experiments, compatibility/release strategy, and the formal procedure for altering the roadmap.
-3. `ai/OPERATING_MANUAL.md` - project goals, constraints, engineering workflow, validation rules, handoff rules, and roadmap-maintenance procedure.
-4. `ai/REPOSITORY_HYGIENE.md` - branch lifecycle, README freshness, public repository organization, release channels, and cleanup rules.
-5. `ai/DECISIONS.md` - durable architectural and product decisions and why they were made.
-6. `ai/ATTEMPT_LOG.md` - historical append-only record through the original log format.
-7. `ai/attempts/` - immutable one-file-per-attempt continuation for experiments, validations, research, failures, roadmap research, and architecture work.
+1. Read `ai/context/ACTIVE_CONTEXT.json` as a **non-authoritative bootstrap index**. It identifies the active goal, exact identifiers, active constraints, open obligations, and recovery pointers.
+2. Read `ai/CURRENT_STATE.md` to verify authoritative current truth before engineering or external mutations.
+3. Read the **relevant section(s)** of `ai/MASTER_ROADMAP.md`. Before changing phase order, scope, validation gates, feature status, compatibility, or release strategy, read the full Roadmap Governance section and all affected roadmap sections.
+4. Read the relevant process constraints from `ai/OPERATING_MANUAL.md`, `ai/REPOSITORY_HYGIENE.md`, and `ai/skills/context-governor/SKILL.md`.
+5. Rehydrate only the durable decisions and immutable attempts referenced by the active task/capsule.
+6. Expand into `ai/ATTEMPT_LOG.md` and older `ai/attempts/` only for provenance, regression analysis, conflicting evidence, or roadmap/decision changes.
 
-Do not skip `MASTER_ROADMAP.md` merely because `CURRENT_STATE.md` is up to date. `CURRENT_STATE.md` is intentionally about the present; the roadmap is where the complete intended product and sequencing live.
+This is **progressive loading, not weaker governance**. `ACTIVE_CONTEXT.json` is a cache/index and never overrides `CURRENT_STATE.md`, the roadmap, decisions, immutable attempts, source, CI, release, or runtime evidence. If a needed fact is absent, stale, ambiguous, or exact wording/identifiers matter, re-read the authoritative source.
+
+For broad project audits, roadmap restructuring, or handoffs where the active capsule indicates unresolved contradictions, load more of the canonical documents as needed rather than relying on the compact layer.
 
 ## What each continuity file is authoritative for
 
@@ -24,6 +25,7 @@ Use the documents for different questions rather than treating them as interchan
 
 - **What is true right now?** -> `CURRENT_STATE.md`.
 - **What are we trying to build over the life of the project?** -> `MASTER_ROADMAP.md`.
+- **How do we keep LLM context bounded and external calls data-minimal without losing recoverability?** -> `context/ACTIVE_CONTEXT.json` + `skills/context-governor/SKILL.md`.
 - **How must the GitHub repository, branches, README, and releases be kept clean?** -> `REPOSITORY_HYGIENE.md`.
 - **Why did we choose this architecture/product direction?** -> `DECISIONS.md`.
 - **What exactly was tried and what happened?** -> `ATTEMPT_LOG.md` and `attempts/`.
@@ -40,7 +42,7 @@ If an agent tries something that changes code, build behavior, runtime behavior,
 
 Older attempts live in `ATTEMPT_LOG.md`. New attempts should be created as immutable files under `ai/attempts/` using names such as `A-0058-short-description.md`. This avoids replacing a large history file merely to append one entry and makes concurrent agent work safer.
 
-When a successful attempt changes the current truth of the project, also update `CURRENT_STATE.md`. When it creates or reverses a durable design choice, also update `DECISIONS.md`. When it changes the long-range plan, phase ordering, product feature set, validation gates, experiments, or release/compatibility strategy, update `MASTER_ROADMAP.md` according to its Roadmap Governance section. When it changes public status, branch lifecycle, README content, or tester-facing release behavior, also apply `REPOSITORY_HYGIENE.md`.
+When a successful attempt changes the current truth of the project, also update `CURRENT_STATE.md`. When it creates or reverses a durable design choice, also update `DECISIONS.md`. When it changes the long-range plan, phase ordering, product feature set, validation gates, experiments, or release/compatibility strategy, update `MASTER_ROADMAP.md` according to its Roadmap Governance section. When it changes public status, branch lifecycle, README content, or tester-facing release behavior, also apply `REPOSITORY_HYGIENE.md`. When active milestone/branch/package/gates/next-action truth changes, refresh and validate `context/ACTIVE_CONTEXT.json` so future agents can bootstrap narrowly without losing recovery pointers.
 
 ## Roadmap discipline
 

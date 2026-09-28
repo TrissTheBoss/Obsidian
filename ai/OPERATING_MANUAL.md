@@ -133,7 +133,7 @@ Unsupported render cases should be explicit and measurable rather than silently 
 
 ## Development workflow
 
-1. Read `ai/README.md` and follow its required order: `CURRENT_STATE.md`, `MASTER_ROADMAP.md`, this manual, `DECISIONS.md`, historical `ATTEMPT_LOG.md`, and the newest relevant files in `ai/attempts/`.
+1. Read `ai/README.md` and use its progressive loading order: bootstrap from `ai/context/ACTIVE_CONTEXT.json`, verify `CURRENT_STATE.md`, then rehydrate only the roadmap/process/decision/attempt sections required for the task. The compact capsule never replaces authoritative sources.
 2. Work from repository truth, not remembered chat context.
 3. Identify the roadmap phase/item the work advances. If the work does not fit the roadmap, decide whether it is a small implementation detail or an actual roadmap change before coding.
 4. For unstable Minecraft renderer APIs, inspect the exact Minecraft 26.2 dependency resolved by Loom rather than guessing from another version.
@@ -148,6 +148,25 @@ Unsupported render cases should be explicit and measurable rather than silently 
 13. Update `MASTER_ROADMAP.md` whenever long-range phase ordering, planned features, validation gates, experiments, compatibility/release direction, or roadmap status changes materially.
 14. Synchronize material roadmap changes into the active PR/issue so reviewers understand why scope changed.
 15. Before handoff, run the continuity consistency checklist below.
+
+## Context governance and external-call minimization
+
+Use `ai/skills/context-governor/SKILL.md` for long-running, tool-heavy, connector/API/OAuth, handoff, and continuity work.
+
+Core rules:
+
+- keep a small active working capsule plus exact recovery pointers rather than carrying processed tool output and full historical documents indefinitely;
+- automatically checkpoint/compact after substantial tool activity, phase/subtask boundaries, material external mutations, or before handoff;
+- use two-phase compaction: prepare must-preserve facts + recovery index, validate them, then drop only re-fetchable/transient bulk;
+- never compress away user requirements, active blockers, security boundaries, durable decisions, exact package/commit/artifact identifiers, unresolved contradictions, or the immediate next action;
+- treat the compact layer as a cache/index only; authoritative repository/API/runtime sources always win;
+- rehydrate exact source truth before irreversible or externally visible mutations and whenever exact IDs, SHAs, hashes, dates, permissions, gates, or wording matter;
+- before every external API/tool/MCP call, construct a call-specific necessity set and send only required identifiers/fields/records; do not forward whole chat history or unrelated repository data;
+- for reads, prefer exact IDs, server-side filtering, field projection, bounded pages/ranges, and metadata-first retrieval;
+- for OAuth/authorization, request the narrowest supported action/resource scopes and prefer incremental/step-up authorization; do not put task documents/conversation content into OAuth parameters;
+- credentials/tokens/cookies/private keys are transport secrets, not LLM context. Let the connector/auth layer inject them whenever possible and never persist them in `/ai`.
+
+At handoff, `ai/context/ACTIVE_CONTEXT.json` must pass the Context Governor validator. If the capsule cannot fit a required fact within its budget, fail closed and keep/rehydrate source context rather than dropping the fact.
 
 ## Roadmap governance procedure
 
@@ -287,6 +306,8 @@ Before stopping a development session or handing off to another agent, verify:
 - the active PR matches the real milestone scope;
 - temporary diagnostic files/workflows are removed unless intentionally retained and documented;
 - repository branch count follows the `REPOSITORY_HYGIENE.md` target or the temporary exception is documented;
+- `ai/context/ACTIVE_CONTEXT.json` reflects the active goal/identifiers/open obligations/next action and passes Context Governor validation;
+- processed large tool outputs are pointerized/re-fetchable instead of copied into durable active context;
 - the root README reflects the real active phase, compatibility, and release channels;
 - a tester-facing CI-green JAR has a Preview prerelease or `CURRENT_STATE.md` states why publication is intentionally deferred;
 - unvalidated behavior is labeled unvalidated rather than implied successful;
@@ -308,5 +329,6 @@ Before handoff:
 - temporary diagnostics should be removed unless intentionally retained;
 - completed/closed branches should be deleted or queued for automatic hygiene cleanup;
 - README/release-channel status should be synchronized with the handoff;
+- the active context capsule should be refreshed/validated when material project truth changed;
 - exact evidence gaps must be named;
 - the next action must be clear enough that a different agent can continue without relying on chat history.
