@@ -21,6 +21,7 @@
 ![Status](https://img.shields.io/badge/status-experimental-orange)
 
 [Releases](https://github.com/TrissTheBoss/Obsidian/releases) ·
+[Timeline](TIMELINE.md) ·
 [Roadmap](ai/MASTER_ROADMAP.md) ·
 [Current state](ai/CURRENT_STATE.md) ·
 [Contributing](CONTRIBUTING.md)
@@ -133,6 +134,7 @@ See [`ai/REPOSITORY_HYGIENE.md`](ai/REPOSITORY_HYGIENE.md) and [`CONTRIBUTING.md
 
 ## Project documents
 
+- [`TIMELINE.md`](TIMELINE.md) — detailed visual development timeline with phase status, milestone evidence, current position, and future horizon.
 - [`ai/CURRENT_STATE.md`](ai/CURRENT_STATE.md) — exact active implementation/runtime truth and next action.
 - [`ai/MASTER_ROADMAP.md`](ai/MASTER_ROADMAP.md) — canonical long-range product plan and phase gates.
 - [`ai/OPERATING_MANUAL.md`](ai/OPERATING_MANUAL.md) — engineering and validation procedure.

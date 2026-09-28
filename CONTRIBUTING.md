@@ -1,5 +1,11 @@
 # Contributing to Obsidian
 
+<div align="center">
+
+[README](README.md) · [Timeline](TIMELINE.md) · [Roadmap](ai/MASTER_ROADMAP.md) · [Current state](ai/CURRENT_STATE.md) · **Contributing**
+
+</div>
+
 Obsidian is an experimental Minecraft 26.2 Fabric renderer with strict correctness and runtime-evidence requirements.
 
 ## Before changing code
