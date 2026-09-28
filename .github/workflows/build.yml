@@ -160,7 +160,7 @@ jobs:
 
   modrinth:
     name: Mirror release to Modrinth
-    if: needs.release.outputs.created == 'true' && vars.MODRINTH_PROJECT_ID != ''
+    if: needs.release.result == 'success' && vars.MODRINTH_PROJECT_ID != ''
     needs: release
     uses: ./.github/workflows/publish-modrinth.yml
     with:

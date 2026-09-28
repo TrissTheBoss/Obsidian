@@ -60,4 +60,4 @@ Automatic mirroring requires:
 
 The PAT is never stored in repository files. The manual **Publish Modrinth** workflow can accept a project-ID override for first-time setup or recovery when the repository variable is not configured.
 
-The publish workflow checks whether the same Modrinth `version_number` already exists and leaves an existing version untouched instead of silently replacing it.
+The publish workflow checks whether the same Modrinth `version_number` already exists and leaves an existing version untouched instead of silently replacing it. Because the Modrinth check is idempotent, an existing GitHub Release/Preview can be invoked again to backfill Modrinth when that GitHub release predates Modrinth integration.

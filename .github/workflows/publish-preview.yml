@@ -183,7 +183,7 @@ jobs:
 
   modrinth:
     name: Mirror preview to Modrinth
-    if: needs.preview.outputs.release_created == 'true' && vars.MODRINTH_PROJECT_ID != ''
+    if: needs.preview.result == 'success' && vars.MODRINTH_PROJECT_ID != ''
     needs: preview
     uses: ./.github/workflows/publish-modrinth.yml
     with:

@@ -229,7 +229,7 @@ The main build workflow classifies versions containing `dev`, `alpha`, `beta`, `
 
 `.github/workflows/publish-preview.yml` allows a maintainer to publish a CI-built Preview directly from an active branch before merge. It refuses version strings that do not look like prereleases.
 
-`.github/workflows/publish-modrinth.yml` is the reusable/manual Modrinth mirror. Automatic GitHub release/Preview publication calls it only when repository variable `MODRINTH_PROJECT_ID` is configured. It rebuilds the exact selected source, verifies the expected runtime/sources JARs, checks Modrinth for an existing matching version number, and then publishes through the pinned `cloudnode-pro/modrinth-publish` action. GitHub remains package authority; Modrinth is a distribution mirror.
+`.github/workflows/publish-modrinth.yml` is the reusable/manual Modrinth mirror. Successful GitHub release/Preview publication flows call it when repository variable `MODRINTH_PROJECT_ID` is configured, including idempotent backfill when the corresponding GitHub release already existed before Modrinth mirroring was enabled. It rebuilds the exact selected source, verifies the expected runtime/sources JARs, checks Modrinth for an existing matching version number, and then publishes through the pinned `cloudnode-pro/modrinth-publish` action. GitHub remains package authority; Modrinth is a distribution mirror.
 
 A release tag is immutable package identity. If a tester-facing binary changes, bump the version rather than replacing the asset behind an existing version.
 
