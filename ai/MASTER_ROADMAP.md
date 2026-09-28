@@ -466,7 +466,7 @@ Obsidian has three publication levels:
 - **Preview / test build:** GitHub Prerelease for a CI-green tester-facing development binary before full promotion. Publish at least one Preview for every milestone that reaches real-machine testing, and publish corrected preview versions when testers need a new binary.
 - **CI artifact:** short-lived Actions output for engineering evidence and internal handoff.
 
-Release tags are immutable package identities; changed binaries require a version bump rather than asset replacement. `[no-release]` is for documentation, continuity, evidence-only, and repository-maintenance merges that do not create a new tester-facing binary. Draft PRs remain unmerged until their required validation gates close. Detailed rules live in `ai/REPOSITORY_HYGIENE.md` and `docs/RELEASE_CHANNELS.md`.
+Release tags are immutable package identities; changed binaries require a version bump rather than asset replacement. `[no-release]` is for documentation, continuity, evidence-only, and repository-maintenance merges that do not create a new tester-facing binary. GitHub remains canonical package/release authority; eligible Stable/Preview builds may be mirrored to Modrinth as a user-facing distribution surface under D-0031 without changing promotion status or package authority. Draft PRs remain unmerged until their required validation gates close. Detailed rules live in `ai/REPOSITORY_HYGIENE.md` and `docs/RELEASE_CHANNELS.md`.
 
 ---
 
