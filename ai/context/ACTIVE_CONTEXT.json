@@ -3,7 +3,7 @@
   "active_goal": "Continue Phase 4 P4.1 reference-runtime validation from the published dev1 Preview without changing renderer source until runtime evidence justifies a new correction.",
   "scope_boundary": "Active engineering scope is Phase 4 P4.1 shadow large-scene GPU visibility plus repository/AI continuity maintenance. Do not promote P4.1, expand native graphics ownership, revive P3.9 partial remeshing, or change production terrain draw ownership without new evidence and a separately frozen contract.",
   "source_snapshot": {
-    "created_at": "2026-09-28T13:21:20Z",
+    "created_at": "2026-09-28T13:23:58Z",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
       "ai/CURRENT_STATE.md@maintenance/modrinth-publishing",
@@ -11,6 +11,7 @@
       "ai/DECISIONS.md@maintenance/modrinth-publishing",
       "ai/REPOSITORY_HYGIENE.md@maintenance/modrinth-publishing",
       "docs/RELEASE_CHANNELS.md@maintenance/modrinth-publishing",
+      "ai/attempts/A-0212-secure-modrinth-publishing-integration.md@maintenance/modrinth-publishing",
       "ai/attempts/A-0205-phase4-p4.1-dev1-ci-package-runtime-handoff.md@main",
       "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md@main",
       "ai/attempts/A-0209-context-governor-hosted-validation-and-activation.md@main",
@@ -55,8 +56,8 @@
     },
     {
       "id": "F6",
-      "text": "Modrinth publication is being integrated as a user-facing distribution mirror while GitHub CI/releases remain canonical package authority; automatic mirroring is gated on repository variable MODRINTH_PROJECT_ID.",
-      "source_ref": "ai/CURRENT_STATE.md#Modrinth-distribution-mirror-INTEGRATION-VALIDATION"
+      "text": "Modrinth publication is integrated and hosted-CI green as a user-facing distribution mirror while GitHub CI/releases remain canonical package authority; the first real upload is pending a configured Modrinth project ID.",
+      "source_ref": "ai/CURRENT_STATE.md#Modrinth-distribution-mirror-INTEGRATED-FIRST-PUBLISH-PENDING-PROJECT-ID"
     }
   ],
   "decisions": [
@@ -99,8 +100,8 @@
     },
     {
       "id": "O3",
-      "text": "Before automatic Modrinth mirroring can run, configure public repository Actions variable MODRINTH_PROJECT_ID; until then GitHub publication continues and Modrinth mirroring remains skipped unless manually dispatched with a project-ID override.",
-      "source_ref": "ai/CURRENT_STATE.md#Modrinth-distribution-mirror-INTEGRATION-VALIDATION"
+      "text": "Configure public repository Actions variable MODRINTH_PROJECT_ID, then perform the first controlled Modrinth publication and verify the created Modrinth version metadata/files; until then automatic mirroring remains skipped and manual dispatch may supply a one-run project ID.",
+      "source_ref": "ai/CURRENT_STATE.md#Modrinth-distribution-mirror-INTEGRATED-FIRST-PUBLISH-PENDING-PROJECT-ID"
     }
   ],
   "exact_identifiers": [
@@ -121,8 +122,8 @@
     },
     {
       "id": "I4",
-      "text": "Modrinth integration draft PR #67 on branch maintenance/modrinth-publishing; publisher action pinned to cloudnode-pro/modrinth-publish commit 203bc72a51ae39fba1194fc4097d9f0750c49bd3 (v2.5.1).",
-      "source_ref": "ai/CURRENT_STATE.md#Modrinth-distribution-mirror-INTEGRATION-VALIDATION"
+      "text": "Modrinth integration draft PR #67 on branch maintenance/modrinth-publishing; validated head c5c902fa666cba3d60985f7913d7ad15d324ce22 passed Context Governor #10 and Build #779; publisher action pinned to cloudnode-pro/modrinth-publish commit 203bc72a51ae39fba1194fc4097d9f0750c49bd3 (v2.5.1).",
+      "source_ref": "ai/attempts/A-0212-secure-modrinth-publishing-integration.md#Exact-hosted-validation"
     }
   ],
   "security_boundaries": [
@@ -208,6 +209,12 @@
       "topic": "Modrinth distribution mirror, channel mapping, credential boundary, project-ID configuration, and publication workflow behavior",
       "source_ref": "ai/DECISIONS.md#D-0031 + ai/REPOSITORY_HYGIENE.md#Modrinth-credential-boundary + docs/RELEASE_CHANNELS.md#Distribution-surfaces",
       "locator": "Load before changing Modrinth publication behavior, third-party publisher version, credential handling, release-channel mapping, or package-authority semantics."
+    },
+    {
+      "id": "modrinth-integration-evidence",
+      "topic": "Exact Modrinth publisher review, workflow integration, hosted validation, security boundary, and remaining first-publish obligation",
+      "source_ref": "ai/attempts/A-0212-secure-modrinth-publishing-integration.md@maintenance/modrinth-publishing",
+      "locator": "Load before changing or troubleshooting Modrinth publication, or when closing the first real publication obligation."
     }
   ],
   "discarded_ids": [
@@ -220,7 +227,8 @@
     "repo-hygiene-evidence",
     "history-cold",
     "context-governor-design",
-    "modrinth-publishing-policy"
+    "modrinth-publishing-policy",
+    "modrinth-integration-evidence"
   ],
   "next_action": "Use the published P4.1 dev1 Preview for the frozen reference runtime exercise; when the tester supplies the log and visual verdict, rehydrate A-0203/A-0205 and validate the result without weakening gates."
 }
