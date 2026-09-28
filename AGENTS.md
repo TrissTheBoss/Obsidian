@@ -12,8 +12,8 @@ The `ai/` directory is the persistent project memory for:
 - failures and superseded approaches;
 - handoff information.
 
-`ai/MASTER_ROADMAP.md` is mandatory reading. It is the canonical long-range plan, not evidence that a feature is already implemented. Follow its Roadmap Governance procedure before changing phase ordering, planned features, priorities, validation gates, experiments, compatibility scope, release strategy, or major feature status.
+`ai/MASTER_ROADMAP.md` is mandatory reading. It is the canonical long-range plan, not evidence that a feature is already implemented. `ai/REPOSITORY_HYGIENE.md` is also mandatory for branch lifecycle, README freshness, public repository organization, and release channels. Follow Roadmap Governance before changing phase ordering, planned features, priorities, validation gates, experiments, compatibility scope, release strategy, or major feature status.
 
-After any meaningful engineering or roadmap attempt, update the relevant `ai/` records as described in `ai/OPERATING_MANUAL.md`.
+After any meaningful engineering or roadmap attempt, update the relevant `ai/` records as described in `ai/OPERATING_MANUAL.md`, then run the repository/readme/release handoff checks in `ai/REPOSITORY_HYGIENE.md`.
 
 Never silently delete a major roadmap feature or rewrite historical attempt evidence to match a newer plan. Preserve the reason in immutable attempts and/or durable decisions, then keep the roadmap itself clean as the best current plan.
