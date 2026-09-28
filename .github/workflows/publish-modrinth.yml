@@ -1,0 +1,247 @@
+name: Publish Modrinth
+
+on:
+  workflow_call:
+    inputs:
+      source_ref:
+        description: Exact branch, tag, or commit SHA to build and publish
+        required: true
+        type: string
+      project_id:
+        description: Modrinth project ID; falls back to repository variable MODRINTH_PROJECT_ID
+        required: false
+        default: ''
+        type: string
+      status:
+        description: Modrinth version visibility
+        required: false
+        default: listed
+        type: string
+    secrets:
+      modrinth_pat:
+        required: true
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Exact branch, tag, or commit SHA to build and publish
+        required: true
+        default: main
+        type: string
+      project_id:
+        description: Optional Modrinth project ID override; otherwise uses MODRINTH_PROJECT_ID repository variable
+        required: false
+        default: ''
+        type: string
+      status:
+        description: Modrinth version visibility
+        required: true
+        default: listed
+        type: choice
+        options:
+          - listed
+          - draft
+          - unlisted
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build and publish Modrinth version
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve secure publication configuration
+        id: config
+        env:
+          INPUT_PROJECT_ID: ${{ inputs.project_id }}
+          DEFAULT_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
+          MODRINTH_TOKEN: ${{ secrets.modrinth_pat }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$MODRINTH_TOKEN" ]]; then
+            echo 'Required GitHub Actions secret modrinth_pat is not configured.' >&2
+            exit 1
+          fi
+
+          PROJECT_ID="$INPUT_PROJECT_ID"
+          if [[ -z "$PROJECT_ID" ]]; then
+            PROJECT_ID="$DEFAULT_PROJECT_ID"
+          fi
+          if [[ -z "$PROJECT_ID" ]]; then
+            echo 'No Modrinth project ID configured. Set repository variable MODRINTH_PROJECT_ID or provide project_id when dispatching manually.' >&2
+            exit 1
+          fi
+
+          echo "project_id=$PROJECT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle 9.5.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+
+      - name: Resolve Modrinth metadata
+        id: meta
+        env:
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="$(grep '^mod_version=' gradle.properties | cut -d= -f2-)"
+          GAME_VERSION="$(grep '^minecraft_version=' gradle.properties | cut -d= -f2-)"
+          if [[ -z "$VERSION" || -z "$GAME_VERSION" ]]; then
+            echo 'mod_version or minecraft_version is missing from gradle.properties.' >&2
+            exit 1
+          fi
+
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          CHANNEL=release
+          if [[ "$VERSION" =~ (dev|alpha|preview) ]]; then
+            CHANNEL=alpha
+          elif [[ "$VERSION" =~ (beta|rc|pre) ]]; then
+            CHANNEL=beta
+          fi
+
+          PRIMARY="Obsidian-$VERSION.jar"
+          SOURCES="Obsidian-$VERSION-sources.jar"
+          CHANGELOG_FILE="$RUNNER_TEMP/modrinth-changelog.md"
+          RELEASE_NOTES="docs/releases/v$VERSION.md"
+
+          if [[ -f "$RELEASE_NOTES" ]]; then
+            cp "$RELEASE_NOTES" "$CHANGELOG_FILE"
+          elif [[ -f CHANGELOG.md ]] && grep -q "^## $VERSION\b" CHANGELOG.md; then
+            awk -v heading="## $VERSION" '
+              index($0, heading) == 1 { found=1 }
+              found && seen && /^## / { exit }
+              found { print; seen=1 }
+            ' CHANGELOG.md > "$CHANGELOG_FILE"
+          else
+            cat > "$CHANGELOG_FILE" <<EOF
+          Obsidian $VERSION.
+
+          See the matching GitHub release and project documentation for the full test notes and current maturity status.
+          EOF
+          fi
+
+          {
+            echo
+            echo '---'
+            echo
+            echo "Exact source: https://github.com/$REPO/commit/$SOURCE_SHA"
+          } >> "$CHANGELOG_FILE"
+
+          {
+            echo "version=$VERSION"
+            echo "game_version=$GAME_VERSION"
+            echo "channel=$CHANNEL"
+            echo "primary=$PRIMARY"
+            echo "sources=$SOURCES"
+            echo "source_sha=$SOURCE_SHA"
+            echo "version_name=Obsidian $VERSION"
+            echo 'changelog<<__CHANGELOG__'
+            cat "$CHANGELOG_FILE"
+            echo '__CHANGELOG__'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build exact source
+        run: gradle build --stacktrace
+
+      - name: Validate publishable files
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "build/libs/Obsidian-$VERSION.jar"
+          test -f "build/libs/Obsidian-$VERSION-sources.jar"
+
+      - name: Check whether version already exists
+        id: existing
+        env:
+          MODRINTH_TOKEN: ${{ secrets.modrinth_pat }}
+          PROJECT_ID: ${{ steps.config.outputs.project_id }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          HTTP_CODE="$(curl             --silent             --show-error             --output "$RUNNER_TEMP/modrinth-versions.json"             --write-out '%{http_code}'             --header "Authorization: $MODRINTH_TOKEN"             "https://api.modrinth.com/v2/project/$PROJECT_ID/version?include_changelog=false")"
+
+          if [[ "$HTTP_CODE" != "200" ]]; then
+            echo "Modrinth project/version lookup failed with HTTP $HTTP_CODE. Verify the project ID and PAT scope." >&2
+            exit 1
+          fi
+
+          EXISTING_ID="$(jq -r --arg version "$VERSION" '.[] | select(.version_number == $version) | .id' "$RUNNER_TEMP/modrinth-versions.json" | head -n 1)"
+          if [[ -n "$EXISTING_ID" ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "version_id=$EXISTING_ID" >> "$GITHUB_OUTPUT"
+            echo "Modrinth version $VERSION already exists; leaving it untouched."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish version to Modrinth
+        id: modrinth
+        if: steps.existing.outputs.exists != 'true'
+        uses: cloudnode-pro/modrinth-publish@203bc72a51ae39fba1194fc4097d9f0750c49bd3
+        with:
+          token: ${{ secrets.modrinth_pat }}
+          project: ${{ steps.config.outputs.project_id }}
+          name: ${{ steps.meta.outputs.version_name }}
+          version: ${{ steps.meta.outputs.version }}
+          channel: ${{ steps.meta.outputs.channel }}
+          changelog: ${{ steps.meta.outputs.changelog }}
+          loaders: fabric
+          game-versions: ${{ steps.meta.outputs.game_version }}
+          files: |-
+            build/libs/${{ steps.meta.outputs.primary }}
+            build/libs/${{ steps.meta.outputs.sources }}
+          primary-file: ${{ steps.meta.outputs.primary }}
+          file-types: |-
+            ${{ steps.meta.outputs.sources }}=sources-jar
+          environment: client_only
+          status: ${{ inputs.status }}
+
+      - name: Publication summary
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          CHANNEL: ${{ steps.meta.outputs.channel }}
+          GAME_VERSION: ${{ steps.meta.outputs.game_version }}
+          SOURCE_SHA: ${{ steps.meta.outputs.source_sha }}
+          ALREADY_EXISTS: ${{ steps.existing.outputs.exists }}
+          EXISTING_ID: ${{ steps.existing.outputs.version_id }}
+          NEW_ID: ${{ steps.modrinth.outputs.version-id }}
+        shell: bash
+        run: |
+          {
+            echo '## Modrinth publication'
+            echo
+            echo "- Version: $VERSION"
+            echo "- Minecraft: $GAME_VERSION"
+            echo "- Loader: Fabric"
+            echo "- Environment: client only"
+            echo "- Channel: $CHANNEL"
+            echo "- Source: $SOURCE_SHA"
+            if [[ "$ALREADY_EXISTS" == "true" ]]; then
+              echo "- Result: existing Modrinth version left unchanged"
+              echo "- Version ID: $EXISTING_ID"
+            else
+              echo "- Result: published"
+              echo "- Version ID: $NEW_ID"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
