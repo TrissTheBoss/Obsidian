@@ -3,17 +3,17 @@
   "active_goal": "Continue Phase 4 P4.1 reference-runtime validation from the published dev1 Preview without changing renderer source until runtime evidence justifies a new correction.",
   "scope_boundary": "Active engineering scope is Phase 4 P4.1 shadow large-scene GPU visibility plus repository/AI continuity maintenance. Do not promote P4.1, expand native graphics ownership, revive P3.9 partial remeshing, or change production terrain draw ownership without new evidence and a separately frozen contract.",
   "source_snapshot": {
-    "created_at": "2026-09-28T14:01:37Z",
+    "created_at": "2026-09-28T14:04:01Z",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
       "ai/CURRENT_STATE.md@maintenance/modrinth-project-id-secret",
       "ai/DECISIONS.md@maintenance/modrinth-project-id-secret",
       "ai/REPOSITORY_HYGIENE.md@maintenance/modrinth-project-id-secret",
       "docs/RELEASE_CHANNELS.md@maintenance/modrinth-project-id-secret",
-      "ai/attempts/A-0212-secure-modrinth-publishing-integration.md@main",
-      "ai/attempts/A-0213-modrinth-existing-preview-backfill.md@main",
       "ai/attempts/A-0214-first-live-modrinth-publication-project-id-mismatch.md@maintenance/modrinth-project-id-secret",
+      "ai/attempts/A-0215-modrinth-project-id-secret-hosted-validation.md@maintenance/modrinth-project-id-secret",
       "pull/57",
+      "pull/69",
       "release/v0.4.0-phase4-dev1"
     ]
   },
@@ -97,8 +97,8 @@
     },
     {
       "id": "O3",
-      "text": "Validate and merge secret-backed MODRINTH_PROJECT_ID support, then rerun /publish-preview on PR #57; verify the Modrinth mirror job actually runs, inspect the created/existing version result, and record exact first-publication evidence.",
-      "source_ref": "ai/attempts/A-0214-first-live-modrinth-publication-project-id-mismatch.md#Next-action"
+      "text": "Merge PR #69 after final evidence-only CI remains green, then rerun /publish-preview on PR #57; verify the downstream Modrinth mirror job runs with the secret-backed project ID and record exact publication evidence.",
+      "source_ref": "ai/attempts/A-0215-modrinth-project-id-secret-hosted-validation.md#Next-action"
     }
   ],
   "exact_identifiers": [
@@ -119,8 +119,8 @@
     },
     {
       "id": "I4",
-      "text": "Base Modrinth integration merge 7323626f7d8f556f5ae81735ecc0e6a4da9bc85f; idempotent backfill merge 67e5a19d92e9e4f746ee5632b95e6aef6fb12c0b; first live Preview run 36432267102 / #3; skipped Modrinth job 108961448887; publisher pin remains 203bc72a51ae39fba1194fc4097d9f0750c49bd3.",
-      "source_ref": "ai/attempts/A-0214-first-live-modrinth-publication-project-id-mismatch.md"
+      "text": "Modrinth base integration merge 7323626f7d8f556f5ae81735ecc0e6a4da9bc85f; backfill merge 67e5a19d92e9e4f746ee5632b95e6aef6fb12c0b; first live run 36432267102 skipped Modrinth job 108961448887; secret-backed correction PR #69 validation head f1c82fbe8433c07e14d6ac7ef487bc9c8ef1b2c0 passed Context Governor #19 and Build #789.",
+      "source_ref": "ai/attempts/A-0215-modrinth-project-id-secret-hosted-validation.md#Exact-hosted-validation"
     }
   ],
   "security_boundaries": [
@@ -224,6 +224,12 @@
       "topic": "First live Modrinth publication attempt, skipped-job root cause, and secret-backed project-ID correction",
       "source_ref": "ai/attempts/A-0214-first-live-modrinth-publication-project-id-mismatch.md@maintenance/modrinth-project-id-secret",
       "locator": "Load when validating/retrying the first Modrinth publication or diagnosing project-ID configuration."
+    },
+    {
+      "id": "modrinth-secret-project-id-validation",
+      "topic": "Hosted validation of secret-backed MODRINTH_PROJECT_ID support",
+      "source_ref": "ai/attempts/A-0215-modrinth-project-id-secret-hosted-validation.md@maintenance/modrinth-project-id-secret",
+      "locator": "Load before merging or troubleshooting secret-backed Modrinth configuration."
     }
   ],
   "discarded_ids": [
@@ -239,7 +245,8 @@
     "modrinth-publishing-policy",
     "modrinth-integration-evidence",
     "modrinth-backfill-evidence",
-    "modrinth-first-live-attempt"
+    "modrinth-first-live-attempt",
+    "modrinth-secret-project-id-validation"
   ],
   "next_action": "Use the published P4.1 dev1 Preview for the frozen reference runtime exercise; when the tester supplies the log and visual verdict, rehydrate A-0203/A-0205 and validate the result without weakening gates."
 }
