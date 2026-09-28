@@ -3,17 +3,16 @@
   "active_goal": "Continue Phase 4 P4.1 reference-runtime validation from the published dev1 Preview without changing renderer source until runtime evidence justifies a new correction.",
   "scope_boundary": "Active engineering scope is Phase 4 P4.1 shadow large-scene GPU visibility plus repository/AI continuity maintenance. Do not promote P4.1, expand native graphics ownership, revive P3.9 partial remeshing, or change production terrain draw ownership without new evidence and a separately frozen contract.",
   "source_snapshot": {
-    "created_at": "2026-09-28T14:04:01Z",
+    "created_at": "2026-09-28T14:12:44Z",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
-      "ai/CURRENT_STATE.md@maintenance/modrinth-project-id-secret",
-      "ai/DECISIONS.md@maintenance/modrinth-project-id-secret",
-      "ai/REPOSITORY_HYGIENE.md@maintenance/modrinth-project-id-secret",
-      "docs/RELEASE_CHANNELS.md@maintenance/modrinth-project-id-secret",
-      "ai/attempts/A-0214-first-live-modrinth-publication-project-id-mismatch.md@maintenance/modrinth-project-id-secret",
-      "ai/attempts/A-0215-modrinth-project-id-secret-hosted-validation.md@maintenance/modrinth-project-id-secret",
+      "ai/CURRENT_STATE.md@maintenance/modrinth-404-fallback",
+      "ai/DECISIONS.md@main",
+      "ai/REPOSITORY_HYGIENE.md@main",
+      "ai/attempts/A-0214-first-live-modrinth-publication-project-id-mismatch.md@main",
+      "ai/attempts/A-0215-modrinth-project-id-secret-hosted-validation.md@main",
+      "ai/attempts/A-0216-modrinth-read-preflight-404.md@maintenance/modrinth-404-fallback",
       "pull/57",
-      "pull/69",
       "release/v0.4.0-phase4-dev1"
     ]
   },
@@ -53,8 +52,8 @@
     },
     {
       "id": "F6",
-      "text": "Modrinth mirror integration and idempotent backfill are merged; first live run #36432267102 proved the Preview path but skipped the Modrinth job because MODRINTH_PROJECT_ID was stored as a repository secret while the caller gated on vars. Secret-backed project-ID support is staged; no Modrinth state changed.",
-      "source_ref": "ai/attempts/A-0214-first-live-modrinth-publication-project-id-mismatch.md#Result"
+      "text": "Modrinth integration now reaches the live API with both masked secret-backed project ID and PAT resolved. Publish Preview run #4 reached the mirror job but the list-versions preflight returned HTTP 404 before create-version; no Modrinth state changed. A 404-fallback/identifier-normalization correction is staged.",
+      "source_ref": "ai/attempts/A-0216-modrinth-read-preflight-404.md#Proven-progress"
     }
   ],
   "decisions": [
@@ -97,8 +96,8 @@
     },
     {
       "id": "O3",
-      "text": "Merge PR #69 after final evidence-only CI remains green, then rerun /publish-preview on PR #57; verify the downstream Modrinth mirror job runs with the secret-backed project ID and record exact publication evidence.",
-      "source_ref": "ai/attempts/A-0215-modrinth-project-id-secret-hosted-validation.md#Next-action"
+      "text": "Validate and merge the Modrinth 404-read fallback, then rerun /publish-preview on PR #57 so the pinned create-version action executes. If create-version rejects the configured identifier, correct MODRINTH_PROJECT_ID; otherwise verify and record the first published Modrinth version.",
+      "source_ref": "ai/attempts/A-0216-modrinth-read-preflight-404.md#Next-action"
     }
   ],
   "exact_identifiers": [
@@ -119,8 +118,8 @@
     },
     {
       "id": "I4",
-      "text": "Modrinth base integration merge 7323626f7d8f556f5ae81735ecc0e6a4da9bc85f; backfill merge 67e5a19d92e9e4f746ee5632b95e6aef6fb12c0b; first live run 36432267102 skipped Modrinth job 108961448887; secret-backed correction PR #69 validation head f1c82fbe8433c07e14d6ac7ef487bc9c8ef1b2c0 passed Context Governor #19 and Build #789.",
-      "source_ref": "ai/attempts/A-0215-modrinth-project-id-secret-hosted-validation.md#Exact-hosted-validation"
+      "text": "Modrinth integration merges: 7323626f7d8f556f5ae81735ecc0e6a4da9bc85f, 67e5a19d92e9e4f746ee5632b95e6aef6fb12c0b, dc4fdec81cc389fb0cee300d982d7da61015ad1b. Live run #4: 36433438631; Modrinth job 108965539055; read-preflight failure HTTP 404.",
+      "source_ref": "ai/attempts/A-0216-modrinth-read-preflight-404.md#Evidence"
     }
   ],
   "security_boundaries": [
@@ -230,6 +229,12 @@
       "topic": "Hosted validation of secret-backed MODRINTH_PROJECT_ID support",
       "source_ref": "ai/attempts/A-0215-modrinth-project-id-secret-hosted-validation.md@maintenance/modrinth-project-id-secret",
       "locator": "Load before merging or troubleshooting secret-backed Modrinth configuration."
+    },
+    {
+      "id": "modrinth-404-preflight",
+      "topic": "Live Modrinth API reachability, 404 read-preflight failure, and create-path fallback",
+      "source_ref": "ai/attempts/A-0216-modrinth-read-preflight-404.md@maintenance/modrinth-404-fallback",
+      "locator": "Load before retrying or troubleshooting the first create-version call."
     }
   ],
   "discarded_ids": [
@@ -246,7 +251,8 @@
     "modrinth-integration-evidence",
     "modrinth-backfill-evidence",
     "modrinth-first-live-attempt",
-    "modrinth-secret-project-id-validation"
+    "modrinth-secret-project-id-validation",
+    "modrinth-404-preflight"
   ],
   "next_action": "Use the published P4.1 dev1 Preview for the frozen reference runtime exercise; when the tester supplies the log and visual verdict, rehydrate A-0203/A-0205 and validate the result without weakening gates."
 }

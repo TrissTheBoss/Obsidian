@@ -81,6 +81,23 @@ jobs:
             exit 1
           fi
 
+          PROJECT_ID="$(printf '%s' "$PROJECT_ID" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+          PROJECT_ID="${PROJECT_ID%%\#*}"
+          PROJECT_ID="${PROJECT_ID%%\?*}"
+          PROJECT_ID="${PROJECT_ID%/}"
+          if [[ "$PROJECT_ID" == */* ]]; then
+            PROJECT_ID="${PROJECT_ID##*/}"
+          fi
+
+          if [[ "$PROJECT_ID" == mrp_* && ${#PROJECT_ID} -gt 32 ]]; then
+            echo 'MODRINTH_PROJECT_ID appears to contain a PAT rather than a project ID/slug.' >&2
+            exit 1
+          fi
+          if [[ -z "$PROJECT_ID" ]]; then
+            echo 'MODRINTH_PROJECT_ID did not contain a usable project ID/slug after normalization.' >&2
+            exit 1
+          fi
+
           echo "project_id=$PROJECT_ID" >> "$GITHUB_OUTPUT"
 
       - name: Checkout exact source
@@ -187,18 +204,21 @@ jobs:
 
           HTTP_CODE="$(curl             --silent             --show-error             --output "$RUNNER_TEMP/modrinth-versions.json"             --write-out '%{http_code}'             --header "Authorization: $MODRINTH_TOKEN"             "https://api.modrinth.com/v2/project/$PROJECT_ID/version?include_changelog=false")"
 
-          if [[ "$HTTP_CODE" != "200" ]]; then
-            echo "Modrinth project/version lookup failed with HTTP $HTTP_CODE. Verify the project ID and PAT scope." >&2
-            exit 1
-          fi
-
-          EXISTING_ID="$(jq -r --arg version "$VERSION" '.[] | select(.version_number == $version) | .id' "$RUNNER_TEMP/modrinth-versions.json" | head -n 1)"
-          if [[ -n "$EXISTING_ID" ]]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "version_id=$EXISTING_ID" >> "$GITHUB_OUTPUT"
-            echo "Modrinth version $VERSION already exists; leaving it untouched."
-          else
+          if [[ "$HTTP_CODE" == "200" ]]; then
+            EXISTING_ID="$(jq -r --arg version "$VERSION" '.[] | select(.version_number == $version) | .id' "$RUNNER_TEMP/modrinth-versions.json" | head -n 1)"
+            if [[ -n "$EXISTING_ID" ]]; then
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+              echo "version_id=$EXISTING_ID" >> "$GITHUB_OUTPUT"
+              echo "Modrinth version $VERSION already exists; leaving it untouched."
+            else
+              echo "exists=false" >> "$GITHUB_OUTPUT"
+            fi
+          elif [[ "$HTTP_CODE" == "404" ]]; then
             echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo 'Modrinth version lookup returned HTTP 404; proceeding to the create-version call so Modrinth can authorize the write path directly.'
+          else
+            echo "Modrinth project/version lookup failed with HTTP $HTTP_CODE. Verify the project ID and PAT permissions." >&2
+            exit 1
           fi
 
       - name: Publish version to Modrinth
