@@ -183,7 +183,7 @@ jobs:
 
   modrinth:
     name: Mirror preview to Modrinth
-    if: needs.preview.result == 'success' && vars.MODRINTH_PROJECT_ID != ''
+    if: needs.preview.result == 'success'
     needs: preview
     uses: ./.github/workflows/publish-modrinth.yml
     with:
@@ -192,3 +192,4 @@ jobs:
       status: listed
     secrets:
       modrinth_pat: ${{ secrets.modrinth_pat }}
+      modrinth_project_id: ${{ secrets.MODRINTH_PROJECT_ID }}
