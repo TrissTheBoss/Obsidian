@@ -1,6 +1,6 @@
 # Obsidian Master Roadmap and Product Plan
 
-Last materially revised: 2026-08-29  
+Last materially revised: 2026-09-28  
 Roadmap schema: v1  
 Canonical repository: `TrissTheBoss/Obsidian`
 
@@ -11,6 +11,7 @@ Repository roles:
 - `ai/CURRENT_STATE.md` — current truth and immediate milestone;
 - `ai/MASTER_ROADMAP.md` — intended architecture and build order;
 - `ai/DECISIONS.md` — durable engineering/product decisions;
+- `ai/REPOSITORY_HYGIENE.md` — branch lifecycle, public README, and release-channel policy;
 - `ai/ATTEMPT_LOG.md` + `ai/attempts/` — immutable experiment/evidence history;
 - source + exact CI + runtime evidence — authority for what actually exists.
 
@@ -459,7 +460,13 @@ Compilation alone is never enough when runtime behavior is part of the contract.
 
 ## 12. Release strategy
 
-Development versions may be direct test JARs/CI artifacts. Internal milestone merges normally use `[no-release]`. Draft PRs remain unmerged until required runtime evidence exists. Public releases are coherent validated checkpoints rather than every dev milestone.
+Obsidian has three publication levels:
+
+- **Stable checkpoint:** normal GitHub Release for a validated public checkpoint. It remains eligible for GitHub `latest`; while Obsidian is experimental, release notes must still state the actual maturity level.
+- **Preview / test build:** GitHub Prerelease for a CI-green tester-facing development binary before full promotion. Publish at least one Preview for every milestone that reaches real-machine testing, and publish corrected preview versions when testers need a new binary.
+- **CI artifact:** short-lived Actions output for engineering evidence and internal handoff.
+
+Release tags are immutable package identities; changed binaries require a version bump rather than asset replacement. `[no-release]` is for documentation, continuity, evidence-only, and repository-maintenance merges that do not create a new tester-facing binary. Draft PRs remain unmerged until their required validation gates close. Detailed rules live in `ai/REPOSITORY_HYGIENE.md` and `docs/RELEASE_CHANNELS.md`.
 
 ---
 
@@ -498,6 +505,14 @@ Newer durable decisions override stale roadmap text until synchronized. Always p
 
 ## 16. Roadmap revision log
 
+### 2026-09-28 — repository hygiene, public README and release-channel governance
+
+- synchronized Phase 3 completion and Phase 4 P4.1 activation from A-0202 through A-0205;
+- adopted D-0028: `main` is the only permanent branch and branches are disposable working state, not archives;
+- added explicit Stable / Preview-prerelease / CI-artifact publication channels;
+- required tester-facing CI-green milestone binaries to become discoverable Preview prereleases rather than living only in Actions artifacts;
+- made README freshness and repository hygiene part of normal handoff discipline;
+- added automated closed/stale branch cleanup with safeguards for `main`, protected branches and open PR heads.
 ### 2026-08-29 — P3.8 completion and P3.9 activation
 
 - A-0158 closed the frozen A-0154 dev15 benchmark contract on the exact same canonical package after A-0157 was partial only for missing measured F3+T;
@@ -585,15 +600,12 @@ Created the canonical master roadmap and formal governance model.
 - Phase 0: COMPLETE.
 - Phase 1: COMPLETE.
 - Phase 2: COMPLETE through P2.7.
-- Phase 3: ACTIVE.
-- P3.1: COMPLETE through `0.3.0-phase3-dev3`.
-- P3.2: COMPLETE through `0.3.0-phase3-dev4`, PR #36.
-- P3.3: COMPLETE through `0.3.0-phase3-dev5`, PR #37.
-- **P3.4: COMPLETE through `0.3.0-phase3-dev11`, promotion PR #44.**
-- **P3.5: COMPLETE through corrected `0.3.0-phase3-dev12.1`, promotion PR #46.**
-- **P3.6: COMPLETE through `0.3.0-phase3-dev13`; A-0149 proves no baseline mitigation required on the reference path.**
-- **P3.7: ACTIVE — differential correctness framework.**
-- P3.8 remains PLANNED and P3.9 remains EXPERIMENTAL.
-- Phases 4-12 retain their planned order/scope.
+- **Phase 3: COMPLETE.**
+- P3.1-P3.8: COMPLETE.
+- P3.9 fixed four-Y-slice partial remeshing: **REJECTED / DEFERRED** by A-0188; do not revive the same strategy as baseline.
+- P3.10 production opaque/cutout terrain replacement: **COMPLETE**; promotion merged to `main` as `01547b55f68690a5d0aac8405fc0fe91cdf440f9` and post-merge Build #741 passed.
+- **Phase 4: ACTIVE — GPU-driven visibility at real-world scale.**
+- **P4.1: ACTIVE / first runtime canary packaged.** `0.4.0-phase4-dev1` is shadow-only large-scene visibility and requires the frozen reference runtime/visual test before promotion.
+- Phases 5-12 retain their planned order/scope unless later evidence-driven roadmap governance changes them.
 
 Always verify live details in `ai/CURRENT_STATE.md` before acting because active milestone state changes more frequently than the long-range plan.

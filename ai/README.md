@@ -11,9 +11,10 @@ Every agent taking over Obsidian should read these files before making changes:
 1. `ai/CURRENT_STATE.md` - what exists right now, what is validated, what branch/PR/version is active, and what the immediate next action is.
 2. `ai/MASTER_ROADMAP.md` - the canonical long-range product plan: phases, planned features, architecture direction, validation gates, experiments, compatibility/release strategy, and the formal procedure for altering the roadmap.
 3. `ai/OPERATING_MANUAL.md` - project goals, constraints, engineering workflow, validation rules, handoff rules, and roadmap-maintenance procedure.
-4. `ai/DECISIONS.md` - durable architectural and product decisions and why they were made.
-5. `ai/ATTEMPT_LOG.md` - historical append-only record through the original log format.
-6. `ai/attempts/` - immutable one-file-per-attempt continuation for experiments, validations, research, failures, roadmap research, and architecture work.
+4. `ai/REPOSITORY_HYGIENE.md` - branch lifecycle, README freshness, public repository organization, release channels, and cleanup rules.
+5. `ai/DECISIONS.md` - durable architectural and product decisions and why they were made.
+6. `ai/ATTEMPT_LOG.md` - historical append-only record through the original log format.
+7. `ai/attempts/` - immutable one-file-per-attempt continuation for experiments, validations, research, failures, roadmap research, and architecture work.
 
 Do not skip `MASTER_ROADMAP.md` merely because `CURRENT_STATE.md` is up to date. `CURRENT_STATE.md` is intentionally about the present; the roadmap is where the complete intended product and sequencing live.
 
@@ -23,6 +24,7 @@ Use the documents for different questions rather than treating them as interchan
 
 - **What is true right now?** -> `CURRENT_STATE.md`.
 - **What are we trying to build over the life of the project?** -> `MASTER_ROADMAP.md`.
+- **How must the GitHub repository, branches, README, and releases be kept clean?** -> `REPOSITORY_HYGIENE.md`.
 - **Why did we choose this architecture/product direction?** -> `DECISIONS.md`.
 - **What exactly was tried and what happened?** -> `ATTEMPT_LOG.md` and `attempts/`.
 - **What code actually exists?** -> source + exact commit/branch.
@@ -38,7 +40,7 @@ If an agent tries something that changes code, build behavior, runtime behavior,
 
 Older attempts live in `ATTEMPT_LOG.md`. New attempts should be created as immutable files under `ai/attempts/` using names such as `A-0058-short-description.md`. This avoids replacing a large history file merely to append one entry and makes concurrent agent work safer.
 
-When a successful attempt changes the current truth of the project, also update `CURRENT_STATE.md`. When it creates or reverses a durable design choice, also update `DECISIONS.md`. When it changes the long-range plan, phase ordering, product feature set, validation gates, experiments, or release/compatibility strategy, update `MASTER_ROADMAP.md` according to its Roadmap Governance section.
+When a successful attempt changes the current truth of the project, also update `CURRENT_STATE.md`. When it creates or reverses a durable design choice, also update `DECISIONS.md`. When it changes the long-range plan, phase ordering, product feature set, validation gates, experiments, or release/compatibility strategy, update `MASTER_ROADMAP.md` according to its Roadmap Governance section. When it changes public status, branch lifecycle, README content, or tester-facing release behavior, also apply `REPOSITORY_HYGIENE.md`.
 
 ## Roadmap discipline
 

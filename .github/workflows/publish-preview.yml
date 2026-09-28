@@ -1,0 +1,163 @@
+name: Publish Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type PUBLISH PREVIEW to publish the selected ref as a GitHub prerelease'
+        required: true
+        type: string
+  pull_request:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: read
+  issues: read
+
+jobs:
+  preview:
+    name: Build and publish preview prerelease
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirmation == 'PUBLISH PREVIEW') ||
+      (github.event_name == 'pull_request' &&
+       github.event.label.name == 'publish-preview' &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       github.event.comment.body == '/publish-preview' &&
+       (github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'))
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve exact source commit
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_SHA: ${{ github.sha }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            SHA="$PR_HEAD_SHA"
+          elif [[ "$EVENT_NAME" == "issue_comment" ]]; then
+            HEAD_REPO="$(gh api "repos/$REPO/pulls/$ISSUE_NUMBER" --jq '.head.repo.full_name')"
+            if [[ "$HEAD_REPO" != "$REPO" ]]; then
+              echo 'Refusing Preview publication from a fork PR.' >&2
+              exit 1
+            fi
+            SHA="$(gh api "repos/$REPO/pulls/$ISSUE_NUMBER" --jq '.head.sha')"
+          else
+            SHA="$EVENT_SHA"
+          fi
+          test -n "$SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle 9.5.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.1'
+
+      - name: Resolve and validate preview version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(grep '^mod_version=' gradle.properties | cut -d= -f2-)"
+          if [[ -z "$VERSION" ]]; then
+            echo 'mod_version is missing from gradle.properties' >&2
+            exit 1
+          fi
+          if [[ ! "$VERSION" =~ (dev|alpha|beta|rc|preview) ]]; then
+            echo "Refusing preview publication: '$VERSION' does not contain a prerelease marker." >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build exact selected source
+        run: gradle build --stacktrace
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION='${{ steps.version.outputs.version }}'
+          mkdir -p release
+          cp "build/libs/Obsidian-$VERSION.jar" release/
+          cp "build/libs/Obsidian-$VERSION-sources.jar" release/
+          cd release
+          sha256sum "Obsidian-$VERSION.jar" "Obsidian-$VERSION-sources.jar" > SHA256SUMS
+
+      - name: Publish immutable preview prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION='${{ steps.version.outputs.version }}'
+          TAG="v$VERSION"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists. Preview tags are immutable; bump mod_version for a different binary."
+            exit 0
+          fi
+
+          cat > release/PREVIEW_NOTES.md <<EOF
+          > [!WARNING]
+          > **PREVIEW / TEST BUILD - NOT PRODUCTION READY unless this release explicitly says otherwise.**
+
+          This build is published for active Obsidian runtime testing.
+
+          - Version: $VERSION
+          - Exact source commit: $SOURCE_SHA
+          - Minecraft: 26.2
+          - Fabric Loader baseline: 0.19.3
+          - Java: 25
+          - Renderer backend: Vulkan only
+
+          Read the active PR and ai/CURRENT_STATE.md for the exact test contract, known limitations, and visual expectations.
+
+          SHA-256 hashes are attached in SHA256SUMS.
+          EOF
+
+          gh release create "$TAG" \
+            --target "$SOURCE_SHA" \
+            --title "Obsidian $VERSION - Preview" \
+            --prerelease \
+            --notes-file release/PREVIEW_NOTES.md \
+            "release/Obsidian-$VERSION.jar" \
+            "release/Obsidian-$VERSION-sources.jar" \
+            release/SHA256SUMS
+
+      - name: Summary
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          {
+            echo '## Preview publication'
+            echo
+            echo '- Version: ${{ steps.version.outputs.version }}'
+            echo "- Source: $SOURCE_SHA"
+            echo '- Channel: GitHub Prerelease'
+          } >> "$GITHUB_STEP_SUMMARY"

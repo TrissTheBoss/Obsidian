@@ -52,16 +52,24 @@ jobs:
       - name: Checkout release metadata
         uses: actions/checkout@v4
 
-      - name: Resolve project version
+      - name: Resolve project version and channel
         id: version
         shell: bash
         run: |
+          set -euo pipefail
           VERSION="$(grep '^mod_version=' gradle.properties | cut -d= -f2-)"
-          if [ -z "$VERSION" ]; then
+          if [[ -z "$VERSION" ]]; then
             echo 'mod_version is missing from gradle.properties' >&2
             exit 1
           fi
+
+          CHANNEL=stable
+          if [[ "$VERSION" =~ (dev|alpha|beta|rc|preview) ]]; then
+            CHANNEL=preview
+          fi
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -72,40 +80,63 @@ jobs:
       - name: Validate release files and create checksums
         shell: bash
         run: |
+          set -euo pipefail
           VERSION='${{ steps.version.outputs.version }}'
-          JAR="release/Obsidian-${VERSION}.jar"
-          SOURCES="release/Obsidian-${VERSION}-sources.jar"
+          JAR="release/Obsidian-$VERSION.jar"
+          SOURCES="release/Obsidian-$VERSION-sources.jar"
           test -f "$JAR"
           test -f "$SOURCES"
           cd release
-          sha256sum "Obsidian-${VERSION}.jar" "Obsidian-${VERSION}-sources.jar" > SHA256SUMS
+          sha256sum "Obsidian-$VERSION.jar" "Obsidian-$VERSION-sources.jar" > SHA256SUMS
 
       - name: Publish release once
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          set -euo pipefail
           VERSION='${{ steps.version.outputs.version }}'
-          TAG="v${VERSION}"
-          JAR="release/Obsidian-${VERSION}.jar"
-          SOURCES="release/Obsidian-${VERSION}-sources.jar"
-          NOTES="docs/releases/${TAG}.md"
+          CHANNEL='${{ steps.version.outputs.channel }}'
+          TAG="v$VERSION"
+          JAR="release/Obsidian-$VERSION.jar"
+          SOURCES="release/Obsidian-$VERSION-sources.jar"
+          NOTES="docs/releases/$TAG.md"
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "$TAG already exists; leaving the existing release untouched."
+            echo "$TAG already exists; release tags are immutable and the existing release is left untouched."
             exit 0
           fi
 
-          if [ -f "$NOTES" ]; then
+          if [[ "$CHANNEL" == "preview" ]]; then
+            {
+              echo '> [!WARNING]'
+              echo '> **PREVIEW / TEST BUILD - NOT PRODUCTION READY unless this release explicitly says otherwise.**'
+              echo
+              echo "Exact source commit: $GITHUB_SHA"
+              echo
+              if [[ -f "$NOTES" ]]; then
+                cat "$NOTES"
+              else
+                echo "This development version is published for active testing. Read ai/CURRENT_STATE.md and the active PR for its exact validation status and known limitations."
+              fi
+            } > release/RELEASE_NOTES.md
+
             gh release create "$TAG" \
               --target "$GITHUB_SHA" \
-              --title "Obsidian ${VERSION}" \
+              --title "Obsidian $VERSION - Preview" \
+              --prerelease \
+              --notes-file release/RELEASE_NOTES.md \
+              "$JAR" "$SOURCES" release/SHA256SUMS
+          elif [[ -f "$NOTES" ]]; then
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "Obsidian $VERSION" \
               --notes-file "$NOTES" \
               "$JAR" "$SOURCES" release/SHA256SUMS
           else
             gh release create "$TAG" \
               --target "$GITHUB_SHA" \
-              --title "Obsidian ${VERSION}" \
+              --title "Obsidian $VERSION" \
               --generate-notes \
               "$JAR" "$SOURCES" release/SHA256SUMS
           fi
