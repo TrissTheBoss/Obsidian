@@ -13,7 +13,7 @@
 </div>
 
 > [!NOTE]
-> This page is a public visual summary. For exact active truth, package authority, promotion gates, and handoff instructions, `ai/CURRENT_STATE.md` is authoritative. For planned scope and phase ordering, use `ai/MASTER_ROADMAP.md`.
+> This page is a maintained public visual summary, not engineering authority. For exact active truth, package authority, promotion gates, and handoff instructions, `ai/CURRENT_STATE.md` is authoritative. For planned scope and phase ordering, use `ai/MASTER_ROADMAP.md`. Timeline freshness is governed by D-0030 and the [`ai/REPOSITORY_HYGIENE.md`](ai/REPOSITORY_HYGIENE.md) timeline maintenance contract.
 
 ## Project arc
 
