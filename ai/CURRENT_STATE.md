@@ -19,6 +19,7 @@ Last updated: 2026-09-28
 - PR #58 exact final head `1044a8846a5e602665e717e7cbeea63de47b4e2e` passed Build #762 and merged `[no-release]` as `e4f00867ea2df5b70eb21e2f0003ad36950fb9d8`; post-merge Build #763 passed.
 - Repository Hygiene run `36400552449` / #1 passed and reduced the repository from **56 branches to 2**: `main` plus the open P4.1 branch. The normal `<=5` target is therefore satisfied.
 - Root `README.md` is now the maintained public landing page with Phase 4 status, compatibility, release channels, quick-start guidance, architecture and roadmap links.
+- Root `TIMELINE.md` is the public visual project-history page: phase rail, detailed milestone timeline, evidence links, current P4.1 position, and planned Phase 5-12 horizon. The README and contributing guide link it directly.
 - Tester-facing CI-green development JARs use GitHub **Prereleases / Preview**; validated public checkpoints use normal Releases; Actions artifacts remain short-lived engineering evidence.
 - Publish Preview run `36400684893` / #1 passed from audited `/publish-preview` on PR #57 and published `v0.4.0-phase4-dev1` as a GitHub prerelease targeting `6af5174f054b272c65174fbf0c37d981a66aff31`.
 - Preview runtime JAR: 493,355 bytes, SHA-256 `8bf25f3aa6bfe6fb4392044ba0973692fc6a24fd9948f3fea51cf55b12e157f3`. Its target differs from A-0205 package authority only by `/ai` continuity files; no renderer/source/resource file changed. Keep this Preview binary identity separate from the original A-0205 Actions-handoff hash.
