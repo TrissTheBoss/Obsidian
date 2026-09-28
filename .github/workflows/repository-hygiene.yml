@@ -22,9 +22,9 @@ jobs:
     steps:
       - name: Delete closed PR head
         env:
-          GH_TOKEN: \${{ github.token }}
-          REPO: \${{ github.repository }}
-          BRANCH: \${{ github.event.pull_request.head.ref }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
         shell: bash
         run: |
           set -euo pipefail
@@ -41,8 +41,8 @@ jobs:
     steps:
       - name: Remove closed and legacy stale branches
         env:
-          GH_TOKEN: \${{ github.token }}
-          REPO: \${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
           DEFAULT_BRANCH: main
           LEGACY_PURGE_BEFORE: '2026-09-03T00:00:00Z'
         shell: bash
