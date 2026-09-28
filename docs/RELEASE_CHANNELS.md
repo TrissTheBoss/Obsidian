@@ -60,4 +60,6 @@ Automatic mirroring requires:
 
 The PAT is never stored in repository files. The project ID is not sensitive, but secret-backed storage is supported. The manual **Publish Modrinth** workflow can accept a project-ID override for first-time setup or recovery.
 
-The publish workflow checks whether the same Modrinth `version_number` already exists and leaves an existing version untouched instead of silently replacing it. Because the Modrinth check is idempotent, an existing GitHub Release/Preview can be invoked again to backfill Modrinth when that GitHub release predates Modrinth integration.
+The publish workflow checks whether the same Modrinth `version_number` already exists and leaves an existing version untouched instead of silently replacing it. When the authenticated version-list request returns HTTP 200, that lookup provides the duplicate guard. If Modrinth returns HTTP 404 for a hidden/draft project read path, the workflow proceeds to the pinned create-version action and lets VERSION_CREATE authorization decide the write; unexpected statuses other than 200/404 still fail closed. Because the flow is idempotent when the read path is available, an existing GitHub Release/Preview can be invoked again to backfill Modrinth when that GitHub release predates Modrinth integration.
+
+The first end-to-end live mirror was proven by Publish Preview run `36434577563` / #5: `0.4.0-phase4-dev1` was uploaded as Modrinth `alpha` version ID `OhTxTs7Z` from exact Preview source `6af5174f054b272c65174fbf0c37d981a66aff31`.

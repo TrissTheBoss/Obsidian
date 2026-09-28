@@ -3,15 +3,15 @@
   "active_goal": "Continue Phase 4 P4.1 reference-runtime validation from the published dev1 Preview without changing renderer source until runtime evidence justifies a new correction.",
   "scope_boundary": "Active engineering scope is Phase 4 P4.1 shadow large-scene GPU visibility plus repository/AI continuity maintenance. Do not promote P4.1, expand native graphics ownership, revive P3.9 partial remeshing, or change production terrain draw ownership without new evidence and a separately frozen contract.",
   "source_snapshot": {
-    "created_at": "2026-09-28T14:12:44Z",
+    "created_at": "2026-09-28T14:17:31Z",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
-      "ai/CURRENT_STATE.md@maintenance/modrinth-404-fallback",
+      "ai/CURRENT_STATE.md@maintenance/modrinth-publication-evidence",
       "ai/DECISIONS.md@main",
       "ai/REPOSITORY_HYGIENE.md@main",
+      "ai/attempts/A-0217-first-successful-modrinth-publication.md@maintenance/modrinth-publication-evidence",
       "ai/attempts/A-0214-first-live-modrinth-publication-project-id-mismatch.md@main",
       "ai/attempts/A-0215-modrinth-project-id-secret-hosted-validation.md@main",
-      "ai/attempts/A-0216-modrinth-read-preflight-404.md@maintenance/modrinth-404-fallback",
       "pull/57",
       "release/v0.4.0-phase4-dev1"
     ]
@@ -52,8 +52,8 @@
     },
     {
       "id": "F6",
-      "text": "Modrinth integration now reaches the live API with both masked secret-backed project ID and PAT resolved. Publish Preview run #4 reached the mirror job but the list-versions preflight returned HTTP 404 before create-version; no Modrinth state changed. A 404-fallback/identifier-normalization correction is staged.",
-      "source_ref": "ai/attempts/A-0216-modrinth-read-preflight-404.md#Proven-progress"
+      "text": "The Modrinth mirror is proven end to end. Publish Preview run #5 (36434577563) and Modrinth job 108969491205 succeeded; the 404 read fallback continued to VERSION_CREATE and published 0.4.0-phase4-dev1 as Modrinth version OhTxTs7Z from exact Preview source 6af5174f054b272c65174fbf0c37d981a66aff31.",
+      "source_ref": "ai/attempts/A-0217-first-successful-modrinth-publication.md#Hosted-result"
     }
   ],
   "decisions": [
@@ -93,11 +93,6 @@
       "id": "O2",
       "text": "Keep PR #57 draft until the frozen P4.1 runtime, scale, correctness, lifetime, and visual gates close.",
       "source_ref": "ai/attempts/A-0205-phase4-p4.1-dev1-ci-package-runtime-handoff.md#Result"
-    },
-    {
-      "id": "O3",
-      "text": "Validate and merge the Modrinth 404-read fallback, then rerun /publish-preview on PR #57 so the pinned create-version action executes. If create-version rejects the configured identifier, correct MODRINTH_PROJECT_ID; otherwise verify and record the first published Modrinth version.",
-      "source_ref": "ai/attempts/A-0216-modrinth-read-preflight-404.md#Next-action"
     }
   ],
   "exact_identifiers": [
@@ -118,8 +113,8 @@
     },
     {
       "id": "I4",
-      "text": "Modrinth integration merges: 7323626f7d8f556f5ae81735ecc0e6a4da9bc85f, 67e5a19d92e9e4f746ee5632b95e6aef6fb12c0b, dc4fdec81cc389fb0cee300d982d7da61015ad1b. Live run #4: 36433438631; Modrinth job 108965539055; read-preflight failure HTTP 404.",
-      "source_ref": "ai/attempts/A-0216-modrinth-read-preflight-404.md#Evidence"
+      "text": "Modrinth mirror proof: PR #70 merged as 87c51328ab1f1587bc544a186ee5fd55bf688977; Publish Preview run #5 36434577563 succeeded; Modrinth job 108969491205 succeeded; published version ID OhTxTs7Z for 0.4.0-phase4-dev1 from source 6af5174f054b272c65174fbf0c37d981a66aff31.",
+      "source_ref": "ai/attempts/A-0217-first-successful-modrinth-publication.md#Hosted-result"
     }
   ],
   "security_boundaries": [
@@ -231,10 +226,10 @@
       "locator": "Load before merging or troubleshooting secret-backed Modrinth configuration."
     },
     {
-      "id": "modrinth-404-preflight",
-      "topic": "Live Modrinth API reachability, 404 read-preflight failure, and create-path fallback",
-      "source_ref": "ai/attempts/A-0216-modrinth-read-preflight-404.md@maintenance/modrinth-404-fallback",
-      "locator": "Load before retrying or troubleshooting the first create-version call."
+      "id": "modrinth-first-success",
+      "topic": "First successful end-to-end Modrinth mirror publication",
+      "source_ref": "ai/attempts/A-0217-first-successful-modrinth-publication.md@maintenance/modrinth-publication-evidence",
+      "locator": "Load for exact successful workflow/job/version IDs and closing evidence."
     }
   ],
   "discarded_ids": [
@@ -252,7 +247,7 @@
     "modrinth-backfill-evidence",
     "modrinth-first-live-attempt",
     "modrinth-secret-project-id-validation",
-    "modrinth-404-preflight"
+    "modrinth-first-success"
   ],
-  "next_action": "Use the published P4.1 dev1 Preview for the frozen reference runtime exercise; when the tester supplies the log and visual verdict, rehydrate A-0203/A-0205 and validate the result without weakening gates."
+  "next_action": "Use the published P4.1 dev1 Preview for the frozen reference runtime exercise; when the tester supplies the log and visual verdict, rehydrate A-0203/A-0205 and validate the result without weakening gates. Modrinth first-publication work is closed by A-0217."
 }

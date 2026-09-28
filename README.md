@@ -21,6 +21,7 @@
 ![Status](https://img.shields.io/badge/status-experimental-orange)
 
 [Releases](https://github.com/TrissTheBoss/Obsidian/releases) ·
+[Modrinth](https://modrinth.com/) ·
 [Timeline](TIMELINE.md) ·
 [Roadmap](ai/MASTER_ROADMAP.md) ·
 [Current state](ai/CURRENT_STATE.md) ·
@@ -49,10 +50,10 @@ For exact source SHAs, CI authority, test gates, and the current handoff, read [
 
 ## Getting a build
 
-Obsidian uses three publication levels:
+Obsidian uses three publication levels. GitHub remains canonical package authority, and eligible Stable/Preview builds are mirrored to Modrinth:
 
 - **Stable checkpoint** — the most validated public checkpoint at that time.
-- **Preview** — GitHub **Prerelease** for active testers; may be incomplete or not production ready.
+- **Preview** — GitHub **Prerelease** for active testers; may be incomplete or not production ready. Eligible Preview builds mirror to Modrinth as `alpha`/`beta` according to the version marker.
 - **CI artifact** — short-lived Actions output used for engineering evidence.
 
 See [`docs/RELEASE_CHANNELS.md`](docs/RELEASE_CHANNELS.md) for the full policy.
