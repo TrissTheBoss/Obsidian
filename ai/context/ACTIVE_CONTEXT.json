@@ -3,15 +3,14 @@
   "active_goal": "Continue Phase 4 P4.1 reference-runtime validation from the published dev1 Preview without changing renderer source until runtime evidence justifies a new correction.",
   "scope_boundary": "Active engineering scope is Phase 4 P4.1 shadow large-scene GPU visibility plus repository/AI continuity maintenance. Do not promote P4.1, expand native graphics ownership, revive P3.9 partial remeshing, or change production terrain draw ownership without new evidence and a separately frozen contract.",
   "source_snapshot": {
-    "created_at": "2026-09-28T13:52:01Z",
+    "created_at": "2026-09-28T13:54:37Z",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
       "ai/CURRENT_STATE.md@maintenance/modrinth-backfill",
-      "ai/MASTER_ROADMAP.md@main",
-      "ai/DECISIONS.md@main",
       "ai/REPOSITORY_HYGIENE.md@maintenance/modrinth-backfill",
       "docs/RELEASE_CHANNELS.md@maintenance/modrinth-backfill",
       "ai/attempts/A-0212-secure-modrinth-publishing-integration.md@main",
+      "ai/attempts/A-0213-modrinth-existing-preview-backfill.md@maintenance/modrinth-backfill",
       "pull/57",
       "pull/68",
       "release/v0.4.0-phase4-dev1"
@@ -119,8 +118,8 @@
     },
     {
       "id": "I4",
-      "text": "Modrinth base integration merged as 7323626f7d8f556f5ae81735ecc0e6a4da9bc85f; backfill correction is draft PR #68 on maintenance/modrinth-backfill; publisher remains pinned to cloudnode-pro/modrinth-publish commit 203bc72a51ae39fba1194fc4097d9f0750c49bd3 (v2.5.1).",
-      "source_ref": "ai/CURRENT_STATE.md#Modrinth-distribution-mirror-INTEGRATED-FIRST-PUBLICATION-TEST-PENDING"
+      "text": "Modrinth base integration merged as 7323626f7d8f556f5ae81735ecc0e6a4da9bc85f; backfill PR #68 validation head d6cc10d790af1c3ab05a644f88ccf4862f8f9469 passed Context Governor #15 and Build #785; publisher remains pinned to cloudnode-pro/modrinth-publish commit 203bc72a51ae39fba1194fc4097d9f0750c49bd3 (v2.5.1).",
+      "source_ref": "ai/attempts/A-0213-modrinth-existing-preview-backfill.md#Exact-hosted-validation"
     }
   ],
   "security_boundaries": [
@@ -212,6 +211,12 @@
       "topic": "Exact Modrinth publisher review, workflow integration, hosted validation, security boundary, and remaining first-publish obligation",
       "source_ref": "ai/attempts/A-0212-secure-modrinth-publishing-integration.md@maintenance/modrinth-publishing",
       "locator": "Load before changing or troubleshooting Modrinth publication, or when closing the first real publication obligation."
+    },
+    {
+      "id": "modrinth-backfill-evidence",
+      "topic": "Idempotent backfill correction for GitHub releases that predate Modrinth mirroring",
+      "source_ref": "ai/attempts/A-0213-modrinth-existing-preview-backfill.md@maintenance/modrinth-backfill",
+      "locator": "Load when backfilling an existing GitHub Release/Preview to Modrinth or diagnosing caller conditions."
     }
   ],
   "discarded_ids": [
@@ -225,7 +230,8 @@
     "history-cold",
     "context-governor-design",
     "modrinth-publishing-policy",
-    "modrinth-integration-evidence"
+    "modrinth-integration-evidence",
+    "modrinth-backfill-evidence"
   ],
   "next_action": "Use the published P4.1 dev1 Preview for the frozen reference runtime exercise; when the tester supplies the log and visual verdict, rehydrate A-0203/A-0205 and validate the result without weakening gates."
 }
