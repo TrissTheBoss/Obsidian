@@ -42,6 +42,7 @@ The reference machine is a primary runtime oracle during development, not a lice
 Before engineering work, understand the role of each file:
 
 - `CURRENT_STATE.md` — current implementation/runtime truth and immediate next work.
+- `TIMELINE.md` — maintained public visual history/index; useful for orientation, but never authority over current state, roadmap, decisions, attempts, source, CI/release, or runtime evidence.
 - `MASTER_ROADMAP.md` — canonical future product/phase/feature plan.
 - `OPERATING_MANUAL.md` — process and engineering discipline.
 - `DECISIONS.md` — durable architectural/product rationale.
@@ -146,8 +147,9 @@ Unsupported render cases should be explicit and measurable rather than silently 
 11. Update `CURRENT_STATE.md` whenever project truth changes.
 12. Update `DECISIONS.md` whenever a durable design/product choice changes.
 13. Update `MASTER_ROADMAP.md` whenever long-range phase ordering, planned features, validation gates, experiments, compatibility/release direction, or roadmap status changes materially.
-14. Synchronize material roadmap changes into the active PR/issue so reviewers understand why scope changed.
-15. Before handoff, run the continuity consistency checklist below.
+14. Update root `TIMELINE.md` when a material public milestone/phase transition, promotion/rejection/deferment, major project-wide operating capability, or roadmap-arc change alters the public development story; follow `REPOSITORY_HYGIENE.md` and keep the timeline non-authoritative.
+15. Synchronize material roadmap changes into the active PR/issue so reviewers understand why scope changed.
+16. Before handoff, run the continuity consistency checklist below.
 
 ## Context governance and external-call minimization
 
@@ -309,6 +311,7 @@ Before stopping a development session or handing off to another agent, verify:
 - `ai/context/ACTIVE_CONTEXT.json` reflects the active goal/identifiers/open obligations/next action and passes Context Governor validation;
 - processed large tool outputs are pointerized/re-fetchable instead of copied into durable active context;
 - the root README reflects the real active phase, compatibility, and release channels;
+- root `TIMELINE.md` reflects material project-history milestones and the real current phase position without contradicting authoritative sources;
 - a tester-facing CI-green JAR has a Preview prerelease or `CURRENT_STATE.md` states why publication is intentionally deferred;
 - unvalidated behavior is labeled unvalidated rather than implied successful;
 - completed roadmap items have evidence at the appropriate validation level;
@@ -328,7 +331,7 @@ Before handoff:
 - material roadmap edits must be described in the active PR/issue;
 - temporary diagnostics should be removed unless intentionally retained;
 - completed/closed branches should be deleted or queued for automatic hygiene cleanup;
-- README/release-channel status should be synchronized with the handoff;
+- README/timeline/release-channel status should be synchronized with the handoff when their maintenance triggers fire;
 - the active context capsule should be refreshed/validated when material project truth changed;
 - exact evidence gaps must be named;
 - the next action must be clear enough that a different agent can continue without relying on chat history.
