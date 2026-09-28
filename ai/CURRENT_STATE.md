@@ -23,16 +23,17 @@ Last updated: 2026-09-28
 - Publish Preview run `36400684893` / #1 passed from audited `/publish-preview` on PR #57 and published `v0.4.0-phase4-dev1` as a GitHub prerelease targeting `6af5174f054b272c65174fbf0c37d981a66aff31`.
 - Preview runtime JAR: 493,355 bytes, SHA-256 `8bf25f3aa6bfe6fb4392044ba0973692fc6a24fd9948f3fea51cf55b12e157f3`. Its target differs from A-0205 package authority only by `/ai` continuity files; no renderer/source/resource file changed. Keep this Preview binary identity separate from the original A-0205 Actions-handoff hash.
 - A-0207 records final cleanup/build/release evidence. P4.1 runtime validation remains pending and PR #57 stays draft.
-## LLM Context Governor — INTEGRATION VALIDATION
+## LLM Context Governor — ACTIVE AND PROVEN
 
-- New reusable skill: `ai/skills/context-governor/SKILL.md`.
-- New compact bootstrap: `ai/context/ACTIVE_CONTEXT.json`; it is a validated cache/index and **not** source authority.
-- D-0029 makes tiered/recoverable context and least-data external calls durable process policy.
-- Automatic compaction is two-phase: preserve critical knowledge + recovery pointers, validate, then discard only re-fetchable/transient bulk. Critical-over-budget cases fail closed.
-- External API/tool/MCP calls use call-specific allowlisted fields/records/ranges. OAuth uses least-privilege action/resource scopes and incremental authorization where supported; credentials stay out of durable/model context.
-- Deterministic local regression suite: **7/7 PASS**; active capsule validation PASS; standalone Skill validation PASS.
-- A-0208 records the design, research, integration and local test evidence.
-- Hosted Build CI + Context Governor CI on the exact integration head and `[no-release]` merge remain before activation is final.
+- Reusable skill: `ai/skills/context-governor/SKILL.md`; compact bootstrap: `ai/context/ACTIVE_CONTEXT.json`, which remains a validated cache/index and **not** source authority.
+- D-0029 makes tiered/recoverable context, fail-closed compaction, exact-source rehydration, least-data external calls, and least-privilege OAuth durable process policy.
+- Deterministic local regression suite: **7/7 PASS**; active-capsule validation PASS; standalone Skill validation PASS. A-0208 records design/research/local evidence.
+- Exact PR #61 integration head `16cde38d8a96f377687f448b11d7f2d05033df90` passed normal Build run `36404017997` / **#768** and Context Governor run `36404018090` / **#1**.
+- PR #61 merged `[no-release]` as `623dc5904fae5e3d0be7d90d13236ee99be32b37`.
+- Exact merged `main` passed Context Governor run `36404117650` / **#2**, normal Build run `36404117683` / **#769**, and Repository Hygiene run `36404117664` / **#8**.
+- A-0209 records hosted validation, activation, post-merge validation, and package evidence.
+- Automatic compaction remains two-phase: preserve critical knowledge + recovery pointers, validate, then discard only re-fetchable/transient bulk. Critical-over-budget cases fail closed.
+- External API/tool/MCP calls use call-specific required identifiers/fields/records/ranges only. OAuth uses least-privilege action/resource scopes and incremental authorization where supported; credentials stay out of durable/model context.
 - This process work does **not** change the P4.1 renderer, runtime package, draft status, or frozen validation gates.
 
 ## Phase 3 status — COMPLETE
