@@ -35,7 +35,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: obsidian-\${{ github.sha }}
+          name: obsidian-${{ github.sha }}
           if-no-files-found: error
           path: |
             build/libs/Obsidian-*.jar
@@ -74,14 +74,14 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: obsidian-\${{ github.sha }}
+          name: obsidian-${{ github.sha }}
           path: release
 
       - name: Validate release files and create checksums
         shell: bash
         run: |
           set -euo pipefail
-          VERSION='\${{ steps.version.outputs.version }}'
+          VERSION='${{ steps.version.outputs.version }}'
           JAR="release/Obsidian-$VERSION.jar"
           SOURCES="release/Obsidian-$VERSION-sources.jar"
           test -f "$JAR"
@@ -91,12 +91,12 @@ jobs:
 
       - name: Publish release once
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          VERSION='\${{ steps.version.outputs.version }}'
-          CHANNEL='\${{ steps.version.outputs.channel }}'
+          VERSION='${{ steps.version.outputs.version }}'
+          CHANNEL='${{ steps.version.outputs.channel }}'
           TAG="v$VERSION"
           JAR="release/Obsidian-$VERSION.jar"
           SOURCES="release/Obsidian-$VERSION-sources.jar"
