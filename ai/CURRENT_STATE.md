@@ -35,6 +35,7 @@ Last updated: 2026-09-28
 - The PAT value is never stored in repository content. Workflows consume repository Actions secret `MODRINTH_PAT` only at runtime.
 - Automatic mirroring additionally requires public repository Actions variable `MODRINTH_PROJECT_ID`. Until that variable exists, GitHub release publication continues normally and the Modrinth mirror is skipped with an Actions summary; manual `Publish Modrinth` dispatch may supply a one-run project ID.
 - Publication performs an authenticated existing-version lookup and leaves an already-published matching version number untouched.
+- Integration branch: `maintenance/modrinth-publishing`; draft PR #67 `Add secure Modrinth publishing mirror`.
 - Hosted Build / Context Governor validation and final immutable attempt evidence are still required before this integration is considered active.
 
 ## LLM Context Governor — ACTIVE AND PROVEN
