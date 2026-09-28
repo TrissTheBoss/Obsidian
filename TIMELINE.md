@@ -103,6 +103,7 @@ flowchart TD
 | **2026-09-28** | Repository/public surface cleanup | `main` became the only permanent branch, Preview prereleases became the tester channel, and the public README/release flow was formalized. | A-0207 · [Repository hygiene](ai/REPOSITORY_HYGIENE.md) |
 | **2026-09-28** | Context Governor activated | Tiered recoverable context, automatic fail-closed compression, call-specific API/MCP minimization, and least-privilege OAuth policy were integrated and CI-proven. | [PR #61](https://github.com/TrissTheBoss/Obsidian/pull/61) · A-0208/A-0209 |
 | **2026-09-28** | Context Governor continuity closed | Final activation evidence, current-state synchronization and active-capsule refresh merged to `main`. | [PR #62](https://github.com/TrissTheBoss/Obsidian/pull/62) · merge `dcfe73eb` |
+| **2026-09-28** | Modrinth mirror proven | The existing P4.1 Preview completed the full GitHub→Modrinth mirror path; `0.4.0-phase4-dev1` was published from exact Preview source `6af5174f` as Modrinth version `OhTxTs7Z`. | [PR #70](https://github.com/TrissTheBoss/Obsidian/pull/70) · [A-0217](ai/attempts/A-0217-first-successful-modrinth-publication.md) |
 
 ## Where the project is now
 
