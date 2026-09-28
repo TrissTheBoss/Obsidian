@@ -21,7 +21,7 @@
 ![Status](https://img.shields.io/badge/status-experimental-orange)
 
 [Releases](https://github.com/TrissTheBoss/Obsidian/releases) ·
-[Modrinth](https://modrinth.com/) ·
+[Modrinth](https://modrinth.com/project/A4lhTRfA) ·
 [Timeline](TIMELINE.md) ·
 [Roadmap](ai/MASTER_ROADMAP.md) ·
 [Current state](ai/CURRENT_STATE.md) ·
