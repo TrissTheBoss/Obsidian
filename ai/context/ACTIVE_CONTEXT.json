@@ -12,7 +12,8 @@
       "ai/attempts/A-0205-phase4-p4.1-dev1-ci-package-runtime-handoff.md@main",
       "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md@main",
       "pull/57",
-      "release/v0.4.0-phase4-dev1"
+      "release/v0.4.0-phase4-dev1",
+      "ai/attempts/A-0208-context-governor-compression-and-call-minimization.md@maintenance/context-governor"
     ]
   },
   "coverage_manifest": [
@@ -50,6 +51,11 @@
       "id": "D2",
       "text": "main is the only permanent branch; branches are disposable working state and history belongs in attempts, PRs, exact SHAs, tags, and releases.",
       "source_ref": "ai/DECISIONS.md#D-0028"
+    },
+    {
+      "id": "D3",
+      "text": "LLM context is tiered and recoverable; compact summaries are non-authoritative indexes, critical knowledge must survive compaction, and external calls/OAuth authorization are limited to task-necessary data and least-privilege scopes.",
+      "source_ref": "ai/DECISIONS.md#D-0029"
     }
   ],
   "open_obligations": [
@@ -141,6 +147,12 @@
       "topic": "Older experiments, failures, and superseded approaches",
       "source_ref": "ai/ATTEMPT_LOG.md + ai/attempts/@main",
       "locator": "Retrieve by attempt ID/topic only when provenance/regression analysis requires it."
+    },
+    {
+      "id": "context-governor-design",
+      "topic": "Context Governor design, external research, local tests, and integration evidence",
+      "source_ref": "ai/attempts/A-0208-context-governor-compression-and-call-minimization.md@maintenance/context-governor",
+      "locator": "Entire attempt until merged to main."
     }
   ],
   "discarded_ids": [
@@ -151,7 +163,8 @@
     "p4-seam",
     "p4-package",
     "repo-hygiene-evidence",
-    "history-cold"
+    "history-cold",
+    "context-governor-design"
   ],
   "next_action": "Use the published P4.1 dev1 Preview for the frozen reference runtime exercise; when the tester supplies the log and visual verdict, rehydrate A-0203/A-0205 and validate the result without weakening gates."
 }
