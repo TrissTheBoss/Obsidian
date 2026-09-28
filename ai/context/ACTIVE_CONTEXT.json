@@ -3,15 +3,16 @@
   "active_goal": "Continue Phase 4 P4.1 reference-runtime validation from the published dev1 Preview without changing renderer source until runtime evidence justifies a new correction.",
   "scope_boundary": "Active engineering scope is Phase 4 P4.1 shadow large-scene GPU visibility plus repository/AI continuity maintenance. Do not promote P4.1, expand native graphics ownership, revive P3.9 partial remeshing, or change production terrain draw ownership without new evidence and a separately frozen contract.",
   "source_snapshot": {
-    "created_at": "2026-09-28T09:34:01Z",
+    "created_at": "2026-09-28T11:34:43Z",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
-      "ai/CURRENT_STATE.md@maintenance/context-governor-evidence",
+      "ai/CURRENT_STATE.md",
       "ai/MASTER_ROADMAP.md@main",
-      "ai/DECISIONS.md@main",
+      "ai/DECISIONS.md",
+      "ai/REPOSITORY_HYGIENE.md",
       "ai/attempts/A-0205-phase4-p4.1-dev1-ci-package-runtime-handoff.md@main",
       "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md@main",
-      "ai/attempts/A-0209-context-governor-hosted-validation-and-activation.md@maintenance/context-governor-evidence",
+      "ai/attempts/A-0209-context-governor-hosted-validation-and-activation.md@main",
       "pull/57",
       "release/v0.4.0-phase4-dev1"
     ]
@@ -44,6 +45,11 @@
       "id": "F4",
       "text": "The Context Governor is active and proven: PR #61 exact head passed hosted Build and Context Governor CI, merged [no-release], and the merged main commit passed Context Governor, Build, and Repository Hygiene workflows.",
       "source_ref": "ai/attempts/A-0209-context-governor-hosted-validation-and-activation.md#Exact-integration-evidence"
+    },
+    {
+      "id": "F5",
+      "text": "Root TIMELINE.md is a maintained public visual history/index governed by D-0030 and REPOSITORY_HYGIENE.md; it must track material phase/milestone/history changes but never overrides authoritative engineering sources.",
+      "source_ref": "ai/CURRENT_STATE.md#Repository-hygiene-public-surface"
     }
   ],
   "decisions": [
@@ -61,6 +67,11 @@
       "id": "D3",
       "text": "LLM context is tiered and recoverable; compact summaries are non-authoritative indexes, critical knowledge must survive compaction, and external calls/OAuth authorization are limited to task-necessary data and least-privilege scopes.",
       "source_ref": "ai/DECISIONS.md#D-0029"
+    },
+    {
+      "id": "D4",
+      "text": "The public project timeline is a governed non-authoritative history index; material phase/milestone transitions, promotions/rejections/deferments, major project-wide operating capabilities, and roadmap-arc changes trigger synchronization.",
+      "source_ref": "ai/DECISIONS.md#D-0030"
     }
   ],
   "open_obligations": [
@@ -156,8 +167,14 @@
     {
       "id": "context-governor-design",
       "topic": "Context Governor design, hosted validation, activation, and integration evidence",
-      "source_ref": "ai/attempts/A-0208-context-governor-compression-and-call-minimization.md@main + ai/attempts/A-0209-context-governor-hosted-validation-and-activation.md@maintenance/context-governor-evidence",
+      "source_ref": "ai/attempts/A-0208-context-governor-compression-and-call-minimization.md@main + ai/attempts/A-0209-context-governor-hosted-validation-and-activation.md@main",
       "locator": "Load A-0208 for design/local-test rationale; load A-0209 for exact hosted CI, merge, post-merge validation, and activation evidence."
+    },
+    {
+      "id": "timeline-policy",
+      "topic": "Public TIMELINE.md maintenance triggers, structure, authority boundary, and handoff freshness rules",
+      "source_ref": "ai/REPOSITORY_HYGIENE.md#Timeline-maintenance-contract + ai/DECISIONS.md#D-0030",
+      "locator": "Load when a phase/milestone/history change may require TIMELINE.md synchronization or when checking public-surface freshness at handoff."
     }
   ],
   "discarded_ids": [
