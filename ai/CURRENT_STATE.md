@@ -24,6 +24,22 @@ Last updated: 2026-09-28
 - Publish Preview run `36400684893` / #1 passed from audited `/publish-preview` on PR #57 and published `v0.4.0-phase4-dev1` as a GitHub prerelease targeting `6af5174f054b272c65174fbf0c37d981a66aff31`.
 - Preview runtime JAR: 493,355 bytes, SHA-256 `8bf25f3aa6bfe6fb4392044ba0973692fc6a24fd9948f3fea51cf55b12e157f3`. Its target differs from A-0205 package authority only by `/ai` continuity files; no renderer/source/resource file changed. Keep this Preview binary identity separate from the original A-0205 Actions-handoff hash.
 - A-0207 records final cleanup/build/release evidence. P4.1 runtime validation remains pending and PR #57 stays draft.
+## Modrinth distribution mirror — INTEGRATED / FIRST PUBLISH PENDING PROJECT ID
+
+- D-0031 keeps GitHub CI/releases authoritative while allowing the same versioned builds to be mirrored to Modrinth for ordinary users.
+- New reusable/manual workflow: `.github/workflows/publish-modrinth.yml`.
+- Main versioned releases and explicit Preview publication are wired to call the Modrinth mirror only after a new GitHub release is successfully created.
+- Channel mapping: `dev`/`alpha`/`preview` -> Modrinth `alpha`; `beta`/`rc`/`pre` -> `beta`; validated versions without a prerelease marker -> `release`.
+- The runtime JAR is primary; the sources JAR is supplementary; metadata is Fabric / exact Minecraft version / client-only.
+- External publisher is pinned to `cloudnode-pro/modrinth-publish` commit `203bc72a51ae39fba1194fc4097d9f0750c49bd3` (v2.5.1).
+- The PAT value is never stored in repository content. Workflows consume repository Actions secret `MODRINTH_PAT` only at runtime.
+- Automatic mirroring additionally requires public repository Actions variable `MODRINTH_PROJECT_ID`. Until that variable exists, GitHub release publication continues normally and the Modrinth mirror is skipped with an Actions summary; manual `Publish Modrinth` dispatch may supply a one-run project ID.
+- Publication performs an authenticated existing-version lookup and leaves an already-published matching version number untouched.
+- Integration branch: `maintenance/modrinth-publishing`; draft PR #67 `Add secure Modrinth publishing mirror`.
+- Exact validation head `c5c902fa666cba3d60985f7913d7ad15d324ce22` passed Context Governor #10 / run `36428088013` and normal Build #779 / run `36428088988`.
+- A-0212 records the reviewed action pin, workflow behavior, security boundary, release-policy synchronization, and exact hosted evidence.
+- The integration is code/CI complete; the first real Modrinth upload remains intentionally pending a configured Modrinth project ID. Automatic mirroring requires repository Actions variable `MODRINTH_PROJECT_ID`; manual dispatch may supply a one-run project ID.
+
 ## LLM Context Governor — ACTIVE AND PROVEN
 
 - Reusable skill: `ai/skills/context-governor/SKILL.md`; compact bootstrap: `ai/context/ACTIVE_CONTEXT.json`, which remains a validated cache/index and **not** source authority.

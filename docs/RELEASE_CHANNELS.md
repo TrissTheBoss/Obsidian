@@ -38,3 +38,26 @@ During active development, each milestone that reaches real-machine testing shou
 Documentation-only, evidence-only, and repository-maintenance changes use `[no-release]`.
 
 See `ai/REPOSITORY_HYGIENE.md` for the authoritative maintainer rules.
+
+
+## Distribution surfaces
+
+GitHub remains Obsidian's canonical build/release authority. Modrinth is a user-facing mirror of the same versioned builds.
+
+| Obsidian maturity | GitHub | Modrinth |
+| --- | --- | --- |
+| Stable checkpoint | normal Release | `release` |
+| Preview with `dev`, `alpha`, or `preview` marker | Prerelease | `alpha` |
+| Preview with `beta`, `rc`, or `pre` marker | Prerelease | `beta` |
+| CI artifact only | Actions artifact | not published |
+
+The Modrinth upload uses the exact source commit selected by the GitHub release/Preview flow, uploads the runtime JAR as primary and the sources JAR as supplementary, and marks the version as client-only Fabric for the exact Minecraft version from `gradle.properties`.
+
+Automatic mirroring requires:
+
+- repository Actions secret `MODRINTH_PAT`;
+- repository Actions variable `MODRINTH_PROJECT_ID`.
+
+The PAT is never stored in repository files. The manual **Publish Modrinth** workflow can accept a project-ID override for first-time setup or recovery when the repository variable is not configured.
+
+The publish workflow checks whether the same Modrinth `version_number` already exists and leaves an existing version untouched instead of silently replacing it.

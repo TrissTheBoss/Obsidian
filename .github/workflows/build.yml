@@ -45,6 +45,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[no-release]')
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      created: ${{ steps.github_release.outputs.created }}
     permissions:
       contents: write
 
@@ -90,6 +92,7 @@ jobs:
           sha256sum "Obsidian-$VERSION.jar" "Obsidian-$VERSION-sources.jar" > SHA256SUMS
 
       - name: Publish release once
+        id: github_release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -104,6 +107,7 @@ jobs:
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "$TAG already exists; release tags are immutable and the existing release is left untouched."
+            echo 'created=false' >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -140,3 +144,28 @@ jobs:
               --generate-notes \
               "$JAR" "$SOURCES" release/SHA256SUMS
           fi
+
+          echo 'created=true' >> "$GITHUB_OUTPUT"
+
+      - name: Note disabled Modrinth mirror
+        if: steps.github_release.outputs.created == 'true' && vars.MODRINTH_PROJECT_ID == ''
+        shell: bash
+        run: |
+          {
+            echo '## Modrinth mirror'
+            echo
+            echo 'Skipped automatic Modrinth publication because repository variable MODRINTH_PROJECT_ID is not configured.'
+            echo 'The publish-modrinth workflow can still be dispatched manually with a project ID override.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  modrinth:
+    name: Mirror release to Modrinth
+    if: needs.release.outputs.created == 'true' && vars.MODRINTH_PROJECT_ID != ''
+    needs: release
+    uses: ./.github/workflows/publish-modrinth.yml
+    with:
+      source_ref: ${{ github.sha }}
+      project_id: ${{ vars.MODRINTH_PROJECT_ID }}
+      status: listed
+    secrets:
+      modrinth_pat: ${{ secrets.modrinth_pat }}
