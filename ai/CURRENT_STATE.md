@@ -37,7 +37,7 @@ Last updated: 2026-09-28
 - Publication performs an authenticated existing-version lookup and leaves an already-published matching version number untouched.
 - PR #67 merged `[no-release]` as `7323626f7d8f556f5ae81735ecc0e6a4da9bc85f`; post-merge Context Governor #14, Repository Hygiene #15, and Build #783 all passed.
 - A-0212 records the reviewed action pin, workflow behavior, security boundary, release-policy synchronization, and exact hosted evidence.
-- Follow-up backfill correction allows the existing `v0.4.0-phase4-dev1` Preview to invoke the idempotent Modrinth mirror without recreating/replacing its GitHub release. First live publication evidence remains pending.
+- Follow-up backfill correction is staged in draft PR #68 `Allow idempotent Modrinth backfill`; it allows the existing `v0.4.0-phase4-dev1` Preview to invoke the idempotent Modrinth mirror without recreating/replacing its GitHub release. First live publication evidence remains pending.
 
 ## LLM Context Governor — ACTIVE AND PROVEN
 
