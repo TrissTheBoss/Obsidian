@@ -1,0 +1,125 @@
+name: Repository Hygiene
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  delete-closed-pr-head:
+    name: Delete closed internal PR branch
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref != 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete closed PR head
+        env:
+          GH_TOKEN: \${{ github.token }}
+          REPO: \${{ github.repository }}
+          BRANCH: \${{ github.event.pull_request.head.ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENCODED="$(jq -rn --arg v "$BRANCH" '$v|@uri')"
+          echo "Deleting closed PR branch: $BRANCH"
+          gh api -X DELETE "repos/$REPO/git/refs/heads/$ENCODED" || {
+            echo "Branch was already deleted or is no longer deletable; continuing."
+          }
+
+  sweep:
+    name: Sweep stale repository branches
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove closed and legacy stale branches
+        env:
+          GH_TOKEN: \${{ github.token }}
+          REPO: \${{ github.repository }}
+          DEFAULT_BRANCH: main
+          LEGACY_PURGE_BEFORE: '2026-09-03T00:00:00Z'
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/open-heads
+          : > /tmp/closed-heads
+          : > /tmp/deleted
+          : > /tmp/kept
+
+          gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
+            --jq '.[] | select(.head.repo.full_name == "'"$REPO"'") | .head.ref' \
+            | sort -u > /tmp/open-heads
+
+          gh api --paginate "repos/$REPO/pulls?state=closed&per_page=100" \
+            --jq '.[] | select(.head.repo.full_name == "'"$REPO"'") | .head.ref' \
+            | sort -u > /tmp/closed-heads
+
+          CUTOFF_EPOCH="$(date -u -d "$LEGACY_PURGE_BEFORE" +%s)"
+
+          gh api --paginate "repos/$REPO/branches?per_page=100" \
+            --jq '.[] | [.name, (.protected|tostring), .commit.sha] | @tsv' \
+            | while IFS=$'\t' read -r BRANCH PROTECTED SHA; do
+                if [[ "$BRANCH" == "$DEFAULT_BRANCH" ]]; then
+                  echo "$BRANCH (default)" >> /tmp/kept
+                  continue
+                fi
+                if [[ "$PROTECTED" == "true" ]]; then
+                  echo "$BRANCH (protected)" >> /tmp/kept
+                  continue
+                fi
+                if grep -Fxq "$BRANCH" /tmp/open-heads; then
+                  echo "$BRANCH (open PR)" >> /tmp/kept
+                  continue
+                fi
+
+                DELETE_REASON=""
+                if grep -Fxq "$BRANCH" /tmp/closed-heads; then
+                  DELETE_REASON="closed/merged PR"
+                else
+                  TIP_DATE="$(gh api "repos/$REPO/commits/$SHA" --jq '.commit.committer.date')"
+                  TIP_EPOCH="$(date -u -d "$TIP_DATE" +%s)"
+                  if (( TIP_EPOCH < CUTOFF_EPOCH )); then
+                    DELETE_REASON="legacy stale branch older than $LEGACY_PURGE_BEFORE"
+                  fi
+                fi
+
+                if [[ -z "$DELETE_REASON" ]]; then
+                  echo "$BRANCH (recent branch without open PR)" >> /tmp/kept
+                  continue
+                fi
+
+                ENCODED="$(jq -rn --arg v "$BRANCH" '$v|@uri')"
+                echo "Deleting $BRANCH: $DELETE_REASON"
+                if gh api -X DELETE "repos/$REPO/git/refs/heads/$ENCODED"; then
+                  echo "$BRANCH - $DELETE_REASON" >> /tmp/deleted
+                else
+                  echo "$BRANCH (delete failed; inspect manually)" >> /tmp/kept
+                fi
+              done
+
+          {
+            echo "## Repository hygiene"
+            echo
+            echo "Permanent branch policy: main only. Open PR heads are preserved."
+            echo
+            echo "### Deleted"
+            if [[ -s /tmp/deleted ]]; then
+              sed 's/^/- /' /tmp/deleted
+            else
+              echo "- None"
+            fi
+            echo
+            echo "### Kept"
+            if [[ -s /tmp/kept ]]; then
+              sed 's/^/- /' /tmp/kept
+            else
+              echo "- None"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
