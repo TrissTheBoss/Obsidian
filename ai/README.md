@@ -26,7 +26,8 @@ Use the documents for different questions rather than treating them as interchan
 - **What is true right now?** -> `CURRENT_STATE.md`.
 - **What are we trying to build over the life of the project?** -> `MASTER_ROADMAP.md`.
 - **How do we keep LLM context bounded and external calls data-minimal without losing recoverability?** -> `context/ACTIVE_CONTEXT.json` + `skills/context-governor/SKILL.md`.
-- **How must the GitHub repository, branches, README, and releases be kept clean?** -> `REPOSITORY_HYGIENE.md`.
+- **How must the GitHub repository, branches, README, public timeline, and releases be kept clean/current?** -> `REPOSITORY_HYGIENE.md`.
+- **What is the public visual project-history summary?** -> root `TIMELINE.md` (non-authoritative index; rehydrate the linked canonical evidence before relying on exact status/identifiers).
 - **Why did we choose this architecture/product direction?** -> `DECISIONS.md`.
 - **What exactly was tried and what happened?** -> `ATTEMPT_LOG.md` and `attempts/`.
 - **What code actually exists?** -> source + exact commit/branch.
@@ -42,7 +43,7 @@ If an agent tries something that changes code, build behavior, runtime behavior,
 
 Older attempts live in `ATTEMPT_LOG.md`. New attempts should be created as immutable files under `ai/attempts/` using names such as `A-0058-short-description.md`. This avoids replacing a large history file merely to append one entry and makes concurrent agent work safer.
 
-When a successful attempt changes the current truth of the project, also update `CURRENT_STATE.md`. When it creates or reverses a durable design choice, also update `DECISIONS.md`. When it changes the long-range plan, phase ordering, product feature set, validation gates, experiments, or release/compatibility strategy, update `MASTER_ROADMAP.md` according to its Roadmap Governance section. When it changes public status, branch lifecycle, README content, or tester-facing release behavior, also apply `REPOSITORY_HYGIENE.md`. When active milestone/branch/package/gates/next-action truth changes, refresh and validate `context/ACTIVE_CONTEXT.json` so future agents can bootstrap narrowly without losing recovery pointers.
+When a successful attempt changes the current truth of the project, also update `CURRENT_STATE.md`. When it creates or reverses a durable design choice, also update `DECISIONS.md`. When it changes the long-range plan, phase ordering, product feature set, validation gates, experiments, or release/compatibility strategy, update `MASTER_ROADMAP.md` according to its Roadmap Governance section. When it changes public status, branch lifecycle, README content, the public development story in `TIMELINE.md`, or tester-facing release behavior, also apply `REPOSITORY_HYGIENE.md`. Material phase/milestone transitions, promotions/rejections/deferments, major project-wide operating capabilities, and roadmap-arc changes must keep `TIMELINE.md` synchronized under that policy. When active milestone/branch/package/gates/next-action truth changes, refresh and validate `context/ACTIVE_CONTEXT.json` so future agents can bootstrap narrowly without losing recovery pointers.
 
 ## Roadmap discipline
 
