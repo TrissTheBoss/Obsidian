@@ -24,7 +24,7 @@ Last updated: 2026-09-28
 - Publish Preview run `36400684893` / #1 passed from audited `/publish-preview` on PR #57 and published `v0.4.0-phase4-dev1` as a GitHub prerelease targeting `6af5174f054b272c65174fbf0c37d981a66aff31`.
 - Preview runtime JAR: 493,355 bytes, SHA-256 `8bf25f3aa6bfe6fb4392044ba0973692fc6a24fd9948f3fea51cf55b12e157f3`. Its target differs from A-0205 package authority only by `/ai` continuity files; no renderer/source/resource file changed. Keep this Preview binary identity separate from the original A-0205 Actions-handoff hash.
 - A-0207 records final cleanup/build/release evidence. P4.1 runtime validation remains pending and PR #57 stays draft.
-## Modrinth distribution mirror — INTEGRATED / FIRST PUBLICATION TEST PENDING
+## Modrinth distribution mirror — INTEGRATED / FIRST PUBLICATION RETRY PENDING
 
 - D-0031 keeps GitHub CI/releases authoritative while allowing the same versioned builds to be mirrored to Modrinth for ordinary users.
 - New reusable/manual workflow: `.github/workflows/publish-modrinth.yml`.
@@ -33,11 +33,11 @@ Last updated: 2026-09-28
 - The runtime JAR is primary; the sources JAR is supplementary; metadata is Fabric / exact Minecraft version / client-only.
 - External publisher is pinned to `cloudnode-pro/modrinth-publish` commit `203bc72a51ae39fba1194fc4097d9f0750c49bd3` (v2.5.1).
 - The PAT value is never stored in repository content. Workflows consume repository Actions secret `MODRINTH_PAT` only at runtime.
-- Automatic mirroring requires public repository Actions variable `MODRINTH_PROJECT_ID`. The maintainer reports the repository secret/variable configuration is now present; the first live publication run is still required to prove it because the connector cannot read Actions secret/variable values.
+- Automatic mirroring resolves `MODRINTH_PROJECT_ID` from an explicit input, repository variable, or repository secret. The PAT remains repository secret `MODRINTH_PAT`; no credential value is persisted in the repository.
 - Publication performs an authenticated existing-version lookup and leaves an already-published matching version number untouched.
 - PR #67 merged `[no-release]` as `7323626f7d8f556f5ae81735ecc0e6a4da9bc85f`; post-merge Context Governor #14, Repository Hygiene #15, and Build #783 all passed.
 - A-0212 records the reviewed action pin, workflow behavior, security boundary, release-policy synchronization, and exact hosted evidence.
-- Follow-up backfill correction is staged in draft PR #68 `Allow idempotent Modrinth backfill`; validation head `d6cc10d790af1c3ab05a644f88ccf4862f8f9469` passed Context Governor #15 / run `36431790710` and Build #785 / run `36431790664`. A-0213 records the correction. It allows the existing `v0.4.0-phase4-dev1` Preview to invoke the idempotent Modrinth mirror without recreating/replacing its GitHub release. First live publication evidence remains pending.
+- PR #68 `Allow idempotent Modrinth backfill` merged `[no-release]` as `67e5a19d92e9e4f746ee5632b95e6aef6fb12c0b` after hosted validation. First live Publish Preview run `36432267102` / #3 rebuilt/handled the exact P4.1 Preview successfully, but downstream Modrinth job `108961448887` was SKIPPED because the project ID was stored as a repository secret while the caller gated only on the repository variable. A-0214 records the failed attempt and root cause. Secret-backed project-ID support is now staged for validation; no Modrinth state changed in the failed attempt.
 
 ## LLM Context Governor — ACTIVE AND PROVEN
 
