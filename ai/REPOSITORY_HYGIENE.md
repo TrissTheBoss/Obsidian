@@ -2,7 +2,7 @@
 
 This file defines how Obsidian keeps its GitHub repository clean, current, understandable, and useful to both humans and AI agents.
 
-It is part of the mandatory AI operating system. Engineering safety rules still live in `OPERATING_MANUAL.md`; this file is authoritative for branch lifecycle, repository presentation, README freshness, and release-channel hygiene.
+It is part of the mandatory AI operating system. Engineering safety rules still live in `OPERATING_MANUAL.md`; this file is authoritative for branch lifecycle, repository presentation, README/TIMELINE freshness, and release-channel hygiene.
 
 ## Repository shape
 
@@ -81,6 +81,7 @@ Every handoff must check:
 - completed/closed PR branches are gone or queued for automatic deletion;
 - branch count is at or moving toward the <=5 target;
 - README top-level status is current;
+- `TIMELINE.md` reflects material completed/active/rejected/deferred milestones and the real current phase position;
 - the correct public release channel exists for the latest testable binary;
 - exact package authority remains recorded in `CURRENT_STATE.md` and the relevant attempt.
 
@@ -122,6 +123,43 @@ Rules:
 - Do not leave a stale phase/version at the top of the README after a promotion or test-package handoff.
 - Decoration is welcome when it remains readable in light/dark GitHub themes and does not hide status/warnings.
 - Prefer a compact ASCII/Unicode logo, badges, tables, and clear sections over large marketing images.
+
+## Timeline maintenance contract
+
+The root `TIMELINE.md` is the public visual history/index. It is **not** authoritative for current engineering truth or future scope; `CURRENT_STATE.md`, `MASTER_ROADMAP.md`, durable decisions, immutable attempts, source, CI/release, and runtime evidence remain authoritative in their own domains.
+
+### Update the timeline in the same coherent change when any of these happen
+
+- a product phase or named milestone becomes ACTIVE, COMPLETE, REJECTED, DEFERRED, or SUPERSEDED;
+- a production-path milestone is promoted, rolled back, or replaced;
+- a milestone reaches its first public/runtime-test handoff or a new validated public checkpoint materially changes the project arc;
+- a major repository/process capability changes how the project is developed or handed off, such as release-channel governance, continuity infrastructure, or another durable project-wide operating rule;
+- roadmap phase order or major planned scope changes materially;
+- an evidence link, PR/merge identity, or milestone description shown on the timeline becomes incorrect and needs correction.
+
+Do **not** churn the timeline for every attempt, small bug fix, wording-only documentation edit, internal diagnostic, or continuity-only commit that does not change the public development story.
+
+### Required timeline structure
+
+Keep `TIMELINE.md` useful as a visual history rather than a second canonical roadmap:
+
+1. a high-level phase/status rail;
+2. a chronological visual milestone path;
+3. evidence-linked milestone entries;
+4. a clearly marked **current position**;
+5. a future-phase horizon sourced from the canonical roadmap;
+6. an explicit note that the timeline is a public summary/index, not authority;
+7. navigation back to README, current state, roadmap, and contributor documentation.
+
+Rules:
+
+- Historical milestones already shown should not silently disappear. Correct or supersede them with evidence when needed.
+- Do not label a milestone COMPLETE without the same evidence required by the canonical roadmap/current-state contract.
+- Do not present planned work as implemented.
+- When roadmap wording and the timeline disagree, fix the timeline from authoritative sources rather than treating the timeline as a tie-breaker.
+- Prefer concise milestone summaries plus links to authoritative attempts/PRs over copying large evidence dumps.
+- Keep Mermaid/Markdown rendering readable on GitHub light and dark themes.
+- Update `CURRENT_STATE.md` only when current truth changes; timeline maintenance alone does not manufacture a current-state change.
 
 ## Release channels
 
@@ -196,6 +234,7 @@ A release tag is immutable package identity. If a tester-facing binary changes, 
 ## Public documentation ownership
 
 - `README.md` — concise public landing page.
+- `TIMELINE.md` — maintained public visual history/index; non-authoritative summary of milestone progression and current phase position.
 - `docs/RELEASE_CHANNELS.md` — public explanation of Stable/Preview/CI channels.
 - `CHANGELOG.md` — notable user-facing changes, not every attempt.
 - `ai/CURRENT_STATE.md` — exact engineering truth and current handoff.
