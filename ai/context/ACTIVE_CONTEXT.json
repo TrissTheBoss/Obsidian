@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "active_goal": "Continue Phase 4 P4.1 reference-runtime validation from the published dev1 Preview without changing renderer source until runtime evidence justifies a new correction.",
+  "scope_boundary": "Active engineering scope is Phase 4 P4.1 shadow large-scene GPU visibility plus repository/AI continuity maintenance. Do not promote P4.1, expand native graphics ownership, revive P3.9 partial remeshing, or change production terrain draw ownership without new evidence and a separately frozen contract.",
+  "source_snapshot": {
+    "created_at": "2026-09-28T09:18:42Z",
+    "repo_or_system": "TrissTheBoss/Obsidian",
+    "authority_refs": [
+      "ai/CURRENT_STATE.md@main",
+      "ai/MASTER_ROADMAP.md@main",
+      "ai/DECISIONS.md@main",
+      "ai/attempts/A-0205-phase4-p4.1-dev1-ci-package-runtime-handoff.md@main",
+      "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md@main",
+      "pull/57",
+      "release/v0.4.0-phase4-dev1"
+    ]
+  },
+  "coverage_manifest": [
+    "user_requirements",
+    "current_state",
+    "durable_decisions",
+    "open_obligations",
+    "exact_identifiers",
+    "security_boundaries"
+  ],
+  "facts": [
+    {
+      "id": "F1",
+      "text": "Phase 3 is complete; Phase 4 P4.1 is active and intentionally shadow-only, with the validated P3.10 path still owning production terrain rendering.",
+      "source_ref": "ai/CURRENT_STATE.md#Phase-4-P4.1"
+    },
+    {
+      "id": "F2",
+      "text": "Repository hygiene is active and proven; the normal steady state is main plus active PR branches, with a target of no more than five branches.",
+      "source_ref": "ai/CURRENT_STATE.md#Repository-hygiene-public-surface"
+    },
+    {
+      "id": "F3",
+      "text": "The public tester channel for development binaries is GitHub Prerelease / Preview; v0.4.0-phase4-dev1 is published as a Preview.",
+      "source_ref": "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md#Preview-release-proof"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "D1",
+      "text": "Native Vulkan interop stays narrow; Minecraft continues to own the Vulkan device, queues, submission lifecycle, swapchain/presentation, and normal graphics passes unless a separately evidenced decision changes that boundary.",
+      "source_ref": "ai/DECISIONS.md#D-0025"
+    },
+    {
+      "id": "D2",
+      "text": "main is the only permanent branch; branches are disposable working state and history belongs in attempts, PRs, exact SHAs, tags, and releases.",
+      "source_ref": "ai/DECISIONS.md#D-0028"
+    }
+  ],
+  "open_obligations": [
+    {
+      "id": "O1",
+      "text": "Run the exact P4.1 dev1 reference-machine exercise, collect the full PrismLauncher log, verify GPU/CPU visibility agreement and inherited P3.10/P3.7/lifetime gates, and obtain an explicit human visual PASS before P4.1 promotion.",
+      "source_ref": "ai/CURRENT_STATE.md#Current-handoff-reference-P4.1-dev1-runtime"
+    },
+    {
+      "id": "O2",
+      "text": "Keep PR #57 draft until the frozen P4.1 runtime, scale, correctness, lifetime, and visual gates close.",
+      "source_ref": "ai/attempts/A-0205-phase4-p4.1-dev1-ci-package-runtime-handoff.md#Result"
+    }
+  ],
+  "exact_identifiers": [
+    {
+      "id": "I1",
+      "text": "Active P4.1 branch: phase4/p4.1-persistent-scene-visibility; active draft PR: #57; current PR continuity head: 6af5174f054b272c65174fbf0c37d981a66aff31.",
+      "source_ref": "ai/CURRENT_STATE.md#Canonical-repository"
+    },
+    {
+      "id": "I2",
+      "text": "Original A-0205 package-authority source is fd58b9f2e915462f665b7d85f5d993456d5f930e; original Actions-handoff JAR SHA-256 is 39c4bb4932bd6e7c00a4190c3514ef29eb926c337bba488f9a04bbef27120458.",
+      "source_ref": "ai/attempts/A-0205-phase4-p4.1-dev1-ci-package-runtime-handoff.md#Exact-source-package-authority"
+    },
+    {
+      "id": "I3",
+      "text": "Public Preview v0.4.0-phase4-dev1 targets 6af5174f054b272c65174fbf0c37d981a66aff31; Preview runtime JAR SHA-256 is 8bf25f3aa6bfe6fb4392044ba0973692fc6a24fd9948f3fea51cf55b12e157f3.",
+      "source_ref": "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md#Preview-release-proof"
+    }
+  ],
+  "security_boundaries": [
+    {
+      "id": "S1",
+      "text": "Never store credentials, access tokens, private keys, cookies, passwords, or other secrets in the repository or AI continuity files.",
+      "source_ref": "ai/README.md#Log-discipline"
+    },
+    {
+      "id": "S2",
+      "text": "External API, connector, MCP, and OAuth calls must receive only task-necessary fields/scopes; unrelated conversation history and available-but-unneeded data are excluded.",
+      "source_ref": "ai/skills/context-governor/SKILL.md#Non-negotiable-rules"
+    }
+  ],
+  "recovery_index": [
+    {
+      "id": "roadmap-full",
+      "topic": "Full product phase order, roadmap governance, experiments, and future scope",
+      "source_ref": "ai/MASTER_ROADMAP.md@main",
+      "locator": "Load relevant phase section; load Roadmap Governance before any scope/phase/status restructuring."
+    },
+    {
+      "id": "operating-manual-full",
+      "topic": "Engineering workflow, validation, handoff, release/build discipline",
+      "source_ref": "ai/OPERATING_MANUAL.md@main",
+      "locator": "Load relevant process section when performing engineering or handoff mutations."
+    },
+    {
+      "id": "decisions-full",
+      "topic": "Durable architecture/product constraints",
+      "source_ref": "ai/DECISIONS.md@main",
+      "locator": "Load decisions referenced by active work; broaden only when architecture/scope may conflict."
+    },
+    {
+      "id": "p4-contract",
+      "topic": "Frozen P4.1 contract and promotion gates",
+      "source_ref": "ai/attempts/A-0203-phase4-p4.1-persistent-scene-gpu-visibility-contract.md@main",
+      "locator": "Entire attempt when evaluating or changing P4.1 behavior/gates."
+    },
+    {
+      "id": "p4-seam",
+      "topic": "Exact Minecraft 26.2 large-scene/frustum API seam",
+      "source_ref": "ai/attempts/A-0204-phase4-p4.1-exact-mc26.2-large-scene-frustum-seam.md@main",
+      "locator": "Exact findings and implementation consequences."
+    },
+    {
+      "id": "p4-package",
+      "topic": "P4.1 dev1 canonical package and runtime test contract",
+      "source_ref": "ai/attempts/A-0205-phase4-p4.1-dev1-ci-package-runtime-handoff.md@main",
+      "locator": "Entire attempt."
+    },
+    {
+      "id": "repo-hygiene-evidence",
+      "topic": "Repository cleanup and Preview release evidence",
+      "source_ref": "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md@main",
+      "locator": "Entire attempt."
+    },
+    {
+      "id": "history-cold",
+      "topic": "Older experiments, failures, and superseded approaches",
+      "source_ref": "ai/ATTEMPT_LOG.md + ai/attempts/@main",
+      "locator": "Retrieve by attempt ID/topic only when provenance/regression analysis requires it."
+    }
+  ],
+  "discarded_ids": [
+    "roadmap-full",
+    "operating-manual-full",
+    "decisions-full",
+    "p4-contract",
+    "p4-seam",
+    "p4-package",
+    "repo-hygiene-evidence",
+    "history-cold"
+  ],
+  "next_action": "Use the published P4.1 dev1 Preview for the frozen reference runtime exercise; when the tester supplies the log and visual verdict, rehydrate A-0203/A-0205 and validate the result without weakening gates."
+}
