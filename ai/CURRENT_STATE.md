@@ -12,15 +12,17 @@ Last updated: 2026-09-28
 - Product phase: **Phase 4 — GPU-driven visibility at real-world scale**.
 
 
-## Repository hygiene / public surface
+## Repository hygiene / public surface — ACTIVE AND PROVEN
 
-- Pre-policy branch audit on 2026-09-28 found **56 branches** and **57 PRs**, with only PR #57 open.
-- New durable policy: `main` is the only permanent branch; active PR heads are temporary work state; closed/merged branches are deleted after evidence is preserved.
-- Normal branch-count target: **<=5**. The new Repository Hygiene workflow preserves `main`, protected branches and open PR heads while deleting closed internal PR heads and the audited legacy stale branch set.
-- Root `README.md` is now a maintained public surface with Phase 4 status, compatibility, release channels, quick-start guidance, architecture and roadmap links.
+- Pre-policy audit on 2026-09-28 found **56 branches** and **57 PRs**, with only PR #57 open.
+- D-0028 / `ai/REPOSITORY_HYGIENE.md`: `main` is the only permanent branch; active PR heads are temporary work state; closed/merged branches are deleted after evidence is preserved.
+- PR #58 exact final head `1044a8846a5e602665e717e7cbeea63de47b4e2e` passed Build #762 and merged `[no-release]` as `e4f00867ea2df5b70eb21e2f0003ad36950fb9d8`; post-merge Build #763 passed.
+- Repository Hygiene run `36400552449` / #1 passed and reduced the repository from **56 branches to 2**: `main` plus the open P4.1 branch. The normal `<=5` target is therefore satisfied.
+- Root `README.md` is now the maintained public landing page with Phase 4 status, compatibility, release channels, quick-start guidance, architecture and roadmap links.
 - Tester-facing CI-green development JARs use GitHub **Prereleases / Preview**; validated public checkpoints use normal Releases; Actions artifacts remain short-lived engineering evidence.
-- `ai/REPOSITORY_HYGIENE.md` is mandatory alongside the operating manual; `docs/RELEASE_CHANNELS.md` is the public release-channel summary.
-- The repository-maintenance merge itself must use `[no-release]` because it changes process/docs/automation, not the renderer binary.
+- Publish Preview run `36400684893` / #1 passed from audited `/publish-preview` on PR #57 and published `v0.4.0-phase4-dev1` as a GitHub prerelease targeting `6af5174f054b272c65174fbf0c37d981a66aff31`.
+- Preview runtime JAR: 493,355 bytes, SHA-256 `8bf25f3aa6bfe6fb4392044ba0973692fc6a24fd9948f3fea51cf55b12e157f3`. Its target differs from A-0205 package authority only by `/ai` continuity files; no renderer/source/resource file changed. Keep this Preview binary identity separate from the original A-0205 Actions-handoff hash.
+- A-0207 records final cleanup/build/release evidence. P4.1 runtime validation remains pending and PR #57 stays draft.
 ## Phase 3 status — COMPLETE
 
 - P3.1-P3.8: COMPLETE.
