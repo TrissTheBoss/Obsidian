@@ -137,11 +137,11 @@ Unsupported render cases should be explicit and measurable rather than silently 
 2. Work from repository truth, not remembered chat context.
 3. Identify the roadmap phase/item the work advances. If the work does not fit the roadmap, decide whether it is a small implementation detail or an actual roadmap change before coding.
 4. For unstable Minecraft renderer APIs, inspect the exact Minecraft 26.2 dependency resolved by Loom rather than guessing from another version.
-5. Use a feature branch for each coherent milestone.
+5. Use a feature branch for each coherent milestone and follow `REPOSITORY_HYGIENE.md`: `main` is the only permanent branch, active work should have a PR, and closed/merged branches are disposable after evidence is preserved.
 6. Keep PRs draft until compile validation and any required real-machine runtime validation pass.
 7. GitHub CI against the real declared dependencies is the compile/package authority.
-8. Do not publish a development milestone as a public release merely because it merged; use `[no-release]` when appropriate.
-9. Remove temporary API-inspection/debug workflows once they have served their purpose.
+8. Publish tester-facing CI-green development JARs as GitHub Preview prereleases when they reach real-machine handoff; use `[no-release]` for documentation, continuity, evidence-only, or repository-maintenance merges.
+9. Remove temporary API-inspection/debug workflows once they have served their purpose, then delete their temporary branches in the same handoff.
 10. Record every meaningful attempt whether it succeeds or fails.
 11. Update `CURRENT_STATE.md` whenever project truth changes.
 12. Update `DECISIONS.md` whenever a durable design/product choice changes.
@@ -261,10 +261,15 @@ Roadmap research/restructuring is a meaningful attempt and should be logged just
 
 ## Release/build rules
 
+The authoritative channel policy is `ai/REPOSITORY_HYGIENE.md` and the public summary is `docs/RELEASE_CHANNELS.md`.
+
 - Canonical binaries come from GitHub CI/release builds against real dependencies.
 - A mocked/local JAR can be useful for internal logic but is not release compatibility evidence.
-- Versioned development JARs may be distributed from CI artifacts for runtime validation before merge/release.
-- Public releases should represent meaningful validated checkpoints.
+- **Preview:** a CI-green tester-facing development JAR is normally published as a GitHub Prerelease once it reaches real-machine handoff. Preview notes must identify the exact source commit, required environment, test purpose, known limitations, and checksums.
+- **Stable checkpoint:** a normal GitHub Release is reserved for a validated public checkpoint and remains eligible for GitHub `latest`.
+- **CI artifact:** short-lived build output remains valid engineering evidence, but should not be the only discoverable home for a build intentionally handed to testers.
+- Release tags are immutable package identities. Bump the version for a changed binary; never silently replace assets behind an existing tester-facing tag.
+- `[no-release]` is appropriate for documentation, continuity, evidence-only, or repository-maintenance merges that do not create a new tester-facing binary.
 - A documentation-only roadmap change does not change binary behavior; do not imply otherwise.
 
 ## Security
@@ -281,6 +286,9 @@ Before stopping a development session or handing off to another agent, verify:
 - durable new architecture/product choices are in `DECISIONS.md`;
 - the active PR matches the real milestone scope;
 - temporary diagnostic files/workflows are removed unless intentionally retained and documented;
+- repository branch count follows the `REPOSITORY_HYGIENE.md` target or the temporary exception is documented;
+- the root README reflects the real active phase, compatibility, and release channels;
+- a tester-facing CI-green JAR has a Preview prerelease or `CURRENT_STATE.md` states why publication is intentionally deferred;
 - unvalidated behavior is labeled unvalidated rather than implied successful;
 - completed roadmap items have evidence at the appropriate validation level;
 - rejected/deferred/superseded major features retain a durable explanation;
@@ -298,5 +306,7 @@ Before handoff:
 - durable architecture/product changes must be in `DECISIONS.md`;
 - material roadmap edits must be described in the active PR/issue;
 - temporary diagnostics should be removed unless intentionally retained;
+- completed/closed branches should be deleted or queued for automatic hygiene cleanup;
+- README/release-channel status should be synchronized with the handoff;
 - exact evidence gaps must be named;
 - the next action must be clear enough that a different agent can continue without relying on chat history.
