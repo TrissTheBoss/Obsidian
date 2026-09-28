@@ -147,20 +147,9 @@ jobs:
 
           echo 'created=true' >> "$GITHUB_OUTPUT"
 
-      - name: Note disabled Modrinth mirror
-        if: steps.github_release.outputs.created == 'true' && vars.MODRINTH_PROJECT_ID == ''
-        shell: bash
-        run: |
-          {
-            echo '## Modrinth mirror'
-            echo
-            echo 'Skipped automatic Modrinth publication because repository variable MODRINTH_PROJECT_ID is not configured.'
-            echo 'The publish-modrinth workflow can still be dispatched manually with a project ID override.'
-          } >> "$GITHUB_STEP_SUMMARY"
-
   modrinth:
     name: Mirror release to Modrinth
-    if: needs.release.result == 'success' && vars.MODRINTH_PROJECT_ID != ''
+    if: needs.release.result == 'success'
     needs: release
     uses: ./.github/workflows/publish-modrinth.yml
     with:
@@ -169,3 +158,4 @@ jobs:
       status: listed
     secrets:
       modrinth_pat: ${{ secrets.modrinth_pat }}
+      modrinth_project_id: ${{ secrets.MODRINTH_PROJECT_ID }}

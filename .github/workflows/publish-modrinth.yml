@@ -20,6 +20,8 @@ on:
     secrets:
       modrinth_pat:
         required: true
+      modrinth_project_id:
+        required: false
   workflow_dispatch:
     inputs:
       source_ref:
@@ -56,6 +58,7 @@ jobs:
         env:
           INPUT_PROJECT_ID: ${{ inputs.project_id }}
           DEFAULT_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
+          SECRET_PROJECT_ID: ${{ secrets.modrinth_project_id || secrets.MODRINTH_PROJECT_ID }}
           MODRINTH_TOKEN: ${{ secrets.modrinth_pat }}
         shell: bash
         run: |
@@ -71,7 +74,10 @@ jobs:
             PROJECT_ID="$DEFAULT_PROJECT_ID"
           fi
           if [[ -z "$PROJECT_ID" ]]; then
-            echo 'No Modrinth project ID configured. Set repository variable MODRINTH_PROJECT_ID or provide project_id when dispatching manually.' >&2
+            PROJECT_ID="$SECRET_PROJECT_ID"
+          fi
+          if [[ -z "$PROJECT_ID" ]]; then
+            echo 'No Modrinth project ID configured. Set MODRINTH_PROJECT_ID as a repository variable or secret, or provide project_id when dispatching manually.' >&2
             exit 1
           fi
 
