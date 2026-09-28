@@ -156,17 +156,6 @@ jobs:
 
           echo 'created=true' >> "$GITHUB_OUTPUT"
 
-      - name: Note disabled Modrinth mirror
-        if: steps.github_release.outputs.created == 'true' && vars.MODRINTH_PROJECT_ID == ''
-        shell: bash
-        run: |
-          {
-            echo '## Modrinth mirror'
-            echo
-            echo 'Skipped automatic Modrinth publication because repository variable MODRINTH_PROJECT_ID is not configured.'
-            echo 'The publish-modrinth workflow can still be dispatched manually with a project ID override.'
-          } >> "$GITHUB_STEP_SUMMARY"
-
       - name: Summary
         shell: bash
         env:
