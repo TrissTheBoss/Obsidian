@@ -1,6 +1,7 @@
 package dev.obsidian.mixin;
 
 import dev.obsidian.render.terrain.SectionLifecycleEvents;
+import dev.obsidian.render.visibility.LargeSceneLifecycleEvents;
 import net.minecraft.client.resources.model.ModelManager;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -15,7 +16,10 @@ public abstract class ModelManagerMixin {
     private void obsidian$reloadCompleted(CallbackInfoReturnable<CompletableFuture<Void>> cir) {
         CompletableFuture<Void> future = cir.getReturnValue();
         if (future != null) {
-            future.thenRun(SectionLifecycleEvents::resourceReloaded);
+            future.thenRun(() -> {
+                SectionLifecycleEvents.resourceReloaded();
+                LargeSceneLifecycleEvents.resourceReloaded();
+            });
         }
     }
 }

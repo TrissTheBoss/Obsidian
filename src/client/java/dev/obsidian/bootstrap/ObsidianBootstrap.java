@@ -6,6 +6,7 @@ import dev.obsidian.render.GpuCapabilities;
 import dev.obsidian.render.MojangVulkanBridge;
 import dev.obsidian.render.RendererBridge;
 import dev.obsidian.render.frame.FrameCoordinator;
+import dev.obsidian.render.visibility.LargeSceneVisibilityProbe;
 import com.mojang.blaze3d.systems.RenderPass;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -22,6 +23,7 @@ public final class ObsidianBootstrap {
     private static volatile ObsidianConfig config;
     private static volatile RendererBridge bridge;
     private static volatile FrameCoordinator frameCoordinator;
+    private static volatile LargeSceneVisibilityProbe largeSceneVisibility;
 
     private ObsidianBootstrap() {}
 
@@ -52,6 +54,7 @@ public final class ObsidianBootstrap {
             candidate.close();
             bridge = null;
             frameCoordinator = null;
+            largeSceneVisibility = null;
             LOG.log(System.Logger.Level.WARNING,
                     "Obsidian is Vulkan-only, but Minecraft initialized backend ''{0}''. Obsidian will remain inactive for this session instead of crashing.", caps.backend());
             LOG.log(System.Logger.Level.WARNING,
@@ -64,6 +67,13 @@ public final class ObsidianBootstrap {
 
         bridge = candidate;
         frameCoordinator = new FrameCoordinator(candidate.nativeDeviceHandle());
+        try {
+            largeSceneVisibility = new LargeSceneVisibilityProbe(candidate.nativeDeviceHandle());
+        } catch (RuntimeException e) {
+            largeSceneVisibility = null;
+            LOG.log(System.Logger.Level.ERROR,
+                    "Phase 4 P4.1 shadow visibility initialization failed; P3.10 production rendering remains active.", e);
+        }
         LOG.log(System.Logger.Level.INFO, "Attached to Vulkan backend: {0}", caps.backend());
         LOG.log(System.Logger.Level.INFO, "GPU: {0} | {1} ({2})", caps.vendor(), caps.deviceName(), caps.deviceType());
         LOG.log(System.Logger.Level.INFO, "Driver: {0}", caps.driverInfo());
@@ -75,7 +85,7 @@ public final class ObsidianBootstrap {
             LOG.log(System.Logger.Level.DEBUG, "Backend description: {0}", caps.backendDescription());
         }
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 3 dev24.2 P3.10 production opaque/cutout replacement canary armed. Dev24.2 keeps the exact Minecraft 26.2 same-OPAQUE-RenderPass replacement seam, per-layer LIVE/P3.7-exact claim rules, deterministic-empty-reference allowance and single-layer record admission from dev24.1. The 3x3x1 scene now recenters whenever the player crosses a vertical section boundary even if X/Z remain inside the horizontal window. Production suppression additionally requires a complete generalized capture with zero rejected blocks; sections containing leaves, fluid-bearing blocks such as kelp, block entities, unsupported materials, translucent output, missing models or non-block-atlas output remain vanilla rather than being replaced by an incomplete mesh. This does not add leaf/fluid rendering support or change P3.7, production positions/color/light/material/UV truth, bounded workers/staging/arena lifetime, native graphics ownership, partial remeshing or GPU patching; workerWorldReadsAfterCapture=0.");
+                "Obsidian Phase 4 P4.1 dev1 shadow large-scene visibility armed. The promoted P3.10 dev24.2 same-OPAQUE-pass SOLID/CUTOUT replacement remains the only production terrain draw owner. P4.1 maintains a bounded persistent non-empty-section metadata scene from exact Minecraft lifecycle signals, performs camera-relative GPU frustum classification/identity compaction through the existing narrow Vulkan compute seam, and validates sampled results against a budgeted independent CPU oracle. Camera-only frames do not rebuild the full Java scene; there is no native graphics expansion, indirect-count consumption, Hi-Z, LOD, translucency change, mesher change, partial remeshing or production draw-list takeover.");
     }
 
     public static void onFrameStart() {
@@ -86,6 +96,8 @@ public final class ObsidianBootstrap {
     public static void onWorldRendered(GameRenderer renderer) {
         FrameCoordinator coordinator = frameCoordinator;
         if (coordinator != null) coordinator.afterWorldRender(renderer);
+        LargeSceneVisibilityProbe visibility = largeSceneVisibility;
+        if (visibility != null) visibility.afterWorldRender(renderer);
     }
 
     public static void onFrameEnd() {
@@ -111,6 +123,9 @@ public final class ObsidianBootstrap {
     }
 
     public static void shutdown() {
+        LargeSceneVisibilityProbe visibility = largeSceneVisibility;
+        largeSceneVisibility = null;
+        if (visibility != null) visibility.close();
         FrameCoordinator coordinator = frameCoordinator;
         frameCoordinator = null;
         if (coordinator != null) coordinator.close();
