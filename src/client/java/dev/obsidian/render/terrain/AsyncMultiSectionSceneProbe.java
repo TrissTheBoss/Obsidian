@@ -226,7 +226,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
 
         if (!centerKnown) {
             if (!tryBindCenterNearPlayer()) return;
-        } else if (state == State.LIVE && tryRecenterIfPlayerLeftWindow(frameSerial)) {
+        } else if (tryRecenterIfPlayerLeftWindow(frameSerial)) {
             return;
         }
 
