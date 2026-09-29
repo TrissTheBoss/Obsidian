@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "active_goal": "Obtain the explicit human visual PASS/FAIL for the exact tested P4.1 dev1 Preview. Automated frozen runtime gates, including post-startup F3+T recovery and world leave/re-entry, are closed; do not change renderer source unless the visual verdict or new evidence reveals a defect.",
+  "active_goal": "Promote the exact tested P4.1 implementation by synchronizing its renderer/resource/version files onto current main, validating that synchronized head in hosted CI, then freeze and begin the next Phase 4 version.",
   "scope_boundary": "Active engineering scope is Phase 4 P4.1 shadow large-scene GPU visibility plus repository/AI continuity maintenance. Do not promote P4.1, expand native graphics ownership, revive P3.9 partial remeshing, or change production terrain draw ownership without new evidence and a separately frozen contract.",
   "source_snapshot": {
-    "created_at": "2026-09-29T15:21:05Z",
+    "created_at": "2026-09-29T17:14:00Z",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
       "ai/CURRENT_STATE.md@maintenance/p4.1-dev1-runtime-partial",
-      "ai/attempts/A-0219-phase4-p4.1-dev1-runtime-partial.md@maintenance/p4.1-dev1-runtime-partial",
       "ai/attempts/A-0220-phase4-p4.1-dev1-followup-runtime.md@maintenance/p4.1-dev1-runtime-partial",
-      "ai/DECISIONS.md@main",
+      "ai/attempts/A-0221-phase4-p4.1-dev1-human-visual-pass.md@maintenance/p4.1-dev1-runtime-partial",
+      "ai/attempts/A-0203-phase4-p4.1-persistent-scene-gpu-visibility-contract.md@main",
       "pull/57",
       "release/v0.4.0-phase4-dev1"
     ]
@@ -62,6 +62,11 @@
       "id": "F8",
       "text": "The 2026-09-29 follow-up run of the exact P4.1 dev1 Preview closes the missing automated runtime exercise: benchmarkResourceReloadDelta=2 with READY/P4.1 recovery, a real leave/re-entry cycle, 1,836/1,836 exact sampled visibility comparisons, zero missing/unexpected/duplicate identities and GPU false culls, no capacity/lifecycle/hard failure, clean inherited P3.10/P3.5/P3.6/P3.7 and resource lifetime, and exit code 0. Only the explicit human visual verdict remains.",
       "source_ref": "ai/attempts/A-0220-phase4-p4.1-dev1-followup-runtime.md"
+    },
+    {
+      "id": "F9",
+      "text": "The tester supplied explicit human visual PASS for the exact A-0220 follow-up run. Together A-0220 and A-0221 close every frozen A-0203 P4.1 runtime and visual gate. Promotion now requires only synchronization of the exact tested implementation onto current main plus exact-head hosted CI.",
+      "source_ref": "ai/attempts/A-0221-phase4-p4.1-dev1-human-visual-pass.md"
     }
   ],
   "decisions": [
@@ -94,13 +99,13 @@
   "open_obligations": [
     {
       "id": "O1",
-      "text": "Obtain the tester's explicit human visual PASS/FAIL for the exact P4.1 dev1 follow-up run. PASS requires no new holes, missing/duplicate terrain, texture/light/cutout/depth regressions, stale popping or other visual difference from the promoted P3.10 baseline, including after F3+T and world re-entry.",
-      "source_ref": "ai/CURRENT_STATE.md#Current-handoff-explicit-human-visual-verdict-only"
+      "text": "Synchronize the exact tested P4.1 renderer/resource/version files onto current main without overwriting newer continuity/maintenance state, verify intended file identity, and run exact-head hosted validation.",
+      "source_ref": "ai/CURRENT_STATE.md#Current-handoff-synchronized-promotion-CI"
     },
     {
       "id": "O2",
-      "text": "Keep PR #57 draft until the visual verdict closes the final frozen P4.1 gate. If PASS, record promotion evidence and run exact synchronized-head hosted validation before promotion/next-slice transition.",
-      "source_ref": "ai/attempts/A-0220-phase4-p4.1-dev1-followup-runtime.md"
+      "text": "After synchronized hosted validation passes, promote P4.1 and freeze the next Phase 4 development slice separately. P4.1 itself remains shadow-only.",
+      "source_ref": "ai/attempts/A-0221-phase4-p4.1-dev1-human-visual-pass.md"
     }
   ],
   "exact_identifiers": [
@@ -192,6 +197,12 @@
       "locator": "Load before P4.1 promotion. Automated frozen runtime gates are closed; only the explicit human visual verdict remains."
     },
     {
+      "id": "p4-visual-pass",
+      "topic": "Final P4.1 dev1 human visual PASS and promotion authorization",
+      "source_ref": "ai/attempts/A-0221-phase4-p4.1-dev1-human-visual-pass.md@maintenance/p4.1-dev1-runtime-partial",
+      "locator": "Load before P4.1 promotion. All frozen runtime/visual gates are closed; remaining work is synchronized exact-head CI and promotion."
+    },
+    {
       "id": "repo-hygiene-evidence",
       "topic": "Repository cleanup and Preview release evidence",
       "source_ref": "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md@main",
@@ -261,6 +272,7 @@
     "p4-package",
     "p4-first-runtime",
     "p4-followup-runtime",
+    "p4-visual-pass",
     "repo-hygiene-evidence",
     "history-cold",
     "context-governor-design",
@@ -271,5 +283,5 @@
     "modrinth-secret-project-id-validation",
     "modrinth-first-success"
   ],
-  "next_action": "Ask for/consume the explicit human visual PASS/FAIL for the exact follow-up run. If PASS, record immutable promotion evidence, synchronize continuity, run exact synchronized-head hosted validation, then proceed with P4.1 promotion/next-slice planning. If FAIL, record the symptom before any renderer correction."
+  "next_action": "Synchronize the exact tested P4.1 implementation onto current main without overwriting newer continuity state, run exact-head hosted validation, promote P4.1, then freeze and start the next Phase 4 version."
 }
