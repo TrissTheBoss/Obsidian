@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "active_goal": "Close only the remaining Phase 4 P4.1 dev1 reference-runtime gates with the exact published Preview: perform post-startup in-world F3+T/recovery and obtain an explicit human visual verdict; do not change renderer source unless new evidence reveals a defect.",
+  "active_goal": "Obtain the explicit human visual PASS/FAIL for the exact tested P4.1 dev1 Preview. Automated frozen runtime gates, including post-startup F3+T recovery and world leave/re-entry, are closed; do not change renderer source unless the visual verdict or new evidence reveals a defect.",
   "scope_boundary": "Active engineering scope is Phase 4 P4.1 shadow large-scene GPU visibility plus repository/AI continuity maintenance. Do not promote P4.1, expand native graphics ownership, revive P3.9 partial remeshing, or change production terrain draw ownership without new evidence and a separately frozen contract.",
   "source_snapshot": {
-    "created_at": "2026-09-29T15:08:47Z",
+    "created_at": "2026-09-29T15:21:05Z",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
       "ai/CURRENT_STATE.md@maintenance/p4.1-dev1-runtime-partial",
       "ai/attempts/A-0219-phase4-p4.1-dev1-runtime-partial.md@maintenance/p4.1-dev1-runtime-partial",
+      "ai/attempts/A-0220-phase4-p4.1-dev1-followup-runtime.md@maintenance/p4.1-dev1-runtime-partial",
       "ai/DECISIONS.md@main",
-      "ai/REPOSITORY_HYGIENE.md@main",
       "pull/57",
       "release/v0.4.0-phase4-dev1"
     ]
@@ -57,6 +57,11 @@
       "id": "F7",
       "text": "The first 2026-09-29 P4.1 dev1 Preview reference run produced clean automated scale/correctness/lifetime evidence (2,644/2,644 sampled comparisons, zero missing/unexpected/duplicate identities, zero GPU false culls, no capacity/lifecycle failure, clean inherited P3.10/P3.7/resource shutdown) but is PARTIAL because no post-startup in-world F3+T/recovery is evidenced and no explicit human visual PASS was supplied.",
       "source_ref": "ai/attempts/A-0219-phase4-p4.1-dev1-runtime-partial.md"
+    },
+    {
+      "id": "F8",
+      "text": "The 2026-09-29 follow-up run of the exact P4.1 dev1 Preview closes the missing automated runtime exercise: benchmarkResourceReloadDelta=2 with READY/P4.1 recovery, a real leave/re-entry cycle, 1,836/1,836 exact sampled visibility comparisons, zero missing/unexpected/duplicate identities and GPU false culls, no capacity/lifecycle/hard failure, clean inherited P3.10/P3.5/P3.6/P3.7 and resource lifetime, and exit code 0. Only the explicit human visual verdict remains.",
+      "source_ref": "ai/attempts/A-0220-phase4-p4.1-dev1-followup-runtime.md"
     }
   ],
   "decisions": [
@@ -89,13 +94,13 @@
   "open_obligations": [
     {
       "id": "O1",
-      "text": "Rerun the exact published P4.1 dev1 Preview, perform F3+T after world/P4.1 readiness, wait for recovery and new PASS samples, and provide the full log plus an explicit human visual PASS/FAIL. Include world leave/re-entry if practical.",
-      "source_ref": "ai/CURRENT_STATE.md#Current-handoff-exact-same-dev1-package-missing-evidence-only"
+      "text": "Obtain the tester's explicit human visual PASS/FAIL for the exact P4.1 dev1 follow-up run. PASS requires no new holes, missing/duplicate terrain, texture/light/cutout/depth regressions, stale popping or other visual difference from the promoted P3.10 baseline, including after F3+T and world re-entry.",
+      "source_ref": "ai/CURRENT_STATE.md#Current-handoff-explicit-human-visual-verdict-only"
     },
     {
       "id": "O2",
-      "text": "Keep PR #57 draft; do not change renderer source or weaken A-0203 from the first partial run because its automated P4.1 correctness/lifetime evidence is clean.",
-      "source_ref": "ai/attempts/A-0219-phase4-p4.1-dev1-runtime-partial.md"
+      "text": "Keep PR #57 draft until the visual verdict closes the final frozen P4.1 gate. If PASS, record promotion evidence and run exact synchronized-head hosted validation before promotion/next-slice transition.",
+      "source_ref": "ai/attempts/A-0220-phase4-p4.1-dev1-followup-runtime.md"
     }
   ],
   "exact_identifiers": [
@@ -181,6 +186,12 @@
       "locator": "Load before evaluating the follow-up dev1 runtime; preserve the distinction between clean automated evidence and the missing post-startup F3+T/human-visual gates."
     },
     {
+      "id": "p4-followup-runtime",
+      "topic": "P4.1 dev1 follow-up runtime closing F3+T and world re-entry gates",
+      "source_ref": "ai/attempts/A-0220-phase4-p4.1-dev1-followup-runtime.md@maintenance/p4.1-dev1-runtime-partial",
+      "locator": "Load before P4.1 promotion. Automated frozen runtime gates are closed; only the explicit human visual verdict remains."
+    },
+    {
       "id": "repo-hygiene-evidence",
       "topic": "Repository cleanup and Preview release evidence",
       "source_ref": "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md@main",
@@ -249,6 +260,7 @@
     "p4-seam",
     "p4-package",
     "p4-first-runtime",
+    "p4-followup-runtime",
     "repo-hygiene-evidence",
     "history-cold",
     "context-governor-design",
@@ -259,5 +271,5 @@
     "modrinth-secret-project-id-validation",
     "modrinth-first-success"
   ],
-  "next_action": "Use the exact same published P4.1 dev1 Preview. After world/P4.1 readiness, perform in-world F3+T, wait for recovery plus new P4.1 PASS samples, optionally leave/re-enter if practical, exit normally, and supply the full log with an explicit human visual verdict. Do not change renderer source from A-0219 alone."
+  "next_action": "Ask for/consume the explicit human visual PASS/FAIL for the exact follow-up run. If PASS, record immutable promotion evidence, synchronize continuity, run exact synchronized-head hosted validation, then proceed with P4.1 promotion/next-slice planning. If FAIL, record the symptom before any renderer correction."
 }
