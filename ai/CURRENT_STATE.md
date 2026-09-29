@@ -1,6 +1,6 @@
 # Obsidian Current State
 
-Last updated: 2026-09-28
+Last updated: 2026-09-29
 
 ## Canonical repository
 
@@ -82,7 +82,7 @@ Canonical direct runtime JAR:
 
 Do not treat later continuity/Phase 4 commits as the source authority for that package.
 
-## Phase 4 P4.1 — ACTIVE / DEV1 REFERENCE RUNTIME REQUIRED
+## Phase 4 P4.1 — RUNTIME + VISUAL GATES PASSED / SYNCHRONIZED CI REQUIRED
 
 Immutable contract:
 
@@ -176,36 +176,51 @@ Sources JAR from the same hosted artifact:
 
 Later continuity-only commits do not change dev1 package authority.
 
-## Current handoff — reference P4.1 dev1 runtime
+## P4.1 dev1 reference runtime — AUTOMATED CONTRACT CLOSED / VISUAL VERDICT PENDING
 
-Use the exact canonical `Obsidian-0.4.0-phase4-dev1.jar` on the reference Windows 11 / RX 6800 XT / Minecraft 26.2 / Fabric Loader 0.19.3 / Java 25 Vulkan setup.
+A-0219 records the first public-Preview reference run: large-scale automated P4.1 correctness/lifetime evidence was clean, but in-world F3+T and the human visual verdict were missing.
 
-Exercise:
+A-0220 records the follow-up run of the **exact same published Preview** and closes the missing automated exercise gates:
 
-1. enter a world and allow the persistent scene to populate/resync;
-2. hold a stable camera long enough for sampled visibility evidence to appear;
-3. perform rapid 360-degree camera turns;
-4. traverse horizontally enough to cause real chunk load/unload churn;
-5. move vertically across section boundaries;
-6. break/place ordinary blocks while P3.10 remains active;
-7. perform F3+T and allow recovery;
-8. leave/re-enter the world if practical;
-9. exit normally.
+- two real post-startup/in-world resource reloads occurred; the measured window reports `benchmarkResourceReloadDelta=2`;
+- each reload recovered through P3.5 rebuild/READY and P4.1 continued producing PASS samples;
+- a real leave/re-entry cycle occurred (disconnect/server stop, then player rejoin and world/P4.1 recovery);
+- final P4.1 scene high-water was **10,642** sections;
+- **1,937** GPU dispatches tested **20,208,721** candidates;
+- **1,836 / 1,836** sampled comparisons were exact/conservative PASS;
+- `missingVisible=0`, `unexpectedVisible=0`, `duplicateVisible=0`, `gpuFalseCullCount=0`;
+- `capacityFailures=0`, `lifecycleOverflow=0`, `hardFailure=false`;
+- `readbackPendingHighWater=1`;
+- `cameraOnlyFullSceneScan=false`, `productionDrawOwnershipChanged=false`, `nativeGraphicsExpansion=false`;
+- P3.10 production accounting stayed coherent with zero duplicate/overflow/stale/revalidation failures;
+- final P3.5/P3.6/P3.7 correctness summaries are clean;
+- worker/staging/arena/resource lifetime is clean;
+- process exit code 0.
 
-Because P4.1 is shadow-only, the required human visual verdict is simple but strict: **the world must look the same as the promoted P3.10 baseline**. Any new holes, missing terrain, duplicate terrain, texture/light/cutout/depth regressions, stale popping or other visual difference is a failure.
+No renderer-source change is authorized or needed from these runs.
 
-Useful dev1 log anchors:
+## P4.1 dev1 human visual verdict — PASS
 
-- `Obsidian 0.4.0-phase4-dev1`;
-- `P4.1 shadow large-scene visibility configured`;
-- `P4.1 bounded scene resync complete`;
-- `P4.1 shadow visibility sample PASS`;
-- `P4.1 final shadow visibility evidence`.
+A-0221 records the tester's explicit human **PASS** for the exact A-0220 follow-up run.
 
-Promotion remains blocked until runtime evidence shows real scale, zero missing/unexpected/duplicate visibility identities, `gpuFalseCullCount=0`, no capacity failure, nonblocking readback/lifetime, `cameraOnlyFullSceneScan=false`, `productionDrawOwnershipChanged=false`, `nativeGraphicsExpansion=false`, inherited P3.10/P3.7/worker/lifetime gates clean, normal exit and explicit human visual PASS.
+All frozen A-0203 runtime and visual gates are now closed. No additional dev1 renderer change or runtime exercise is required.
 
-PR #57 stays **DRAFT / DO NOT MERGE** until those gates close.
+## Current handoff — synchronized promotion CI
 
-## After the dev1 runtime
+The tested P4.1 implementation branch predates later repository-maintenance work on `main`, so promotion must preserve the exact tested renderer/source/resource content while synchronizing it onto current `main`.
 
-If the reference run passes, record the runtime result immutably and decide the next Phase 4 slice from measured evidence. Do not connect GPU-visible records to production draw submission in P4.1 itself and do not weaken A-0203 after seeing runtime data.
+Do **not** merge the stale branch continuity snapshot over newer `main` state.
+
+Required next actions:
+
+1. synchronize the exact tested P4.1 renderer/resource/version files onto current `main`;
+2. verify those implementation files are byte-identical to the tested P4.1 head where intended;
+3. run hosted Build/Context Governor/Repository Hygiene validation on the synchronized promotion head;
+4. promote/merge P4.1 only after the exact synchronized head is green;
+5. freeze the next Phase 4 slice separately.
+
+P4.1 remains shadow-only through promotion; production terrain draw ownership stays with P3.10.
+
+## After synchronized P4.1 promotion
+
+Choose the next Phase 4 slice from measured P4.1 evidence and freeze it before renderer-source changes. Do not retroactively expand P4.1 itself into production GPU-driven terrain ownership.
