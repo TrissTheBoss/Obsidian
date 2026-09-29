@@ -38,13 +38,13 @@
 | --- | --- |
 | **Product phase** | **Phase 4 — GPU-driven visibility at real-world scale** |
 | **Validated production baseline** | Phase 3 P3.10 opaque/cutout terrain replacement |
-| **Current tester build** | `0.4.0-phase4-dev1` — P4.1 shadow large-scene GPU visibility |
+| **Current tester build** | `0.4.0-phase4-dev1` — promoted P4.1 shadow visibility (dev2 is in development) |
 | **Minecraft** | 26.2 |
 | **Fabric Loader baseline** | 0.19.3 |
 | **Java** | 25 |
 | **Graphics backend** | Vulkan only |
 
-P4.1 is intentionally **shadow-only**: the proven Phase 3 terrain path still owns production terrain rendering while the new persistent large-scene database and GPU frustum/compaction path are validated beside it.
+P4.1 is promoted and remains intentionally **shadow-only**: the proven Phase 3 terrain path still owns production terrain rendering. Active P4.2/dev2 work adds a persistent chunk-column hierarchy and conservative coarse GPU visibility above that proven section-level foundation; it does not yet change production draw ownership.
 
 For exact source SHAs, CI authority, test gates, and the current handoff, read [`ai/CURRENT_STATE.md`](ai/CURRENT_STATE.md).
 
