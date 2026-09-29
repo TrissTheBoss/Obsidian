@@ -215,7 +215,7 @@ A-0223 records final promotion:
 - obsolete diverged PR #57 was closed as superseded;
 - P4.1 remains shadow-only by design and P3.10 remains the production terrain draw owner.
 
-## Phase 4 P4.2 — ACTIVE / DEV2 PACKAGE READY
+## Phase 4 P4.2 — ACTIVE / DEV2 REFERENCE RUNTIME REQUIRED
 
 Frozen contract:
 
@@ -289,13 +289,54 @@ Sources JAR:
 
 Package inspection confirms the exact dev2 Fabric version and all three new P4.2 runtime classes.
 
-## Current handoff — publish dev2 Preview, then reference runtime
+### Public dev2 Preview
 
-The dev2 source-bearing package is CI-green. Publish `0.4.0-phase4-dev2` as the GitHub Preview tester build from PR #75 continuity state, verify the mirrored Modrinth publication, then use that exact Preview JAR for the frozen A-0224 reference-machine exercise.
+A-0226 closes publication:
 
-The main runtime scale exercise should use render distance **32 or higher when practical**, then exercise stable sampling, rapid camera turns, horizontal/vertical traversal, edits, F3+T, leave/re-entry where practical, normal exit and explicit human visual parity.
+- exact Preview target `feac48607f74a665cf0040b618912e96a1f0f020`;
+- target differs from source-bearing package head only by `ai/CURRENT_STATE.md`, A-0225 and `ACTIVE_CONTEXT.json`;
+- exact Preview target passed Build #824 / run `36606622961` and Context Governor #48 / run `36606622557`;
+- Publish Preview run `36606727229` / **#12** — SUCCESS;
+- GitHub release ID `399384457`;
+- tag `v0.4.0-phase4-dev2`;
+- prerelease published successfully;
+- published runtime JAR size/hash are exactly **519,756 bytes** / **`ce699db92c05afb3d056c7fb30c5fede0d7fc066a75200129e3403fe948c9a3f`**, byte-identical to Build #821 package authority;
+- downstream Modrinth job `109537853446` — SUCCESS;
+- the already-documented authenticated version-list HTTP 404 correctly fell through to direct create;
+- pinned Modrinth publisher reported successful upload of `0.4.0-phase4-dev2`.
 
-Required runtime evidence includes zero structural hierarchy-audit failures, zero missing/duplicate coarse identities, `gpuColumnFalseCullCount=0`, bounded capacity/memory, no camera-only full hierarchy scan, clean P4.1 fine oracle, clean inherited P3.10/P3.7/worker/lifetime gates, and no production/native graphics expansion.
+GitHub remains package authority; Modrinth is the mirrored distribution surface.
+
+## Current handoff — reference P4.2 dev2 runtime
+
+Use the exact public Preview:
+
+- `Obsidian-0.4.0-phase4-dev2.jar`;
+- Preview source `feac48607f74a665cf0040b618912e96a1f0f020`;
+- SHA-256 `ce699db92c05afb3d056c7fb30c5fede0d7fc066a75200129e3403fe948c9a3f`.
+
+Exercise:
+
+1. enter a world and let P4.1 + P4.2 resync/audit settle;
+2. use render distance **32 or higher when practical** for the main scale sample;
+3. hold a stable camera for repeated P4.1/P4.2 PASS samples;
+4. perform rapid 360-degree turns;
+5. traverse horizontally enough for real column load/unload churn;
+6. move vertically across section boundaries;
+7. break/place ordinary blocks;
+8. perform F3+T and allow hierarchy + fine visibility recovery;
+9. leave/re-enter the world if practical;
+10. exit normally;
+11. provide the full Prism Launcher log and explicit human visual PASS/FAIL.
+
+Required P4.2 evidence includes zero structural hierarchy-audit failures, zero missing/duplicate coarse identities, `gpuColumnFalseCullCount=0`, bounded capacity/memory, `cameraOnlyFullHierarchyScan=false`, clean P4.1 fine oracle, clean inherited P3.10/P3.7/worker/lifetime gates, and no production/native graphics expansion.
+
+Useful anchors:
+
+- `P4.2 shadow column hierarchy configured`;
+- `P4.2 structural hierarchy audit PASS`;
+- `P4.2 coarse column visibility sample PASS`;
+- `P4.2 final column hierarchy evidence`.
 
 PR #75 remains **DRAFT / DO NOT MERGE** until the frozen dev2 runtime/visual gates close.
 
