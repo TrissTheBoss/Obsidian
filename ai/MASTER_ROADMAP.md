@@ -1,6 +1,6 @@
 # Obsidian Master Roadmap and Product Plan
 
-Last materially revised: 2026-09-28  
+Last materially revised: 2026-09-29  
 Roadmap schema: v1  
 Canonical repository: `TrissTheBoss/Obsidian`
 
@@ -337,9 +337,19 @@ Only after full-section greedy meshing is stable and measured. Partial slice/sub
 
 Phase 3 exits only when the greedy mesher is default for supported terrain, permanent differential correctness passes, the worker system remains bounded/cancellation-safe, hot paths avoid routine allocation and throughput supports large-scale scene testing.
 
-### Phase 4 — GPU-driven visibility at real-world scale — PLANNED
+### Phase 4 — GPU-driven visibility at real-world scale — ACTIVE
 
 Persistent region/chunk-column/section hierarchy, GPU frustum culling, conservative temporal visibility, optional Hi-Z, real command compaction, capability/evidence-gated indirect-count consumption and hierarchy suited to 32/64/96/128+ distances.
+
+#### P4.1 — Persistent section scene + GPU frustum visibility — COMPLETE
+
+Promoted by A-0223 after the exact dev1 Preview passed the frozen A-0203 contract: bounded persistent non-empty-section metadata, exact lifecycle membership, conservative camera-relative GPU frustum classification, identity compaction/count, independent CPU oracle, asynchronous readback, clean inherited P3.10/P3.7/lifetime evidence and explicit human visual PASS. P4.1 remains shadow-only and does not own production terrain drawing.
+
+#### P4.2 — Persistent chunk-column hierarchy + coarse GPU visibility — ACTIVE
+
+Frozen by A-0224 for `0.4.0-phase4-dev2`. Maintain a bounded primitive chunk-column hierarchy from the same exact section lifecycle truth, prove structural membership/min-max/count invariants, classify conservative column AABBs on the GPU against an independent CPU oracle, and measure coarse candidate reduction relative to P4.1's flat section path. P4.1 remains the fine-grained control. No production draw ownership, command compaction, temporal occlusion, Hi-Z, native graphics expansion or indirect-count consumption is added in P4.2.
+
+Later Phase 4 slices may feed a proven hierarchy into fine section visibility, conservative temporal visibility and real terrain command compaction. Native indirect-count graphics and Hi-Z remain evidence/capability-gated rather than baseline assumptions.
 
 ### Phase 5 — Frame pacing, streaming and adaptive scheduling — PLANNED
 
@@ -410,7 +420,7 @@ Configuration/UI polish, presets/migration, crash diagnostics, benchmark export,
 - [COMPLETE foundation] Compute-generated commands + visibility/compaction primitive.
 - [COMPLETE foundation] Persistent multi-section real-scene validation path.
 - [COMPLETE canary] Repeat-aware large-quad terrain emission for proven-safe canonical candidates.
-- [PLANNED] Large-scale persistent scene database/culling hierarchy.
+- [ACTIVE] Large-scale persistent scene database/culling hierarchy — P4.1 section database COMPLETE; P4.2 column hierarchy ACTIVE.
 - [PLANNED] Temporal visibility.
 - [EXPERIMENTAL] Hi-Z occlusion.
 - [EXPERIMENTAL] Native indirect-count consumption.
@@ -504,6 +514,15 @@ Newer durable decisions override stale roadmap text until synchronized. Always p
 ---
 
 ## 16. Roadmap revision log
+
+### 2026-09-29 — P4.1 promotion and P4.2 hierarchy activation
+
+- A-0220/A-0221 closed every frozen P4.1 automated and human visual gate on the exact dev1 Preview;
+- A-0222 synchronized the tested implementation byte-for-byte onto current main without overwriting newer maintenance/continuity state;
+- promotion PR #74 exact head passed Build #809 and Context Governor #37, merged as `59d130e17000b07e6ed8bbe226cb2f50eb795c74`, then merged main passed Build #810, Context Governor #38 and Repository Hygiene #31;
+- marked P4.1 COMPLETE while retaining its shadow-only ownership boundary;
+- A-0224 activated P4.2 / `0.4.0-phase4-dev2` as the first persistent chunk-column hierarchy + conservative coarse GPU visibility slice;
+- kept production terrain ownership on P3.10 and deferred command compaction, temporal visibility, Hi-Z and indirect-count work to later separately frozen Phase 4 slices.
 
 ### 2026-09-28 — repository hygiene, public README and release-channel governance
 
@@ -605,7 +624,8 @@ Created the canonical master roadmap and formal governance model.
 - P3.9 fixed four-Y-slice partial remeshing: **REJECTED / DEFERRED** by A-0188; do not revive the same strategy as baseline.
 - P3.10 production opaque/cutout terrain replacement: **COMPLETE**; promotion merged to `main` as `01547b55f68690a5d0aac8405fc0fe91cdf440f9` and post-merge Build #741 passed.
 - **Phase 4: ACTIVE — GPU-driven visibility at real-world scale.**
-- **P4.1: ACTIVE / first runtime canary packaged.** `0.4.0-phase4-dev1` is shadow-only large-scene visibility and requires the frozen reference runtime/visual test before promotion.
+- **P4.1: COMPLETE.** `0.4.0-phase4-dev1` passed frozen runtime + visual gates and promoted through PR #74 / merge `59d130e17000b07e6ed8bbe226cb2f50eb795c74`.
+- **P4.2: ACTIVE.** `0.4.0-phase4-dev2` targets bounded persistent chunk-column hierarchy + conservative coarse GPU visibility while P4.1 remains the fine shadow control.
 - Phases 5-12 retain their planned order/scope unless later evidence-driven roadmap governance changes them.
 
 Always verify live details in `ai/CURRENT_STATE.md` before acting because active milestone state changes more frequently than the long-range plan.
