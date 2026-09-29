@@ -122,7 +122,10 @@ For Obsidian CI/build evidence, use the repository-specific protocol in `referen
 - never infer that a push build is absent from a helper that only returns pull-request runs;
 - exact run ID -> jobs -> failed job/step first;
 - failed-job logs only, unless a named evidence contract explicitly requires more;
-- raw Actions payloads/logs are Tier 3 and should be pointerized after extracting exact IDs and the diagnosis.
+- raw Actions payloads/logs are Tier 3 and should be pointerized after extracting exact IDs and the diagnosis;
+- freeze the expected head SHA before CI gating and abandon old wait state if that head moves;
+- never open-ended poll: one run/head is capped at 3 state observations or 2 identical nonterminal snapshots;
+- when exact jobs are terminal but the run wrapper remains nonterminal, cross-check the exact run once, then stop waiting and classify persistent mismatch as stale run metadata.
 
 ## Testing
 

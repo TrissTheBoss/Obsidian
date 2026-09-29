@@ -205,6 +205,75 @@ def compress_bundle(bundle):
     }
 
 
+
+def actions_poll_decision(doc):
+    poll_count = int(doc.get("poll_count", 1))
+    unchanged_polls = int(doc.get("unchanged_polls", 0))
+    max_polls = int(doc.get("max_polls", 3))
+    max_unchanged = int(doc.get("max_unchanged_polls", 2))
+    expected_head = str(doc.get("expected_head_sha", "")).strip()
+    current_head = str(doc.get("current_head_sha", "")).strip()
+    cross_check_performed = bool(doc.get("cross_check_performed", False))
+    run = doc.get("run") or {}
+    jobs = list(doc.get("jobs") or [])
+
+    if expected_head and current_head and expected_head != current_head:
+        return {
+            "action": "switch_head",
+            "terminal": False,
+            "reason": "branch head moved; old run no longer gates current head",
+            "expected_head_sha": expected_head,
+            "current_head_sha": current_head,
+        }
+
+    run_status = str(run.get("status", "")).lower()
+    run_conclusion = run.get("conclusion")
+    if run_status == "completed" or run_conclusion not in (None, ""):
+        return {
+            "action": "terminal",
+            "terminal": True,
+            "reason": "run is terminal",
+            "status": run.get("status"),
+            "conclusion": run_conclusion,
+        }
+
+    jobs_terminal = bool(jobs) and all(str(job.get("status", "")).lower() == "completed" for job in jobs)
+    if jobs_terminal:
+        if not cross_check_performed:
+            return {
+                "action": "cross_check_once",
+                "terminal": False,
+                "reason": "all jobs are terminal but run wrapper is still nonterminal",
+            }
+        return {
+            "action": "stop_waiting",
+            "terminal": True,
+            "reason": "run metadata remained stale after one exact-run cross-check; terminal job evidence is sufficient to stop polling",
+            "job_conclusions": [job.get("conclusion") for job in jobs],
+        }
+
+    if poll_count >= max_polls:
+        return {
+            "action": "stop_waiting",
+            "terminal": False,
+            "reason": f"poll cap reached ({poll_count}/{max_polls}); preserve run/head as an open obligation",
+        }
+
+    if unchanged_polls >= max_unchanged:
+        return {
+            "action": "stop_waiting",
+            "terminal": False,
+            "reason": f"unchanged nonterminal snapshot cap reached ({unchanged_polls}/{max_unchanged}); stop blocking the session",
+        }
+
+    return {
+        "action": "poll_once_more",
+        "terminal": False,
+        "reason": "run is nonterminal and bounded observation budget remains",
+        "remaining_observations": max(0, max_polls - poll_count),
+    }
+
+
 def validate_entry_list(name, value, errors):
     if not isinstance(value, list):
         errors.append(f"{name} must be a list")
@@ -283,6 +352,9 @@ def main():
     p = sub.add_parser("validate-checkpoint")
     p.add_argument("checkpoint")
 
+    p = sub.add_parser("actions-poll-decision")
+    p.add_argument("snapshot")
+
     args = parser.parse_args()
     try:
         if args.cmd == "minimize-call":
@@ -296,6 +368,8 @@ def main():
             dump_json(result)
             if not result["valid"]:
                 sys.exit(2)
+        elif args.cmd == "actions-poll-decision":
+            dump_json(actions_poll_decision(load_json(args.snapshot)))
     except (ValueError, KeyError, json.JSONDecodeError) as exc:
         print(json.dumps({"valid": False, "error": str(exc)}, indent=2), file=sys.stderr)
         sys.exit(2)
