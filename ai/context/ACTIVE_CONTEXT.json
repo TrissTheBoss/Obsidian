@@ -1,17 +1,15 @@
 {
   "schema_version": 1,
-  "active_goal": "Promote the exact tested P4.1 implementation by synchronizing its renderer/resource/version files onto current main, validating that synchronized head in hosted CI, then freeze and begin the next Phase 4 version.",
+  "active_goal": "Validate and merge the synchronized P4.1 promotion head, then freeze and implement the next Phase 4 version. The source-bearing synchronized P4.1 commit is 3fb81bf6053cebbed7e6e4b058635d3653ddb6c3 and preserves the exact tested implementation blobs.",
   "scope_boundary": "Active engineering scope is Phase 4 P4.1 shadow large-scene GPU visibility plus repository/AI continuity maintenance. Do not promote P4.1, expand native graphics ownership, revive P3.9 partial remeshing, or change production terrain draw ownership without new evidence and a separately frozen contract.",
   "source_snapshot": {
-    "created_at": "2026-09-29T17:14:00Z",
+    "created_at": "2026-09-29T17:20:00Z",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
-      "ai/CURRENT_STATE.md@maintenance/p4.1-dev1-runtime-partial",
-      "ai/attempts/A-0220-phase4-p4.1-dev1-followup-runtime.md@maintenance/p4.1-dev1-runtime-partial",
-      "ai/attempts/A-0221-phase4-p4.1-dev1-human-visual-pass.md@maintenance/p4.1-dev1-runtime-partial",
-      "ai/attempts/A-0203-phase4-p4.1-persistent-scene-gpu-visibility-contract.md@main",
-      "pull/57",
-      "release/v0.4.0-phase4-dev1"
+      "ai/CURRENT_STATE.md@promotion/p4.1-synchronized",
+      "ai/attempts/A-0221-phase4-p4.1-dev1-human-visual-pass.md@main",
+      "ai/attempts/A-0222-phase4-p4.1-synchronized-promotion-head.md@promotion/p4.1-synchronized",
+      "ai/attempts/A-0203-phase4-p4.1-persistent-scene-gpu-visibility-contract.md@main"
     ]
   },
   "coverage_manifest": [
@@ -99,12 +97,12 @@
   "open_obligations": [
     {
       "id": "O1",
-      "text": "Synchronize the exact tested P4.1 renderer/resource/version files onto current main without overwriting newer continuity/maintenance state, verify intended file identity, and run exact-head hosted validation.",
-      "source_ref": "ai/CURRENT_STATE.md#Current-handoff-synchronized-promotion-CI"
+      "text": "Run exact-head hosted Build/Context Governor/Repository Hygiene validation on the final promotion/p4.1-synchronized head and merge P4.1 only if green.",
+      "source_ref": "ai/attempts/A-0222-phase4-p4.1-synchronized-promotion-head.md"
     },
     {
       "id": "O2",
-      "text": "After synchronized hosted validation passes, promote P4.1 and freeze the next Phase 4 development slice separately. P4.1 itself remains shadow-only.",
+      "text": "After P4.1 promotion, freeze the next Phase 4 version separately before renderer-source changes; do not retroactively expand P4.1 beyond its shadow-only contract.",
       "source_ref": "ai/attempts/A-0221-phase4-p4.1-dev1-human-visual-pass.md"
     }
   ],
@@ -128,6 +126,11 @@
       "id": "I4",
       "text": "Modrinth mirror proof: PR #70 merged as 87c51328ab1f1587bc544a186ee5fd55bf688977; Publish Preview run #5 36434577563 succeeded; Modrinth job 108969491205 succeeded; published version ID OhTxTs7Z for 0.4.0-phase4-dev1 from source 6af5174f054b272c65174fbf0c37d981a66aff31.",
       "source_ref": "ai/attempts/A-0217-first-successful-modrinth-publication.md#Hosted-result"
+    },
+    {
+      "id": "I5",
+      "text": "P4.1 synchronized promotion branch is promotion/p4.1-synchronized; source-bearing synchronized commit 3fb81bf6053cebbed7e6e4b058635d3653ddb6c3 is based on main 9ff415325c956c8f9bb678eda95343afdb209c66 and reuses the exact tested P4.1 implementation/version blobs.",
+      "source_ref": "ai/attempts/A-0222-phase4-p4.1-synchronized-promotion-head.md"
     }
   ],
   "security_boundaries": [
@@ -283,5 +286,5 @@
     "modrinth-secret-project-id-validation",
     "modrinth-first-success"
   ],
-  "next_action": "Synchronize the exact tested P4.1 implementation onto current main without overwriting newer continuity state, run exact-head hosted validation, promote P4.1, then freeze and start the next Phase 4 version."
+  "next_action": "Open the synchronized P4.1 promotion PR, close obsolete draft PR #57 as superseded, validate the exact final promotion head, merge if green, then freeze/start the next Phase 4 version."
 }
