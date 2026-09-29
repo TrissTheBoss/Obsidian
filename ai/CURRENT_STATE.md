@@ -215,7 +215,7 @@ A-0223 records final promotion:
 - obsolete diverged PR #57 was closed as superseded;
 - P4.1 remains shadow-only by design and P3.10 remains the production terrain draw owner.
 
-## Phase 4 P4.2 — ACTIVE / DEV2 IMPLEMENTATION
+## Phase 4 P4.2 — ACTIVE / DEV2 PACKAGE READY
 
 Frozen contract:
 
@@ -232,24 +232,70 @@ Active branch / PR:
 
 P4.2 adds the first hierarchy level above the proven P4.1 section database: bounded persistent chunk-column metadata plus conservative coarse GPU frustum visibility.
 
-The design is correctness-first and shadow-only:
+A-0225 records the complete dev2 implementation and exact hosted package evidence.
 
-- exact section lifecycle/resync events must maintain both section and column truth;
-- column capacity derives from exact cache diameter with hard ceiling 131,072;
-- vertical occupancy storage derives from the exact active section range rather than assuming 24 sections forever;
-- each live column has stable identity, exact live-section count, min/max live section Y and bounded occupancy;
-- GPU coarse culling uses conservative camera-relative column AABBs;
-- an independent CPU column oracle and structural hierarchy audit must report zero unsafe misses/duplicates/stale identity;
-- P4.1 fine section-level GPU/CPU oracle stays active as the control;
-- no production draw ownership change;
-- no native graphics expansion;
-- no real command compaction, temporal occlusion, Hi-Z or indirect-count consumption in P4.2.
+### P4.2 dev2 implementation
 
-## Current handoff — implement and package dev2
+- bounded `PersistentColumnHierarchy` with hard ceiling **131,072 columns**;
+- exact active vertical range and dynamically sized occupancy bitsets;
+- stable per-column validation identities and bounded slot reuse;
+- exact live-section count and min/max live section Y;
+- section/column lifecycle updated from the same P4.1 event/resync stream;
+- explicit cross-database mutation disagreement failures;
+- budgeted structural section->column and per-column occupancy audits;
+- `VulkanLargeSceneColumnVisibilityProbe` using conservative camera-relative aggregate column AABBs;
+- atomic visible-column count + identity compaction;
+- independent Minecraft `Frustum.isVisible(AABB)` CPU oracle plus boundary ambiguity accounting;
+- scale telemetry for live columns/sections, coarse visible ratio and estimated fine-candidate upper bound;
+- async zero-timeout readback and completion-gated shutdown behavior;
+- `cameraOnlyFullHierarchyScan=false`;
+- P4.1 remains the fine section-level shadow control;
+- production draw ownership/native graphics ownership unchanged;
+- command compaction, temporal visibility, Hi-Z and indirect-count consumption remain disabled.
 
-Implement the frozen A-0224 hierarchy without widening scope, then run exact hosted CI. Once CI is green, package/publish `0.4.0-phase4-dev2` as a Preview for reference-machine runtime validation.
+### Canonical dev2 source/package authority
 
-The main runtime scale exercise should use render distance **32 or higher when practical**, then exercise camera turns, horizontal/vertical traversal, edits, F3+T, leave/re-entry where practical, normal exit and explicit human visual parity.
+Version:
+
+`0.4.0-phase4-dev2`
+
+Exact source-bearing head:
+
+`bb4adfd12b48a1f3b03670d6fc4d25aed47ff61d`
+
+Hosted validation:
+
+- Build run `36606137730` / **#821** — SUCCESS;
+- Java 25 / Gradle 9.5.1 job `109535514540` — SUCCESS;
+- Context Governor run `36606137407` / **#45** — SUCCESS.
+
+Build #821 artifact:
+
+- artifact ID `11050872212`;
+- wrapper `obsidian-34750749b7bbee5c38ba1ed0bc44285058163d36`;
+- wrapper size `758,297` bytes;
+- wrapper digest `sha256:95fbb5b3b60e72297ebed2e45cc21c9c13d0e80a2dc61a9f4be1c1a8d9b9680c`.
+
+Canonical direct runtime JAR:
+
+- `Obsidian-0.4.0-phase4-dev2.jar`;
+- size **519,756 bytes**;
+- SHA-256 **`ce699db92c05afb3d056c7fb30c5fede0d7fc066a75200129e3403fe948c9a3f`**.
+
+Sources JAR:
+
+- size **269,555 bytes**;
+- SHA-256 **`1c4e6b96410fa6838c1b6f405d2deeea6681351abba2f1da603db9fd5397130c`**.
+
+Package inspection confirms the exact dev2 Fabric version and all three new P4.2 runtime classes.
+
+## Current handoff — publish dev2 Preview, then reference runtime
+
+The dev2 source-bearing package is CI-green. Publish `0.4.0-phase4-dev2` as the GitHub Preview tester build from PR #75 continuity state, verify the mirrored Modrinth publication, then use that exact Preview JAR for the frozen A-0224 reference-machine exercise.
+
+The main runtime scale exercise should use render distance **32 or higher when practical**, then exercise stable sampling, rapid camera turns, horizontal/vertical traversal, edits, F3+T, leave/re-entry where practical, normal exit and explicit human visual parity.
+
+Required runtime evidence includes zero structural hierarchy-audit failures, zero missing/duplicate coarse identities, `gpuColumnFalseCullCount=0`, bounded capacity/memory, no camera-only full hierarchy scan, clean P4.1 fine oracle, clean inherited P3.10/P3.7/worker/lifetime gates, and no production/native graphics expansion.
 
 PR #75 remains **DRAFT / DO NOT MERGE** until the frozen dev2 runtime/visual gates close.
 
