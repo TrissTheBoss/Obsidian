@@ -82,7 +82,7 @@ Canonical direct runtime JAR:
 
 Do not treat later continuity/Phase 4 commits as the source authority for that package.
 
-## Phase 4 P4.1 — ACTIVE / HUMAN VISUAL VERDICT REQUIRED
+## Phase 4 P4.1 — RUNTIME + VISUAL GATES PASSED / SYNCHRONIZED CI REQUIRED
 
 Immutable contract:
 
@@ -199,14 +199,28 @@ A-0220 records the follow-up run of the **exact same published Preview** and clo
 
 No renderer-source change is authorized or needed from these runs.
 
-## Current handoff — explicit human visual verdict only
+## P4.1 dev1 human visual verdict — PASS
 
-The frozen automated P4.1 dev1 runtime contract is now closed. The **only remaining promotion gate** is the required explicit human visual verdict for the exact tested Preview.
+A-0221 records the tester's explicit human **PASS** for the exact A-0220 follow-up run.
 
-The tester must state **PASS** only if the world looked the same as the promoted P3.10 baseline throughout the run, including after F3+T and world re-entry: no new holes, missing terrain, duplicate terrain, texture/light/cutout/depth regressions, stale popping or other rendering difference attributable to P4.1.
+All frozen A-0203 runtime and visual gates are now closed. No additional dev1 renderer change or runtime exercise is required.
 
-PR #57 stays **DRAFT / DO NOT MERGE** until that verdict is supplied.
+## Current handoff — synchronized promotion CI
 
-## After the human visual verdict
+The tested P4.1 implementation branch predates later repository-maintenance work on `main`, so promotion must preserve the exact tested renderer/source/resource content while synchronizing it onto current `main`.
 
-If the visual verdict is PASS, record the P4.1 runtime promotion immutably, synchronize current state/context, run exact synchronized-head CI, and decide the next Phase 4 slice from measured evidence. Do not connect GPU-visible records to production draw submission inside P4.1 itself and do not weaken A-0203 after seeing runtime data. If the verdict is FAIL, record the symptom as new runtime evidence before changing renderer source.
+Do **not** merge the stale branch continuity snapshot over newer `main` state.
+
+Required next actions:
+
+1. synchronize the exact tested P4.1 renderer/resource/version files onto current `main`;
+2. verify those implementation files are byte-identical to the tested P4.1 head where intended;
+3. run hosted Build/Context Governor/Repository Hygiene validation on the synchronized promotion head;
+4. promote/merge P4.1 only after the exact synchronized head is green;
+5. freeze the next Phase 4 slice separately.
+
+P4.1 remains shadow-only through promotion; production terrain draw ownership stays with P3.10.
+
+## After synchronized P4.1 promotion
+
+Choose the next Phase 4 slice from measured P4.1 evidence and freeze it before renderer-source changes. Do not retroactively expand P4.1 itself into production GPU-driven terrain ownership.
