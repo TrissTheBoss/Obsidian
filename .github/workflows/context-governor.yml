@@ -11,6 +11,7 @@ on:
       - 'ai/DECISIONS.md'
       - 'AGENTS.md'
       - '.github/workflows/context-governor.yml'
+      - '.github/workflows/build.yml'
   pull_request:
     branches: [main]
     paths:
@@ -21,6 +22,7 @@ on:
       - 'ai/DECISIONS.md'
       - 'AGENTS.md'
       - '.github/workflows/context-governor.yml'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
 
 permissions:
@@ -28,7 +30,7 @@ permissions:
 
 jobs:
   validate:
-    name: Validate context compression and minimization
+    name: Validate context, minimization, and Actions evidence policy
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

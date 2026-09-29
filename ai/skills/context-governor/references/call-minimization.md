@@ -42,6 +42,12 @@ Prefer, where the API supports it:
 - minimal representations (`Prefer: return=minimal`) when the returned object is not needed;
 - metadata first, full body only after it is selected as relevant.
 
+## Provider-specific GitHub Actions rule
+
+For Obsidian workflow/build evidence, generic response minimization is not enough because run-list payloads can be large and one connector helper currently omits push-triggered runs. Follow `github-actions-evidence.md`: bounded run discovery, immediate compact projection, exact run ID -> jobs, failed job/step first, and failed-job logs only.
+
+Do not carry raw workflow-run lists or complete logs in active context after the exact run/job identifiers and required diagnosis have been extracted.
+
 ## OAuth / authorization
 
 Authorization is a privilege request, not a context-transfer channel.
