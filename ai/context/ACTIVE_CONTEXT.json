@@ -1,16 +1,17 @@
 {
   "schema_version": 1,
-  "active_goal": "Publish the CI-green Phase 4 P4.2 / 0.4.0-phase4-dev2 Preview from PR #75, verify GitHub/Modrinth publication, then collect the frozen A-0224 reference runtime at render distance 32+ when practical.",
+  "active_goal": "Close the final Phase 4 P4.2 promotion gate by running the exact published 0.4.0-phase4-dev2.2 Preview at render distance 32+; no source change is requested unless that scale-only run exposes new evidence.",
   "scope_boundary": "Active engineering scope is P4.2 column hierarchy/coarse GPU visibility plus required continuity/release maintenance. Do not add production GPU-driven draw ownership, real terrain command compaction, native graphics expansion, temporal occlusion, Hi-Z, indirect-count consumption, P3.9 partial remeshing, or unrelated renderer scope.",
   "source_snapshot": {
-    "created_at": "2026-09-29T17:42:00Z",
+    "created_at": "2026-09-29T21:52:05Z",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
       "ai/CURRENT_STATE.md@phase4/p4.2-column-hierarchy",
       "ai/MASTER_ROADMAP.md@phase4/p4.2-column-hierarchy",
-      "ai/attempts/A-0223-phase4-p4.1-promotion.md@phase4/p4.2-column-hierarchy",
       "ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md@phase4/p4.2-column-hierarchy",
-      "ai/attempts/A-0225-phase4-p4.2-dev2-ci-package-runtime-handoff.md@phase4/p4.2-column-hierarchy",
+      "ai/attempts/A-0232-recenter-liveness-contract.md@phase4/p4.2-column-hierarchy",
+      "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md@phase4/p4.2-column-hierarchy",
+      "ai/attempts/A-0234-phase4-p4.2-dev2.2-runtime-liveness-pass.md@phase4/p4.2-column-hierarchy",
       "pull/75"
     ]
   },
@@ -30,13 +31,13 @@
     },
     {
       "id": "F10",
-      "text": "P4.2 is active on draft PR #75 with frozen A-0224 contract and version target 0.4.0-phase4-dev2. It adds bounded persistent chunk-column hierarchy plus conservative coarse GPU visibility while keeping P4.1 as the fine section-level control.",
-      "source_ref": "ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md"
+      "text": "P4.2 is active on draft PR #75. Dev2.2 preserves the A-0224 column hierarchy/coarse GPU visibility contract and closes the inherited exact-player-section recenter/liveness defect without changing production draw ownership.",
+      "source_ref": "ai/attempts/A-0234-phase4-p4.2-dev2.2-runtime-liveness-pass.md"
     },
     {
       "id": "F11",
-      "text": "P4.2 dev2 implementation is complete and CI-green on source-bearing head bb4adfd12b48a1f3b03670d6fc4d25aed47ff61d. Build #821 and Context Governor #45 passed; canonical Build #821 runtime JAR is 519,756 bytes SHA-256 ce699db92c05afb3d056c7fb30c5fede0d7fc066a75200129e3403fe948c9a3f.",
-      "source_ref": "ai/attempts/A-0225-phase4-p4.2-dev2-ci-package-runtime-handoff.md"
+      "text": "The canonical public tester package is 0.4.0-phase4-dev2.2 from exact source c30c8686e65f7310ab047d88fadf2fe3b42d7415. Build #833 and Context Governor #57 passed; runtime JAR SHA-256 is 571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37. GitHub Preview #14 and Modrinth version yDBeoQge published successfully.",
+      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
     },
     {
       "id": "F2",
@@ -45,8 +46,8 @@
     },
     {
       "id": "F3",
-      "text": "The public tester channel for development binaries is GitHub Prerelease / Preview; v0.4.0-phase4-dev1 is published as a Preview.",
-      "source_ref": "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md#Preview-release-proof"
+      "text": "The public tester channel for development binaries is GitHub Prerelease / Preview; v0.4.0-phase4-dev2.2 is the current published Preview.",
+      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
     },
     {
       "id": "F4",
@@ -60,8 +61,8 @@
     },
     {
       "id": "F6",
-      "text": "The Modrinth mirror is proven end to end. Publish Preview run #5 (36434577563) and Modrinth job 108969491205 succeeded; the 404 read fallback continued to VERSION_CREATE and published 0.4.0-phase4-dev1 as Modrinth version OhTxTs7Z from exact Preview source 6af5174f054b272c65174fbf0c37d981a66aff31.",
-      "source_ref": "ai/attempts/A-0217-first-successful-modrinth-publication.md#Hosted-result"
+      "text": "The Modrinth mirror remains proven and current; dev2.2 Preview run #14 mirrored successfully as Modrinth version yDBeoQge while GitHub remained package authority.",
+      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
     }
   ],
   "decisions": [
@@ -94,45 +95,30 @@
   "open_obligations": [
     {
       "id": "O1",
-      "text": "Publish 0.4.0-phase4-dev2 as a GitHub Preview from the current PR #75 continuity head and verify the Modrinth mirror without changing package authority.",
-      "source_ref": "ai/CURRENT_STATE.md#Current-handoff-publish-dev2-Preview-then-reference-runtime"
-    },
-    {
-      "id": "O2",
-      "text": "Run the exact published dev2 Preview on the reference machine under A-0224: render distance 32+ when practical, repeated P4.1/P4.2 samples, camera/traversal/edit churn, F3+T, leave/re-entry if practical, clean exit, and explicit human visual PASS before promotion.",
-      "source_ref": "ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md"
+      "text": "Run the exact published 0.4.0-phase4-dev2.2 Preview at render distance 32+ long enough for repeated P4.1/P4.2 samples, then exit normally. This is the only remaining frozen P4.2 promotion gate.",
+      "source_ref": "ai/attempts/A-0234-phase4-p4.2-dev2.2-runtime-liveness-pass.md#Remaining-frozen-gate"
     }
   ],
   "exact_identifiers": [
     {
-      "id": "I7",
-      "text": "P4.2 source-bearing package head bb4adfd12b48a1f3b03670d6fc4d25aed47ff61d passed Build #821 run 36606137730 and Context Governor #45 run 36606137407; artifact 11050872212; runtime Obsidian-0.4.0-phase4-dev2.jar SHA-256 ce699db92c05afb3d056c7fb30c5fede0d7fc066a75200129e3403fe948c9a3f.",
-      "source_ref": "ai/attempts/A-0225-phase4-p4.2-dev2-ci-package-runtime-handoff.md"
+      "id": "I1",
+      "text": "Active branch phase4/p4.2-column-hierarchy; active draft PR #75; current tester package 0.4.0-phase4-dev2.2.",
+      "source_ref": "ai/CURRENT_STATE.md#Current-handoff-one-final-dev22-32-scale-run"
     },
     {
-      "id": "I1",
-      "text": "Active branch phase4/p4.2-column-hierarchy; active draft PR #75; P4.2 version target 0.4.0-phase4-dev2.",
-      "source_ref": "ai/CURRENT_STATE.md#Phase-4-P4.2"
+      "id": "I7",
+      "text": "Dev2.2 exact source c30c8686e65f7310ab047d88fadf2fe3b42d7415 passed Build #833 run 36634634353 and Context Governor #57 run 36634634108; artifact 11063553493; runtime SHA-256 571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37.",
+      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
+    },
+    {
+      "id": "I8",
+      "text": "Preview v0.4.0-phase4-dev2.2 release ID 399552665 targets c30c8686e65f7310ab047d88fadf2fe3b42d7415; Publish Preview #14 run 36635510377 succeeded; Modrinth job 109635372697 succeeded with version ID yDBeoQge.",
+      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
     },
     {
       "id": "I6",
-      "text": "P4.1 promoted merge is 59d130e17000b07e6ed8bbe226cb2f50eb795c74; promotion PR #74 exact head 8be121eaf473423b8fc0766be37e48bb8fa2af16 passed Build #809 and Context Governor #37; merged main passed Build #810, Context Governor #38 and Repository Hygiene #31.",
+      "text": "P4.1 promoted merge is 59d130e17000b07e6ed8bbe226cb2f50eb795c74.",
       "source_ref": "ai/attempts/A-0223-phase4-p4.1-promotion.md"
-    },
-    {
-      "id": "I2",
-      "text": "Original A-0205 package-authority source is fd58b9f2e915462f665b7d85f5d993456d5f930e; original Actions-handoff JAR SHA-256 is 39c4bb4932bd6e7c00a4190c3514ef29eb926c337bba488f9a04bbef27120458.",
-      "source_ref": "ai/attempts/A-0205-phase4-p4.1-dev1-ci-package-runtime-handoff.md#Exact-source-package-authority"
-    },
-    {
-      "id": "I3",
-      "text": "Public Preview v0.4.0-phase4-dev1 targets 6af5174f054b272c65174fbf0c37d981a66aff31; Preview runtime JAR SHA-256 is 8bf25f3aa6bfe6fb4392044ba0973692fc6a24fd9948f3fea51cf55b12e157f3.",
-      "source_ref": "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md#Preview-release-proof"
-    },
-    {
-      "id": "I4",
-      "text": "Modrinth mirror proof: PR #70 merged as 87c51328ab1f1587bc544a186ee5fd55bf688977; Publish Preview run #5 36434577563 succeeded; Modrinth job 108969491205 succeeded; published version ID OhTxTs7Z for 0.4.0-phase4-dev1 from source 6af5174f054b272c65174fbf0c37d981a66aff31.",
-      "source_ref": "ai/attempts/A-0217-first-successful-modrinth-publication.md#Hosted-result"
     }
   ],
   "security_boundaries": [
@@ -284,6 +270,12 @@
       "topic": "First successful end-to-end Modrinth mirror publication",
       "source_ref": "ai/attempts/A-0217-first-successful-modrinth-publication.md@maintenance/modrinth-publication-evidence",
       "locator": "Load for exact successful workflow/job/version IDs and closing evidence."
+    },
+    {
+      "id": "p4-p4.2-dev2.2-runtime",
+      "topic": "Dev2.2 recenter-liveness runtime PASS and final remaining 32+ scale gate",
+      "source_ref": "ai/attempts/A-0234-phase4-p4.2-dev2.2-runtime-liveness-pass.md@phase4/p4.2-column-hierarchy",
+      "locator": "Load before P4.2 promotion. Liveness and visual gates are closed; corrected-package 32+ scale sample remains open."
     }
   ],
   "discarded_ids": [
@@ -309,5 +301,5 @@
     "modrinth-secret-project-id-validation",
     "modrinth-first-success"
   ],
-  "next_action": "After the current continuity head passes hosted CI, issue /publish-preview on PR #75, verify GitHub release + Modrinth mirror, then hand the exact dev2 Preview JAR to the tester for A-0224 runtime validation."
+  "next_action": "Run the already-published dev2.2 Preview at render distance 32+ for a short scale-only validation, provide the full Prism log, and promote P4.2 only if the frozen corrected-package scale/correctness/lifetime gates remain clean."
 }
