@@ -26,3 +26,4 @@ Never silently delete a major roadmap feature or rewrite historical attempt evid
 - Before external calls, send only the target IDs/fields/records/scopes required for that operation. Exclude unrelated conversation/project context.
 - Prefer exact resource reads, field projection, filters and bounded ranges/pages.
 - OAuth scopes must be least-privilege and incremental where supported; credentials must not be copied into AI continuity/context.
+- For GitHub Actions evidence, use bounded run discovery -> immediate compact metadata -> exact run jobs -> failed job/step first -> failed-job logs only. Do not treat a PR-only commit-run helper as authoritative for push-triggered builds; follow `ai/skills/context-governor/references/github-actions-evidence.md`.

@@ -114,6 +114,16 @@ When working in `TrissTheBoss/Obsidian`, also read `references/obsidian-integrat
 
 Use `ai/context/ACTIVE_CONTEXT.json` as a fast bootstrap capsule only after checking its source snapshot. It is never more authoritative than `ai/CURRENT_STATE.md`, `ai/MASTER_ROADMAP.md`, `ai/DECISIONS.md`, relevant immutable attempts, source, or CI/runtime evidence.
 
+## GitHub Actions evidence retrieval
+
+For Obsidian CI/build evidence, use the repository-specific protocol in `references/github-actions-evidence.md`:
+
+- bounded run discovery, then immediate compact projection;
+- never infer that a push build is absent from a helper that only returns pull-request runs;
+- exact run ID -> jobs -> failed job/step first;
+- failed-job logs only, unless a named evidence contract explicitly requires more;
+- raw Actions payloads/logs are Tier 3 and should be pointerized after extracting exact IDs and the diagnosis.
+
 ## Testing
 
 Run the representative deterministic tests after changing this skill:
@@ -137,4 +147,5 @@ The tests must prove:
 - `references/checkpoint-schema.md` — checkpoint fields, preservation categories, and two-phase validation.
 - `references/call-minimization.md` — API/tool/MCP/OAuth minimization rules.
 - `references/obsidian-integration.md` — exact `/ai` integration and bootstrap/recovery procedure.
+- `references/github-actions-evidence.md` — bounded GitHub Actions run/job/log retrieval and connector caveats.
 - `references/research-notes.md` — external design inspirations and what was adopted or rejected.

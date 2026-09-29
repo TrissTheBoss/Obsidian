@@ -30,15 +30,36 @@ jobs:
           gradle-version: '9.5.1'
 
       - name: Build
+        id: compile
         run: gradle build --stacktrace
 
       - name: Upload build artifacts
+        id: build_artifact
         uses: actions/upload-artifact@v4
         with:
           name: obsidian-${{ github.sha }}
           if-no-files-found: error
           path: |
             build/libs/Obsidian-*.jar
+
+      - name: Summarize compact CI evidence
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Compact CI evidence"
+            echo
+            echo "- run_id: $GITHUB_RUN_ID"
+            echo "- run_attempt: $GITHUB_RUN_ATTEMPT"
+            echo "- event: $GITHUB_EVENT_NAME"
+            echo "- sha: $GITHUB_SHA"
+            echo "- ref: $GITHUB_REF"
+            echo "- build: ${{ steps.compile.outcome }}"
+            echo "- artifact_upload: ${{ steps.build_artifact.outcome }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf 'OBSIDIAN_CI_EVIDENCE run_id=%s attempt=%s event=%s sha=%s ref=%s build=%s artifact_upload=%s\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_EVENT_NAME" "$GITHUB_SHA" "$GITHUB_REF" \
+            '${{ steps.compile.outcome }}' '${{ steps.build_artifact.outcome }}'
 
   release:
     name: Publish versioned release

@@ -168,6 +168,19 @@ Core rules:
 - for OAuth/authorization, request the narrowest supported action/resource scopes and prefer incremental/step-up authorization; do not put task documents/conversation content into OAuth parameters;
 - credentials/tokens/cookies/private keys are transport secrets, not LLM context. Let the connector/auth layer inject them whenever possible and never persist them in `/ai`.
 
+### GitHub Actions evidence retrieval
+
+GitHub Actions evidence must follow the same least-data discipline as other external calls:
+
+1. Discover only a small bounded set of workflow runs (normally 5; never more than 10 without a concrete reason) and immediately reduce each candidate to run ID/name/number, head SHA, event, status, conclusion, and timestamps.
+2. Do not use a commit-workflow-run helper as authority for push-triggered builds unless its current contract explicitly includes push events. The connector helper currently available to Obsidian filters to pull-request-triggered runs, so an empty result does **not** prove that a push build is absent.
+3. Once the relevant run ID is known, retrieve that run's jobs directly instead of repeatedly listing run history.
+4. Inspect failed jobs and failed steps first. Successful job step detail is normally unnecessary once success is established.
+5. Fetch logs only for the failed job(s) that need diagnosis. Do not bulk-download every job log for a run.
+6. Treat raw run lists, full job payloads, and logs as Tier 3 re-fetchable evidence. Keep exact run/job IDs and the compact diagnosis in active context, then pointerize/discard the bulky response.
+
+The exact provider-specific protocol and fallback rules live in `ai/skills/context-governor/references/github-actions-evidence.md`.
+
 At handoff, `ai/context/ACTIVE_CONTEXT.json` must pass the Context Governor validator. If the capsule cannot fit a required fact within its budget, fail closed and keep/rehydrate source context rather than dropping the fact.
 
 ## Roadmap governance procedure

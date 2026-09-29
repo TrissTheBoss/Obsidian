@@ -48,8 +48,19 @@ Examples:
 - GitHub file read: send repository, exact path/ref, and encoding; do not send the full task description.
 - GitHub file update: send repository, path, exact content, message, branch, and current blob SHA only.
 - PR lookup: request the exact PR number rather than searching all PRs when known.
-- Workflow evidence: request the exact run/job IDs once discovered rather than re-listing all runs.
+- Workflow evidence: use the GitHub Actions protocol below; once a run/job ID is known, stop broad discovery and address that exact resource.
 - Uploaded log analysis: retrieve targeted ranges/queries rather than loading unrelated project documents.
+
+### GitHub Actions evidence retrieval
+
+1. Discover a bounded candidate set (normally 5 runs; default ceiling 10) and immediately project each run to: `id`, `name`, `run_number`, `head_sha`, `event`, `status`, `conclusion`, `created_at`, and `updated_at`.
+2. For push builds, do **not** rely on the current commit-workflow-runs connector helper: its contract filters to pull-request-triggered runs. An empty helper result is therefore not absence evidence for a push-triggered compile.
+3. Select the exact run ID, then retrieve its jobs directly.
+4. Put failed jobs first and inspect their failed steps before requesting logs.
+5. Fetch only the failed job log(s) needed to identify root cause. Successful job logs remain cold unless a named evidence contract requires them.
+6. Keep compact conclusions plus exact run/job IDs in the active capsule. Raw run lists, full job objects, and logs are Tier 3/re-fetchable and should be pointerized after processing.
+
+The detailed fallback/recording rules are in `references/github-actions-evidence.md`.
 
 ## Handoff
 
