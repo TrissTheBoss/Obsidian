@@ -102,6 +102,7 @@ flowchart TD
 | **2026-09-28** | P4.1 dev1 Preview | Persistent large-scene GPU visibility packaged as a **shadow-only** canary; production draw ownership remains on P3.10. | [PR #57](https://github.com/TrissTheBoss/Obsidian/pull/57) · [Current state](ai/CURRENT_STATE.md) |
 | **2026-09-29** | **P4.1 promoted** | Exact dev1 runtime/visual gates passed; synchronized promotion PR #74 merged and post-merge Build/Context Governor/Repository Hygiene all passed. | [PR #74](https://github.com/TrissTheBoss/Obsidian/pull/74) · [A-0223](ai/attempts/A-0223-phase4-p4.1-promotion.md) |
 | **2026-09-29** | **P4.2 activated** | Dev2 freezes the first persistent chunk-column hierarchy and conservative coarse GPU visibility layer above P4.1's fine section classifier. | [PR #75](https://github.com/TrissTheBoss/Obsidian/pull/75) · [A-0224](ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md) |
+| **2026-09-29** | P4.2 dev2.2 Preview | Exact-section recenter + non-live recenter liveness corrections were CI-proven and published to GitHub Preview/Modrinth; runtime Visual PASS closed the liveness defect, leaving only the corrected-package 32+ scale sample. | [PR #75](https://github.com/TrissTheBoss/Obsidian/pull/75) · [A-0233](ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md) · [A-0234](ai/attempts/A-0234-phase4-p4.2-dev2.2-runtime-liveness-pass.md) |
 | **2026-09-28** | Repository/public surface cleanup | `main` became the only permanent branch, Preview prereleases became the tester channel, and the public README/release flow was formalized. | A-0207 · [Repository hygiene](ai/REPOSITORY_HYGIENE.md) |
 | **2026-09-28** | Context Governor activated | Tiered recoverable context, automatic fail-closed compression, call-specific API/MCP minimization, and least-privilege OAuth policy were integrated and CI-proven. | [PR #61](https://github.com/TrissTheBoss/Obsidian/pull/61) · A-0208/A-0209 |
 | **2026-09-28** | Context Governor continuity closed | Final activation evidence, current-state synchronization and active-capsule refresh merged to `main`. | [PR #62](https://github.com/TrissTheBoss/Obsidian/pull/62) · merge `dcfe73eb` |
@@ -111,9 +112,9 @@ flowchart TD
 
 ### Phase 4 / P4.2 — active
 
-P4.1 is **promoted and complete**. The public `0.4.0-phase4-dev1` Preview remains the most recent tester build until dev2 is packaged, and its promoted capability remains intentionally shadow-only.
+P4.1 is **promoted and complete**. The current public tester build is `0.4.0-phase4-dev2.2`, while P4.1 remains the promoted fine section-level shadow control.
 
-Development is now on **P4.2 / `0.4.0-phase4-dev2`**. P4.2 adds a bounded persistent chunk-column hierarchy above P4.1's section database and validates conservative coarse GPU column visibility against an independent CPU oracle.
+Development is now on **P4.2 / `0.4.0-phase4-dev2.2`**. The hierarchy/coarse-GPU design is stable, the vertical recenter/liveness correction has a runtime Visual PASS, and only the corrected-package render-distance-32+ scale gate remains before promotion.
 
 P4.2 does **not** change production terrain draw ownership. P3.10 still owns production SOLID/CUTOUT replacement, and P4.1 remains the fine section-level shadow control. Real command compaction, temporal visibility, Hi-Z and native indirect-count graphics stay for later separately frozen Phase 4 slices.
 
