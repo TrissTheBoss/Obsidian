@@ -253,90 +253,83 @@ A-0225 records the complete dev2 implementation and exact hosted package evidenc
 - production draw ownership/native graphics ownership unchanged;
 - command compaction, temporal visibility, Hi-Z and indirect-count consumption remain disabled.
 
-### Canonical dev2 source/package authority
+### Canonical dev2.2 source/package authority
 
 Version:
 
-`0.4.0-phase4-dev2`
+`0.4.0-phase4-dev2.2`
 
-Exact source-bearing head:
+Exact validated source:
 
-`bb4adfd12b48a1f3b03670d6fc4d25aed47ff61d`
+`c30c8686e65f7310ab047d88fadf2fe3b42d7415`
 
 Hosted validation:
 
-- Build run `36606137730` / **#821** — SUCCESS;
-- Java 25 / Gradle 9.5.1 job `109535514540` — SUCCESS;
-- Context Governor run `36606137407` / **#45** — SUCCESS.
+- Build run `36634634353` / **#833** — SUCCESS;
+- Context Governor run `36634634108` / **#57** — SUCCESS;
+- Build #833 artifact ID `11063553493`;
+- runtime JAR `Obsidian-0.4.0-phase4-dev2.2.jar`;
+- runtime size **519,994 bytes**;
+- runtime SHA-256 **`571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37`**.
 
-Build #821 artifact:
+A-0233 records the exact hosted package authority.
 
-- artifact ID `11050872212`;
-- wrapper `obsidian-34750749b7bbee5c38ba1ed0bc44285058163d36`;
-- wrapper size `758,297` bytes;
-- wrapper digest `sha256:95fbb5b3b60e72297ebed2e45cc21c9c13d0e80a2dc61a9f4be1c1a8d9b9680c`.
+### Public dev2.2 Preview
 
-Canonical direct runtime JAR:
+Publish Preview run `36635510377` / **#14** completed SUCCESS.
 
-- `Obsidian-0.4.0-phase4-dev2.jar`;
-- size **519,756 bytes**;
-- SHA-256 **`ce699db92c05afb3d056c7fb30c5fede0d7fc066a75200129e3403fe948c9a3f`**.
-
-Sources JAR:
-
-- size **269,555 bytes**;
-- SHA-256 **`1c4e6b96410fa6838c1b6f405d2deeea6681351abba2f1da603db9fd5397130c`**.
-
-Package inspection confirms the exact dev2 Fabric version and all three new P4.2 runtime classes.
-
-### Public dev2 Preview
-
-A-0226 closes publication:
-
-- exact Preview target `feac48607f74a665cf0040b618912e96a1f0f020`;
-- target differs from source-bearing package head only by `ai/CURRENT_STATE.md`, A-0225 and `ACTIVE_CONTEXT.json`;
-- exact Preview target passed Build #824 / run `36606622961` and Context Governor #48 / run `36606622557`;
-- Publish Preview run `36606727229` / **#12** — SUCCESS;
-- GitHub release ID `399384457`;
-- tag `v0.4.0-phase4-dev2`;
-- prerelease published successfully;
-- published runtime JAR size/hash are exactly **519,756 bytes** / **`ce699db92c05afb3d056c7fb30c5fede0d7fc066a75200129e3403fe948c9a3f`**, byte-identical to Build #821 package authority;
-- downstream Modrinth job `109537853446` — SUCCESS;
-- the already-documented authenticated version-list HTTP 404 correctly fell through to direct create;
-- pinned Modrinth publisher reported successful upload of `0.4.0-phase4-dev2`.
+- GitHub release ID `399552665`;
+- tag `v0.4.0-phase4-dev2.2`;
+- exact release target `c30c8686e65f7310ab047d88fadf2fe3b42d7415`;
+- published runtime JAR is byte-identical to Build #833 package authority;
+- downstream Modrinth job `109635372697` completed SUCCESS;
+- pinned publisher returned Modrinth version ID `yDBeoQge`.
 
 GitHub remains package authority; Modrinth is the mirrored distribution surface.
 
-## Current handoff — reference P4.2 dev2 runtime
+### Dev2.2 runtime status
 
-Use the exact public Preview:
+A-0234 records the latest reference runtime.
 
-- `Obsidian-0.4.0-phase4-dev2.jar`;
-- Preview source `feac48607f74a665cf0040b618912e96a1f0f020`;
-- SHA-256 `ce699db92c05afb3d056c7fb30c5fede0d7fc066a75200129e3403fe948c9a3f`.
+Closed gates:
 
-Exercise:
+- exact-player-section recentering works;
+- the former non-live SCANNING liveness defect is closed;
+- the critical sequence `Y=4 -> Y=5 -> Y=6 (ineligible/non-live) -> Y=5` completed, including the downward recenter while the upper scene was still non-live;
+- the lower viable scene recovered to READY;
+- explicit human **Visual PASS**;
+- P4.2 structural audit/capacity/mutation/missing/duplicate/false-cull gates clean;
+- P4.1 inherited fine visibility gates clean;
+- P3.10 suppression/execution accounting clean;
+- worker/staging/arena/resource lifetime clean;
+- normal process exit code 0.
 
-1. enter a world and let P4.1 + P4.2 resync/audit settle;
-2. use render distance **32 or higher when practical** for the main scale sample;
-3. hold a stable camera for repeated P4.1/P4.2 PASS samples;
-4. perform rapid 360-degree turns;
-5. traverse horizontally enough for real column load/unload churn;
-6. move vertically across section boundaries;
-7. break/place ordinary blocks;
-8. perform F3+T and allow hierarchy + fine visibility recovery;
-9. leave/re-enter the world if practical;
-10. exit normally;
-11. provide the full Prism Launcher log and explicit human visual PASS/FAIL.
+The current dev2.2 runtime was at render distance **16**.
 
-Required P4.2 evidence includes zero structural hierarchy-audit failures, zero missing/duplicate coarse identities, `gpuColumnFalseCullCount=0`, bounded capacity/memory, `cameraOnlyFullHierarchyScan=false`, clean P4.1 fine oracle, clean inherited P3.10/P3.7/worker/lifetime gates, and no production/native graphics expansion.
+### Current handoff — one final dev2.2 32+ scale run
 
-Useful anchors:
+A-0232 explicitly requires the corrected dev2.2 package itself to retain clean P4.1/P4.2 behavior at render distance **32+**. The earlier dev2.1 32+ run remains supporting evidence but does not replace this corrected-package gate.
 
-- `P4.2 shadow column hierarchy configured`;
-- `P4.2 structural hierarchy audit PASS`;
-- `P4.2 coarse column visibility sample PASS`;
-- `P4.2 final column hierarchy evidence`.
+Use the exact already-published Preview:
 
-PR #75 remains **DRAFT / DO NOT MERGE** until the frozen dev2 runtime/visual gates close.
+- `Obsidian-0.4.0-phase4-dev2.2.jar`;
+- source `c30c8686e65f7310ab047d88fadf2fe3b42d7415`;
+- SHA-256 `571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37`.
+
+No source change is requested.
+
+A short scale-only run is enough:
+
+1. set render distance to **32 or higher**;
+2. enter/settle a world long enough for the hierarchy and P4.1 scene to populate;
+3. allow repeated P4.2 coarse and P4.1 fine PASS samples;
+4. move/turn briefly so camera-only samples are exercised;
+5. exit normally;
+6. provide the full Prism log.
+
+Promotion requires the dev2.2 32+ run to retain zero hierarchy-audit failures, zero missing/duplicate coarse identities, `gpuColumnFalseCullCount=0`, no capacity/hard failure, clean P4.1 fine oracle, clean lifetime/shutdown, `cameraOnlyFullHierarchyScan=false`, and unchanged production/native graphics ownership.
+
+The existing dev2.2 human Visual PASS remains valid unless a new visual regression is observed during that scale-only run.
+
+PR #75 remains **DRAFT / DO NOT MERGE** until this final corrected-package 32+ scale gate closes.
 
