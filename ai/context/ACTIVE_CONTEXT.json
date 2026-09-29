@@ -1,17 +1,17 @@
 {
   "schema_version": 1,
-  "active_goal": "Implement and package Phase 4 P4.2 / 0.4.0-phase4-dev2: a bounded persistent chunk-column hierarchy plus conservative coarse GPU visibility, while retaining promoted P4.1 section visibility as the fine shadow control and P3.10 as production terrain owner.",
+  "active_goal": "Publish the CI-green Phase 4 P4.2 / 0.4.0-phase4-dev2 Preview from PR #75, verify GitHub/Modrinth publication, then collect the frozen A-0224 reference runtime at render distance 32+ when practical.",
   "scope_boundary": "Active engineering scope is P4.2 column hierarchy/coarse GPU visibility plus required continuity/release maintenance. Do not add production GPU-driven draw ownership, real terrain command compaction, native graphics expansion, temporal occlusion, Hi-Z, indirect-count consumption, P3.9 partial remeshing, or unrelated renderer scope.",
   "source_snapshot": {
-    "created_at": "2026-09-29T17:30:00Z",
+    "created_at": "2026-09-29T17:42:00Z",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
       "ai/CURRENT_STATE.md@phase4/p4.2-column-hierarchy",
       "ai/MASTER_ROADMAP.md@phase4/p4.2-column-hierarchy",
       "ai/attempts/A-0223-phase4-p4.1-promotion.md@phase4/p4.2-column-hierarchy",
       "ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md@phase4/p4.2-column-hierarchy",
-      "pull/75",
-      "main@59d130e17000b07e6ed8bbe226cb2f50eb795c74"
+      "ai/attempts/A-0225-phase4-p4.2-dev2-ci-package-runtime-handoff.md@phase4/p4.2-column-hierarchy",
+      "pull/75"
     ]
   },
   "coverage_manifest": [
@@ -32,6 +32,11 @@
       "id": "F10",
       "text": "P4.2 is active on draft PR #75 with frozen A-0224 contract and version target 0.4.0-phase4-dev2. It adds bounded persistent chunk-column hierarchy plus conservative coarse GPU visibility while keeping P4.1 as the fine section-level control.",
       "source_ref": "ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md"
+    },
+    {
+      "id": "F11",
+      "text": "P4.2 dev2 implementation is complete and CI-green on source-bearing head bb4adfd12b48a1f3b03670d6fc4d25aed47ff61d. Build #821 and Context Governor #45 passed; canonical Build #821 runtime JAR is 519,756 bytes SHA-256 ce699db92c05afb3d056c7fb30c5fede0d7fc066a75200129e3403fe948c9a3f.",
+      "source_ref": "ai/attempts/A-0225-phase4-p4.2-dev2-ci-package-runtime-handoff.md"
     },
     {
       "id": "F2",
@@ -89,16 +94,21 @@
   "open_obligations": [
     {
       "id": "O1",
-      "text": "Implement A-0224 exactly: persistent bounded column hierarchy maintained from the same section lifecycle/resync truth, structural audits, coarse GPU classifier, independent CPU oracle, scale/candidate-reduction telemetry, and no production ownership change.",
-      "source_ref": "ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md"
+      "text": "Publish 0.4.0-phase4-dev2 as a GitHub Preview from the current PR #75 continuity head and verify the Modrinth mirror without changing package authority.",
+      "source_ref": "ai/CURRENT_STATE.md#Current-handoff-publish-dev2-Preview-then-reference-runtime"
     },
     {
       "id": "O2",
-      "text": "Run exact hosted CI on dev2, package/publish a Preview when CI-green, then collect the frozen reference runtime with render distance 32+ when practical, F3+T/re-entry/lifetime checks and explicit human visual PASS before promotion.",
-      "source_ref": "ai/CURRENT_STATE.md#Current-handoff-implement-and-package-dev2"
+      "text": "Run the exact published dev2 Preview on the reference machine under A-0224: render distance 32+ when practical, repeated P4.1/P4.2 samples, camera/traversal/edit churn, F3+T, leave/re-entry if practical, clean exit, and explicit human visual PASS before promotion.",
+      "source_ref": "ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md"
     }
   ],
   "exact_identifiers": [
+    {
+      "id": "I7",
+      "text": "P4.2 source-bearing package head bb4adfd12b48a1f3b03670d6fc4d25aed47ff61d passed Build #821 run 36606137730 and Context Governor #45 run 36606137407; artifact 11050872212; runtime Obsidian-0.4.0-phase4-dev2.jar SHA-256 ce699db92c05afb3d056c7fb30c5fede0d7fc066a75200129e3403fe948c9a3f.",
+      "source_ref": "ai/attempts/A-0225-phase4-p4.2-dev2-ci-package-runtime-handoff.md"
+    },
     {
       "id": "I1",
       "text": "Active branch phase4/p4.2-column-hierarchy; active draft PR #75; P4.2 version target 0.4.0-phase4-dev2.",
@@ -210,6 +220,12 @@
       "locator": "Load entirely before changing or evaluating dev2 behavior/gates."
     },
     {
+      "id": "p4-p4.2-package",
+      "topic": "P4.2 dev2 implementation and canonical Build #821 package handoff",
+      "source_ref": "ai/attempts/A-0225-phase4-p4.2-dev2-ci-package-runtime-handoff.md@phase4/p4.2-column-hierarchy",
+      "locator": "Load for implementation summary, exact source head, hosted CI/artifact IDs, JAR hashes, and frozen runtime handoff."
+    },
+    {
       "id": "repo-hygiene-evidence",
       "topic": "Repository cleanup and Preview release evidence",
       "source_ref": "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md@main",
@@ -281,6 +297,7 @@
     "p4-followup-runtime",
     "p4-visual-pass",
     "p4-p4.2-contract",
+    "p4-p4.2-package",
     "p4-promotion",
     "repo-hygiene-evidence",
     "history-cold",
@@ -292,5 +309,5 @@
     "modrinth-secret-project-id-validation",
     "modrinth-first-success"
   ],
-  "next_action": "Implement A-0224 on PR #75, run exact hosted CI, then package/publish 0.4.0-phase4-dev2 Preview for the frozen reference runtime. Keep P4.2 shadow-only."
+  "next_action": "After the current continuity head passes hosted CI, issue /publish-preview on PR #75, verify GitHub release + Modrinth mirror, then hand the exact dev2 Preview JAR to the tester for A-0224 runtime validation."
 }
