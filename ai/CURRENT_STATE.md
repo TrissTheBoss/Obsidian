@@ -82,7 +82,7 @@ Canonical direct runtime JAR:
 
 Do not treat later continuity/Phase 4 commits as the source authority for that package.
 
-## Phase 4 P4.1 — ACTIVE / DEV1 FOLLOW-UP RUNTIME REQUIRED
+## Phase 4 P4.1 — ACTIVE / HUMAN VISUAL VERDICT REQUIRED
 
 Immutable contract:
 
@@ -176,48 +176,37 @@ Sources JAR from the same hosted artifact:
 
 Later continuity-only commits do not change dev1 package authority.
 
-## First P4.1 dev1 reference runtime — PARTIAL / AUTOMATED PATH CLEAN
+## P4.1 dev1 reference runtime — AUTOMATED CONTRACT CLOSED / VISUAL VERDICT PENDING
 
-A-0219 records the first public-Preview reference runtime from 2026-09-29.
+A-0219 records the first public-Preview reference run: large-scale automated P4.1 correctness/lifetime evidence was clean, but in-world F3+T and the human visual verdict were missing.
 
-Observed clean evidence from the exact published Preview includes:
+A-0220 records the follow-up run of the **exact same published Preview** and closes the missing automated exercise gates:
 
-- final live/high-water persistent scene: **10,642** sections at effective render distance 16;
-- **2,779** GPU dispatches over **25,985,145** candidates;
-- **2,644 / 2,644** exact/conservative sampled visibility comparisons passed;
+- two real post-startup/in-world resource reloads occurred; the measured window reports `benchmarkResourceReloadDelta=2`;
+- each reload recovered through P3.5 rebuild/READY and P4.1 continued producing PASS samples;
+- a real leave/re-entry cycle occurred (disconnect/server stop, then player rejoin and world/P4.1 recovery);
+- final P4.1 scene high-water was **10,642** sections;
+- **1,937** GPU dispatches tested **20,208,721** candidates;
+- **1,836 / 1,836** sampled comparisons were exact/conservative PASS;
 - `missingVisible=0`, `unexpectedVisible=0`, `duplicateVisible=0`, `gpuFalseCullCount=0`;
 - `capacityFailures=0`, `lifecycleOverflow=0`, `hardFailure=false`;
+- `readbackPendingHighWater=1`;
 - `cameraOnlyFullSceneScan=false`, `productionDrawOwnershipChanged=false`, `nativeGraphicsExpansion=false`;
-- real horizontal/vertical traversal and scene churn occurred;
-- inherited P3.10/P3.5/P3.6/P3.7 correctness evidence remained clean;
-- worker/staging/arena/resource lifetime closed cleanly;
+- P3.10 production accounting stayed coherent with zero duplicate/overflow/stale/revalidation failures;
+- final P3.5/P3.6/P3.7 correctness summaries are clean;
+- worker/staging/arena/resource lifetime is clean;
 - process exit code 0.
 
-This run is **not promotion-complete**. The only explicit ResourceManager reload and `resource-reload` invalidation occur during startup before world entry/P4.1 configuration, while the inherited measured window reports `benchmarkResourceReloadDelta=0`. Therefore the required **post-startup in-world F3+T + recovery** is not proven. The uploaded log also did not include an explicit human visual PASS. A world leave/re-entry cycle was not demonstrated either, though A-0203 makes that item conditional on practicality.
+No renderer-source change is authorized or needed from these runs.
 
-No renderer-source change is authorized from this result.
+## Current handoff — explicit human visual verdict only
 
-## Current handoff — exact same dev1 package, missing evidence only
+The frozen automated P4.1 dev1 runtime contract is now closed. The **only remaining promotion gate** is the required explicit human visual verdict for the exact tested Preview.
 
-Use the **same published Preview**:
+The tester must state **PASS** only if the world looked the same as the promoted P3.10 baseline throughout the run, including after F3+T and world re-entry: no new holes, missing terrain, duplicate terrain, texture/light/cutout/depth regressions, stale popping or other rendering difference attributable to P4.1.
 
-- `Obsidian-0.4.0-phase4-dev1.jar`;
-- Preview source `6af5174f054b272c65174fbf0c37d981a66aff31`;
-- Preview JAR SHA-256 `8bf25f3aa6bfe6fb4392044ba0973692fc6a24fd9948f3fea51cf55b12e157f3`.
+PR #57 stays **DRAFT / DO NOT MERGE** until that verdict is supplied.
 
-Follow-up exercise:
+## After the human visual verdict
 
-1. enter the world and wait for `P4.1 bounded scene resync complete` plus subsequent `P4.1 shadow visibility sample PASS` evidence;
-2. press **F3+T** after the world is fully active;
-3. wait for resource reload/recovery and new P4.1 PASS samples afterward;
-4. leave/re-enter the world if practical and again allow P4.1 to recover;
-5. exit normally;
-6. provide the full Prism Launcher log and an explicit human visual verdict.
-
-The visual verdict remains strict: **the world must look the same as the promoted P3.10 baseline**. Any new holes, missing terrain, duplicate terrain, texture/light/cutout/depth regressions, stale popping or other visual difference is failure.
-
-Promotion remains blocked until the missing F3+T/recovery evidence and explicit human visual PASS are supplied. PR #57 stays **DRAFT / DO NOT MERGE**.
-
-## After the follow-up dev1 runtime
-
-If the exact same package closes the remaining gates, record the runtime promotion immutably, synchronize current state/context, run exact synchronized-head CI, and decide the next Phase 4 slice from measured evidence. Do not connect GPU-visible records to production draw submission inside P4.1 itself and do not weaken A-0203 after seeing runtime data.
+If the visual verdict is PASS, record the P4.1 runtime promotion immutably, synchronize current state/context, run exact synchronized-head CI, and decide the next Phase 4 slice from measured evidence. Do not connect GPU-visible records to production draw submission inside P4.1 itself and do not weaken A-0203 after seeing runtime data. If the verdict is FAIL, record the symptom as new runtime evidence before changing renderer source.
