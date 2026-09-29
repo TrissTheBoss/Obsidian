@@ -178,6 +178,10 @@ GitHub Actions evidence must follow the same least-data discipline as other exte
 4. Inspect failed jobs and failed steps first. Successful job step detail is normally unnecessary once success is established.
 5. Fetch logs only for the failed job(s) that need diagnosis. Do not bulk-download every job log for a run.
 6. Treat raw run lists, full job payloads, and logs as Tier 3 re-fetchable evidence. Keep exact run/job IDs and the compact diagnosis in active context, then pointerize/discard the bulky response.
+7. Before exact-head CI validation, capture the expected branch/PR head SHA. Once waiting/validation begins, do not keep committing unrelated continuity edits and chasing a moving CI target. If the head changes, the old run no longer gates the new head; switch once to the new head and discard the old wait state.
+8. Waiting is bounded: for one exact run/head, make at most **3** state observations and never continue after **2 identical nonterminal snapshots**. Do not tight-loop or repeatedly re-list workflow history.
+9. If all exact jobs are terminal but the run wrapper still reports queued/in-progress, perform **one** exact-run cross-check. If the mismatch persists, classify run metadata as stale, retain the terminal job evidence, stop waiting, and report/continue from the evidence that is actually available.
+10. When the observation cap is reached while work is genuinely still nonterminal, stop waiting in the current session. Preserve the exact run/head IDs and current state as a recoverable obligation rather than blocking the conversation.
 
 The exact provider-specific protocol and fallback rules live in `ai/skills/context-governor/references/github-actions-evidence.md`.
 
