@@ -59,6 +59,8 @@ Examples:
 4. Put failed jobs first and inspect their failed steps before requesting logs.
 5. Fetch only the failed job log(s) needed to identify root cause. Successful job logs remain cold unless a named evidence contract requires them.
 6. Keep compact conclusions plus exact run/job IDs in the active capsule. Raw run lists, full job objects, and logs are Tier 3/re-fetchable and should be pointerized after processing.
+7. Freeze the expected head before exact-head validation. If the head moves, abandon the old run as a gate instead of chasing both heads.
+8. Cap one run/head at 3 state observations or 2 identical nonterminal snapshots. If jobs are terminal but the run wrapper is not, cross-check the exact run once and then stop waiting on persistent stale metadata.
 
 The detailed fallback/recording rules are in `references/github-actions-evidence.md`.
 
