@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import json
-from context_governor import audit_scopes, compress_bundle, minimize_call, validate_checkpoint
+from context_governor import actions_poll_decision, audit_scopes, compress_bundle, minimize_call, validate_checkpoint
 
 
 def check(condition, message):
@@ -93,6 +93,62 @@ def test_scope_audit():
     check(result["incremental_new_scopes"] == ["repo"], "incremental scope delta incorrect")
 
 
+
+def test_actions_poll_guard():
+    moved = actions_poll_decision({
+        "expected_head_sha":"aaa",
+        "current_head_sha":"bbb",
+        "poll_count":1,
+        "run":{"status":"in_progress","conclusion":None},
+    })
+    check(moved["action"] == "switch_head", "moving head must abandon old run")
+
+    done = actions_poll_decision({
+        "expected_head_sha":"aaa",
+        "current_head_sha":"aaa",
+        "poll_count":1,
+        "run":{"status":"completed","conclusion":"success"},
+    })
+    check(done["action"] == "terminal" and done["terminal"], "completed run must terminate polling")
+
+    stale_first = actions_poll_decision({
+        "expected_head_sha":"aaa",
+        "current_head_sha":"aaa",
+        "poll_count":2,
+        "run":{"status":"in_progress","conclusion":None},
+        "jobs":[{"status":"completed","conclusion":"success"}],
+    })
+    check(stale_first["action"] == "cross_check_once", "terminal jobs with nonterminal run require one cross-check")
+
+    stale_second = actions_poll_decision({
+        "expected_head_sha":"aaa",
+        "current_head_sha":"aaa",
+        "poll_count":3,
+        "cross_check_performed":True,
+        "run":{"status":"in_progress","conclusion":None},
+        "jobs":[{"status":"completed","conclusion":"success"}],
+    })
+    check(stale_second["action"] == "stop_waiting" and stale_second["terminal"], "persistent stale wrapper must stop polling")
+
+    capped = actions_poll_decision({
+        "expected_head_sha":"aaa",
+        "current_head_sha":"aaa",
+        "poll_count":3,
+        "run":{"status":"in_progress","conclusion":None},
+        "jobs":[{"status":"in_progress","conclusion":None}],
+    })
+    check(capped["action"] == "stop_waiting" and not capped["terminal"], "poll cap must stop blocking session")
+
+    unchanged = actions_poll_decision({
+        "expected_head_sha":"aaa",
+        "current_head_sha":"aaa",
+        "poll_count":2,
+        "unchanged_polls":2,
+        "run":{"status":"queued","conclusion":None},
+    })
+    check(unchanged["action"] == "stop_waiting", "two unchanged nonterminal snapshots must stop waiting")
+
+
 def valid_checkpoint():
     return {
         "schema_version":1,
@@ -132,6 +188,7 @@ def main():
         test_secret_block,
         test_nonsecret_token_parameter_allowed,
         test_scope_audit,
+        test_actions_poll_guard,
         test_checkpoint_validation,
     ]
     for test in tests:
