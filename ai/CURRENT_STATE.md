@@ -82,7 +82,7 @@ Canonical direct runtime JAR:
 
 Do not treat later continuity/Phase 4 commits as the source authority for that package.
 
-## Phase 4 P4.1 — RUNTIME + VISUAL GATES PASSED / SYNCHRONIZED CI REQUIRED
+## Phase 4 P4.1 — RUNTIME + VISUAL GATES PASSED / PROMOTION CI ACTIVE
 
 Immutable contract:
 
@@ -207,17 +207,16 @@ All frozen A-0203 runtime and visual gates are now closed. No additional dev1 re
 
 ## Current handoff — synchronized promotion CI
 
-The tested P4.1 implementation branch predates later repository-maintenance work on `main`, so promotion must preserve the exact tested renderer/source/resource content while synchronizing it onto current `main`.
+A-0222 created a clean synchronized promotion branch from current `main` and copied the exact tested P4.1 implementation/version blobs byte-for-byte. The source-bearing synchronized commit is `3fb81bf6053cebbed7e6e4b058635d3653ddb6c3`.
 
 Do **not** merge the stale branch continuity snapshot over newer `main` state.
 
 Required next actions:
 
-1. synchronize the exact tested P4.1 renderer/resource/version files onto current `main`;
-2. verify those implementation files are byte-identical to the tested P4.1 head where intended;
-3. run hosted Build/Context Governor/Repository Hygiene validation on the synchronized promotion head;
-4. promote/merge P4.1 only after the exact synchronized head is green;
-5. freeze the next Phase 4 slice separately.
+1. open/use a non-draft promotion PR from `promotion/p4.1-synchronized`;
+2. run hosted Build/Context Governor/Repository Hygiene validation on the exact final promotion head;
+3. promote/merge P4.1 only after that head is green;
+4. freeze the next Phase 4 slice separately.
 
 P4.1 remains shadow-only through promotion; production terrain draw ownership stays with P3.10.
 
