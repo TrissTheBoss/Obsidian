@@ -349,13 +349,19 @@ Promoted by A-0223 after the exact dev1 Preview passed the frozen A-0203 contrac
 
 Promoted by A-0237 after A-0234 closed exact-section recenter liveness + human Visual PASS, A-0235 closed the corrected-package render-distance-32 scale gate, synchronized PR #77 exact head passed Build #840 / Context Governor #62, and merged main passed Build #841 / Context Governor #63 / Repository Hygiene #36. P4.2 remains shadow-only: P4.1 stays the flat fine section control and P3.10 remains production terrain owner.
 
-#### P4.3 — Hierarchy-fed fine section visibility — VALIDATED / PROMOTION IN PROGRESS
+#### P4.3 — Hierarchy-fed fine section visibility — COMPLETE
 
-A-0243 closes P4.3 on corrected `0.4.0-phase4-dev3.1`: render-distance-32 runtime reproduced non-zero conservative safe-extra coarse/lineage activity while missing/unexpected/duplicate fine identities and hierarchical false culls remained zero, real hierarchy-fed candidate reduction remained substantial, inherited P4.2/P4.1/production/lifetime gates remained clean, and the tester supplied explicit human Visual PASS. Promotion proceeds through PR #78 after exact continuity-head CI.
+A-0244 records final promotion of corrected `0.4.0-phase4-dev3.1`. PR #78 exact head passed Build #854 / Context Governor #75, merged as `4ba408becfcde42456b9d8468106a3e0d27de049`, and merged main passed Build #855 / Context Governor #76 / Repository Hygiene #38.
 
 P4.3 remains sampled and shadow-only. It does not add production draw ownership, command compaction, temporal visibility, Hi-Z, native graphics expansion, indirect-count graphics, region hierarchy or LOD.
 
-Later Phase 4 slices may remove the sampled CPU-readback handoff, add conservative temporal visibility, build real terrain command compaction, and only then consider capability/evidence-gated indirect-count graphics or Hi-Z.
+#### P4.4 — GPU-resident hierarchy-fed fine visibility — ACTIVE
+
+Frozen by A-0245 for `0.4.0-phase4-dev4`. Remove the intermediate CPU/readback dependency between P4.2 coarse GPU visibility and fine section GPU visibility. A snapshot-aligned bounded GPU section table feeds direct coarse snapshot-index -> fine compute in the same sampled submission, while final host readback remains only for correctness validation and P4.3 remains the independent control.
+
+Source head `ff6dc56e4635df58cc4204a4ccc78f8cd1b8b53a` passed Build #856 and A-0247 records the exact dev4 package hashes. P4.4 remains shadow-only and does not add production draw ownership, command compaction, temporal visibility, Hi-Z, native graphics ownership, indirect-count graphics, region hierarchy or LOD.
+
+Later Phase 4 slices may add conservative temporal visibility and real terrain command compaction, and only then consider capability/evidence-gated indirect-count graphics or Hi-Z.
 
 ### Phase 5 — Frame pacing, streaming and adaptive scheduling — PLANNED
 
@@ -521,6 +527,17 @@ Newer durable decisions override stale roadmap text until synchronized. Always p
 
 ## 16. Roadmap revision log
 
+### 2026-10-03 — P4.3 promoted and P4.4 activated
+
+- PR #78 exact promotion head passed Build #854 / Context Governor #75 and merged as `4ba408becfcde42456b9d8468106a3e0d27de049`;
+- merged main passed Build #855, Context Governor #76 and Repository Hygiene #38;
+- A-0244 marks P4.3 COMPLETE;
+- A-0245 freezes P4.4 / `0.4.0-phase4-dev4` as GPU-resident sampled coarse-to-fine visibility;
+- A-0246 implements the direct GPU handoff while P4.3 remains the independent control;
+- A-0247 records source-head Build #856 and exact package hashes;
+- production ownership, command compaction, temporal visibility, Hi-Z and native graphics scope remain unchanged.
+
+
 ### 2026-10-03 — P4.3 validation closure
 
 - dev3 proved real hierarchy-fed fine candidate reduction but exposed an oracle-only safe-extra lineage accounting defect;
@@ -659,7 +676,8 @@ Created the canonical master roadmap and formal governance model.
 - **Phase 4: ACTIVE — GPU-driven visibility at real-world scale.**
 - **P4.1: COMPLETE.** `0.4.0-phase4-dev1` passed frozen runtime + visual gates and promoted through PR #74 / merge `59d130e17000b07e6ed8bbe226cb2f50eb795c74`.
 - **P4.2: COMPLETE.** `0.4.0-phase4-dev2.2` promoted through PR #77 / merge `3b50f1e0fea11ae65c3e61689db20f03c8dd4766` with green post-merge Build/Context Governor/Hygiene.
-- **P4.3: ACTIVE.** `0.4.0-phase4-dev3` proves hierarchy-fed fine section visibility in shadow mode before temporal visibility or production command compaction.
+- **P4.3: COMPLETE.** `0.4.0-phase4-dev3.1` promoted through PR #78 / merge `4ba408becfcde42456b9d8468106a3e0d27de049` with green post-merge Build/Context Governor/Hygiene.
+- **P4.4: ACTIVE.** `0.4.0-phase4-dev4` removes the intermediate CPU/readback coarse-to-fine handoff while retaining final sampled correctness validation.
 - Phases 5-12 retain their planned order/scope unless later evidence-driven roadmap governance changes them.
 
 Always verify live details in `ai/CURRENT_STATE.md` before acting because active milestone state changes more frequently than the long-range plan.

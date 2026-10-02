@@ -52,14 +52,19 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
     private final IntOpenHashSet expectedVisibleIds = new IntOpenHashSet();
     private final IntOpenHashSet gpuVisibleIds = new IntOpenHashSet();
     private final Int2IntOpenHashMap snapshotSlotByIdentity;
+    private final int[] snapshotIdentityByCandidateIndex;
+    private final int[] sampleGpuVisibleSnapshotIndices;
     private final HierarchicalFineVisibilityProbe fineVisibility;
+    private final GpuResidentHierarchicalFineVisibilityProbe gpuResidentFine;
 
     private GpuFence inFlightFence;
 
     private long uploadedHierarchySerial;
+    private long uploadedSectionSerial;
     private int uploadedCandidateCount = -1;
     private boolean snapshotBuilding;
     private long snapshotBuildSerial;
+    private long snapshotBuildSectionSerial;
     private int snapshotSlotCursor;
     private int snapshotCandidateCount;
     private long snapshotLookupSerial;
@@ -154,7 +159,11 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
         this.readbackData = readbackView.data();
         this.snapshotSlotByIdentity = new Int2IntOpenHashMap(hierarchy.capacity(), 0.75f);
         this.snapshotSlotByIdentity.defaultReturnValue(-1);
+        this.snapshotIdentityByCandidateIndex = new int[hierarchy.capacity()];
+        this.sampleGpuVisibleSnapshotIndices = new int[hierarchy.capacity()];
         this.fineVisibility = new HierarchicalFineVisibilityProbe(device, hierarchy, sections);
+        this.gpuResidentFine = new GpuResidentHierarchicalFineVisibilityProbe(
+                device, hierarchy, sections, gpu);
         this.nextSampleFrame = 0L;
 
         LOG.log(System.Logger.Level.INFO,
@@ -179,6 +188,7 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
         if (hardFailure) return;
 
         boolean hierarchyWork = hierarchy.serial() != uploadedHierarchySerial
+                || sections.serial() != uploadedSectionSerial
                 || !auditCurrent()
                 || snapshotBuilding;
         if (hierarchy.mutationFailures() != 0L || hierarchy.capacityFailures() != 0L) {
@@ -192,7 +202,8 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
         processStructuralAuditBudget();
         if (hardFailure) return;
 
-        if (hierarchy.serial() != uploadedHierarchySerial) {
+        if (hierarchy.serial() != uploadedHierarchySerial
+                || sections.serial() != uploadedSectionSerial) {
             buildCandidateSnapshotBudget();
             hierarchyWork = true;
         }
@@ -201,7 +212,9 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
         finishSampleIfReady();
 
         if (inFlightFence == null && !sampleActive && auditCurrent()) {
-            if (uploadedHierarchySerial == hierarchy.serial() && uploadedCandidateCount >= 0
+            if (uploadedHierarchySerial == hierarchy.serial()
+                    && uploadedSectionSerial == sections.serial()
+                    && uploadedCandidateCount >= 0
                     && (dispatches == 0 || frameIndex >= nextSampleFrame)) {
                 dispatchSample(renderer, frameIndex, false);
             } else if (!snapshotBuilding && snapshotBuildSerial == hierarchy.serial()) {
@@ -298,14 +311,19 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
     private void buildCandidateSnapshotBudget() {
         if (inFlightFence != null) return;
         long serial = hierarchy.serial();
-        if (!snapshotBuilding || snapshotBuildSerial != serial) {
+        long sectionSerial = sections.serial();
+        if (!snapshotBuilding
+                || snapshotBuildSerial != serial
+                || snapshotBuildSectionSerial != sectionSerial) {
             if (snapshotBuilding) snapshotBuildRestarts++;
             snapshotBuilding = true;
             snapshotBuildSerial = serial;
+            snapshotBuildSectionSerial = sectionSerial;
             snapshotSlotCursor = 0;
             snapshotCandidateCount = 0;
             snapshotLookupSerial = 0L;
             snapshotSlotByIdentity.clear();
+            gpuResidentFine.startSnapshot(serial, sectionSerial);
         }
 
         int budget = SNAPSHOT_COLUMN_BUDGET;
@@ -320,8 +338,9 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
                 return;
             }
 
+            int candidateIndex = snapshotCandidateCount;
             int byteOffset = Math.multiplyExact(
-                    snapshotCandidateCount, VulkanLargeSceneColumnVisibilityProbe.CANDIDATE_BYTES);
+                    candidateIndex, VulkanLargeSceneColumnVisibilityProbe.CANDIDATE_BYTES);
             uploadData.putInt(byteOffset, hierarchy.chunkX(slot));
             uploadData.putInt(byteOffset + 4, hierarchy.minLiveSectionY(slot));
             uploadData.putInt(byteOffset + 8, hierarchy.chunkZ(slot));
@@ -339,12 +358,23 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
                         columnIdentity);
                 return;
             }
+            snapshotIdentityByCandidateIndex[candidateIndex] = columnIdentity;
+            gpuResidentFine.writeSnapshotColumn(candidateIndex, slot);
+            if (gpuResidentFine.hardFailure()) {
+                hardFailure = true;
+                return;
+            }
             snapshotCandidateCount++;
         }
 
         if (snapshotSlotCursor >= hierarchy.capacity()) {
             snapshotBuilding = false;
             snapshotLookupSerial = snapshotBuildSerial;
+            gpuResidentFine.finishSnapshot(
+                    snapshotCandidateCount,
+                    snapshotBuildSerial,
+                    snapshotBuildSectionSerial);
+            if (gpuResidentFine.hardFailure()) hardFailure = true;
         }
     }
 
@@ -360,7 +390,8 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
                     "P4.2 invalid candidate count before dispatch: {0}", candidateCount);
             return;
         }
-        if (uploadChanged && snapshotBuildSerial != hierarchy.serial()) return;
+        if (uploadChanged && (snapshotBuildSerial != hierarchy.serial()
+                || snapshotBuildSectionSerial != sections.serial())) return;
 
         CommandEncoder encoder = device.createCommandEncoder();
         try {
@@ -376,6 +407,25 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
                     sampleCameraSectionX, sampleCameraSectionY, sampleCameraSectionZ,
                     sampleCameraLocalX, sampleCameraLocalY, sampleCameraLocalZ,
                     FRUSTUM_EPSILON, samplePlanes);
+
+            boolean p44Dispatched = gpuResidentFine.prepareAndDispatch(
+                    encoder,
+                    uploadChanged,
+                    candidateCount,
+                    uploadChanged ? snapshotBuildSerial : uploadedHierarchySerial,
+                    uploadChanged ? snapshotBuildSectionSerial : uploadedSectionSerial,
+                    sampleCameraSectionX,
+                    sampleCameraSectionY,
+                    sampleCameraSectionZ,
+                    sampleCameraLocalX,
+                    sampleCameraLocalY,
+                    sampleCameraLocalZ,
+                    samplePlanes);
+            if (!p44Dispatched && gpuResidentFine.hardFailure()) {
+                hardFailure = true;
+                return;
+            }
+
             encoder.copyToBuffer(gpu.outputSlice(), readbackBuffer.slice(0L, gpu.outputBytes()));
             GpuFence fence = encoder.createFence();
             encoder.submit();
@@ -389,6 +439,7 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
 
         if (uploadChanged) {
             uploadedHierarchySerial = snapshotBuildSerial;
+            uploadedSectionSerial = snapshotBuildSectionSerial;
             uploadedCandidateCount = candidateCount;
         }
         dispatches++;
@@ -449,6 +500,7 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
         sampleFlatFineCandidates = sections.liveCount();
         expectedVisibleIds.clear();
         gpuVisibleIds.clear();
+        gpuResidentFine.abortStaleSample();
     }
 
     private void processOracleBudget() {
@@ -546,7 +598,23 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
         sampleGpuVisibleCount = visibleCount;
         gpuVisibleIds.clear();
         for (int i = 0; i < visibleCount; i++) {
-            int id = readbackData.getInt((i + 1) * Integer.BYTES);
+            int snapshotIndex = readbackData.getInt((i + 1) * Integer.BYTES);
+            if (snapshotIndex < 0 || snapshotIndex >= sampleCandidateCount) {
+                hardFailure = true;
+                LOG.log(System.Logger.Level.ERROR,
+                        "P4.2 GPU coarse snapshot index outside captured bounds: index={0}, candidates={1}.",
+                        snapshotIndex, sampleCandidateCount);
+                return;
+            }
+            sampleGpuVisibleSnapshotIndices[i] = snapshotIndex;
+            int id = snapshotIdentityByCandidateIndex[snapshotIndex];
+            if (id == 0) {
+                hardFailure = true;
+                LOG.log(System.Logger.Level.ERROR,
+                        "P4.2 GPU coarse snapshot index resolved to zero identity: index={0}.",
+                        snapshotIndex);
+                return;
+            }
             if (!gpuVisibleIds.add(id)) sampleGpuDuplicateIds++;
         }
         sampleGpuComplete = true;
@@ -584,6 +652,25 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
                     sampleCandidateCount, sampleCpuVisible, sampleCpuAmbiguous, sampleCpuCulled,
                     sampleGpuVisibleCount, missing, unexpected, sampleGpuDuplicateIds);
         } else {
+            gpuResidentFine.validateCompletedSample(
+                    sampleGpuVisibleSnapshotIndices,
+                    sampleGpuVisibleCount,
+                    expectedVisibleIds,
+                    sampleHierarchySerial,
+                    sampleSectionSerial,
+                    sampleFlatFineCandidates,
+                    sampleCameraSectionX,
+                    sampleCameraSectionY,
+                    sampleCameraSectionZ,
+                    sampleCameraLocalX,
+                    sampleCameraLocalY,
+                    sampleCameraLocalZ,
+                    samplePlanes);
+            if (gpuResidentFine.hardFailure()) {
+                hardFailure = true;
+                return;
+            }
+
             lastVisibleColumns = sampleGpuVisibleCount;
             lastCoarseVisiblePermille = sampleCandidateCount == 0
                     ? 0 : (int) Math.min(1000L, (long) sampleGpuVisibleCount * 1000L / sampleCandidateCount);
@@ -655,6 +742,8 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
 
         fineVisibility.close();
         if (fineVisibility.hardFailure()) hardFailure = true;
+        gpuResidentFine.close(abandonedForDeviceShutdown);
+        if (gpuResidentFine.hardFailure()) hardFailure = true;
 
         LOG.log(System.Logger.Level.INFO,
                 "P4.2 final column hierarchy evidence: configured=true, renderDistance={0}, columnCapacity={1}, liveColumns={2}, highWaterColumns={3}, liveSections={4}, columnMembership={5}, sectionsPerLiveColumnPermille={6}, columnMetadataBytes={7}, occupancyBytes={8}, wordsPerColumn={9}, columnInstalls={10}, columnRemovals={11}, slotReuses={12}, membershipAdds={13}, membershipRemovals={14}, capacityFailures={15}, mutationFailures={16}, hierarchyAuditRuns={17}, hierarchyAuditFailures={18}, snapshotBuildRestarts={19}, snapshotUploads={20}, snapshotUploadBytes={21}, dispatches={22}, columnCandidatesTested={23}, samplesCompleted={24}, samplesAbortedStale={25}, conservativeSamples={26}, exactSamples={27}, missingVisibleColumns={28}, unexpectedVisibleColumns={29}, duplicateVisibleColumns={30}, gpuColumnFalseCullCount={31}, readbackPendingHighWater={32}, lastVisibleColumns={33}, lastCoarseVisiblePermille={34}, lastEstimatedFineCandidateUpperBound={35}, lastFlatFineCandidateCount={36}, hierarchyMutationCalls={37}, hierarchyMutationNs={38}, hierarchyUpdateFrames={39}, cameraOnlyFrames={40}, hierarchyMaintenanceNs={41}, cameraOnlyHierarchyMaintenanceNs={42}, hardFailure={43}, abandonedForDeviceShutdown={44}, cameraOnlyFullHierarchyScan=false, productionDrawOwnershipChanged=false, nativeGraphicsExpansion=false, commandCompactionEnabled=false, temporalVisibilityEnabled=false, hizEnabled=false.",

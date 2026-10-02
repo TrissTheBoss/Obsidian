@@ -1,17 +1,18 @@
 {
   "schema_version": 1,
-  "active_goal": "Promote fully validated Phase 4 P4.3 / 0.4.0-phase4-dev3.1 through exact final-head CI on PR #78, merge if green, validate merged main, record P4.3 COMPLETE, then freeze the next Phase 4 milestone.",
-  "scope_boundary": "Active engineering scope is P4.3 sampled hierarchy-fed fine section visibility plus required continuity/release maintenance. Do not add production GPU-driven draw ownership, production command compaction, native graphics expansion, temporal visibility, Hi-Z, indirect-count graphics, region hierarchy, LOD, P3.9 partial remeshing, or unrelated renderer scope.",
+  "active_goal": "Validate, package, publish, and runtime-close Phase 4 P4.4 / 0.4.0-phase4-dev4 GPU-resident hierarchy-fed fine visibility on draft PR #79 without changing production terrain ownership.",
+  "scope_boundary": "Active engineering scope is P4.4 GPU-resident sampled coarse-to-fine visibility plus required continuity/release maintenance. Do not add production draw ownership, command compaction, temporal visibility, Hi-Z, indirect-count graphics, native graphics/render-pass ownership, region hierarchy, LOD, mesher changes, or unrelated renderer scope.",
   "source_snapshot": {
-    "created_at": "2026-10-03T01:45:00+02:00",
+    "created_at": "2026-10-03T01:58:00+02:00",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
-      "ai/CURRENT_STATE.md@phase4/p4.3-hierarchy-fed-fine-visibility",
-      "ai/MASTER_ROADMAP.md@phase4/p4.3-hierarchy-fed-fine-visibility",
-      "ai/attempts/A-0238-phase4-p4.3-hierarchy-fed-fine-visibility-contract.md@phase4/p4.3-hierarchy-fed-fine-visibility",
-      "ai/attempts/A-0241-phase4-p4.3-dev3.1-safe-extra-lineage-contract.md@phase4/p4.3-hierarchy-fed-fine-visibility",
-      "ai/attempts/A-0243-phase4-p4.3-dev3.1-runtime-pass.md@phase4/p4.3-hierarchy-fed-fine-visibility",
-      "pull/78"
+      "ai/CURRENT_STATE.md@phase4/p4.4-gpu-resident-hierarchy-fine",
+      "ai/MASTER_ROADMAP.md@phase4/p4.4-gpu-resident-hierarchy-fine",
+      "ai/attempts/A-0244-phase4-p4.3-promotion.md@phase4/p4.4-gpu-resident-hierarchy-fine",
+      "ai/attempts/A-0245-phase4-p4.4-gpu-resident-hierarchy-fine-contract.md@phase4/p4.4-gpu-resident-hierarchy-fine",
+      "ai/attempts/A-0246-phase4-p4.4-dev4-implementation-handoff.md@phase4/p4.4-gpu-resident-hierarchy-fine",
+      "ai/attempts/A-0247-phase4-p4.4-dev4-source-head-ci-package-handoff.md@phase4/p4.4-gpu-resident-hierarchy-fine",
+      "pull/79"
     ]
   },
   "coverage_manifest": [
@@ -35,8 +36,8 @@
     },
     {
       "id": "F11",
-      "text": "P4.3 runtime and visual gates are CLOSED on 0.4.0-phase4-dev3.1. A-0243 reproduced non-zero safe-extra coarse/lineage activity while missing/unexpected/duplicate fine identities and hierarchical false culls remained zero; explicit human Visual PASS and clean inherited gates were recorded.",
-      "source_ref": "ai/attempts/A-0243-phase4-p4.3-dev3.1-runtime-pass.md"
+      "text": "P4.3 is COMPLETE. PR #78 merged as 4ba408becfcde42456b9d8468106a3e0d27de049 after Build #854 and Context Governor #75; merged main passed Build #855, Context Governor #76, and Repository Hygiene #38.",
+      "source_ref": "ai/attempts/A-0244-phase4-p4.3-promotion.md"
     },
     {
       "id": "F2",
@@ -62,6 +63,11 @@
       "id": "F6",
       "text": "The Modrinth mirror remains proven and current; dev2.2 Preview run #14 mirrored successfully as Modrinth version yDBeoQge while GitHub remained package authority.",
       "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
+    },
+    {
+      "id": "F12",
+      "text": "P4.4 is ACTIVE on draft PR #79 as 0.4.0-phase4-dev4. A-0245 freezes GPU-resident sampled coarse-to-fine visibility; source head ff6dc56e4635df58cc4204a4ccc78f8cd1b8b53a passed Build #856 and produced runtime SHA-256 4422a77c4a8637b0abac27dcbf76f72d987cbb96cc1d77987f104f6de16a919b.",
+      "source_ref": "ai/attempts/A-0247-phase4-p4.4-dev4-source-head-ci-package-handoff.md"
     }
   ],
   "decisions": [
@@ -94,25 +100,25 @@
   "open_obligations": [
     {
       "id": "O1",
-      "text": "Freeze PR #78 final continuity-synchronized head, require hosted Build + Context Governor success on that exact head, merge if green, validate merged main, record P4.3 COMPLETE, then freeze the next Phase 4 milestone.",
-      "source_ref": "ai/attempts/A-0243-phase4-p4.3-dev3.1-runtime-pass.md"
+      "text": "Freeze PR #79 final continuity-synchronized head, require hosted Build + Context Governor, verify final package byte identity, publish immutable dev4 Preview + Modrinth mirror, then execute A-0245 RD32+ runtime + human visual gates.",
+      "source_ref": "ai/attempts/A-0247-phase4-p4.4-dev4-source-head-ci-package-handoff.md"
     }
   ],
   "exact_identifiers": [
     {
       "id": "I1",
-      "text": "Active branch phase4/p4.3-hierarchy-fed-fine-visibility; draft PR #78 is the P4.3 promotion vehicle; version 0.4.0-phase4-dev3.1.",
+      "text": "Active branch phase4/p4.4-gpu-resident-hierarchy-fine; active draft PR #79; version 0.4.0-phase4-dev4.",
       "source_ref": "ai/CURRENT_STATE.md"
     },
     {
-      "id": "I7",
-      "text": "P4.2 promoted merge is 3b50f1e0fea11ae65c3e61689db20f03c8dd4766; post-merge Build #841, Context Governor #63, and Repository Hygiene #36 all succeeded.",
-      "source_ref": "ai/attempts/A-0237-phase4-p4.2-promotion.md"
+      "id": "I11",
+      "text": "P4.3 promoted merge is 4ba408becfcde42456b9d8468106a3e0d27de049; post-merge Build #855 run 37079294608, Context Governor #76 run 37079294323, and Repository Hygiene #38 run 37079294312 all succeeded.",
+      "source_ref": "ai/attempts/A-0244-phase4-p4.3-promotion.md"
     },
     {
-      "id": "I10",
-      "text": "Dev3.1 exact runtime source 3b38e63af1153d8ede4955da6cfc087cda5de423 passed Build #850 and Context Governor #71; runtime SHA-256 076dfdadea03d51fd46ea6804f492f73691c493a4c02cf8a3c84d8404f4ff6ef; Preview #16 and Modrinth ImfQC3L5 published successfully.",
-      "source_ref": "ai/attempts/A-0243-phase4-p4.3-dev3.1-runtime-pass.md"
+      "id": "I12",
+      "text": "P4.4 dev4 source head ff6dc56e4635df58cc4204a4ccc78f8cd1b8b53a passed Build #856 run 37079835614; artifact 11258123493; runtime SHA-256 4422a77c4a8637b0abac27dcbf76f72d987cbb96cc1d77987f104f6de16a919b.",
+      "source_ref": "ai/attempts/A-0247-phase4-p4.4-dev4-source-head-ci-package-handoff.md"
     }
   ],
   "security_boundaries": [
@@ -272,10 +278,22 @@
       "locator": "Load for exact PR/CI/merge/post-merge proof and promoted ownership boundaries."
     },
     {
-      "id": "p4-p4.3-final-runtime",
-      "topic": "Final P4.3 dev3.1 safe-extra-lineage runtime PASS and promotion authorization",
-      "source_ref": "ai/attempts/A-0243-phase4-p4.3-dev3.1-runtime-pass.md@phase4/p4.3-hierarchy-fed-fine-visibility",
-      "locator": "Load before P4.3 promotion. All frozen runtime/visual gates are closed; remaining work is exact-head CI, merge, and post-merge validation."
+      "id": "p4-p4.3-promotion-closure",
+      "topic": "Final P4.3 promotion and post-merge validation",
+      "source_ref": "ai/attempts/A-0244-phase4-p4.3-promotion.md@phase4/p4.4-gpu-resident-hierarchy-fine",
+      "locator": "Load for exact P4.3 merge/post-merge proof and ownership boundary inherited by P4.4."
+    },
+    {
+      "id": "p4-p4.4-contract",
+      "topic": "Frozen P4.4 GPU-resident hierarchy-fed fine visibility contract",
+      "source_ref": "ai/attempts/A-0245-phase4-p4.4-gpu-resident-hierarchy-fine-contract.md@phase4/p4.4-gpu-resident-hierarchy-fine",
+      "locator": "Load entirely before changing or evaluating dev4 behavior/gates."
+    },
+    {
+      "id": "p4-p4.4-source-package",
+      "topic": "P4.4 dev4 implementation and source-head Build #856 package authority",
+      "source_ref": "ai/attempts/A-0247-phase4-p4.4-dev4-source-head-ci-package-handoff.md@phase4/p4.4-gpu-resident-hierarchy-fine",
+      "locator": "Load for exact dev4 source head, artifact ID/hashes and final-head publication handoff."
     }
   ],
   "discarded_ids": [
@@ -301,5 +319,5 @@
     "modrinth-secret-project-id-validation",
     "modrinth-first-success"
   ],
-  "next_action": "Freeze PR #78 final head after continuity sync, require hosted Build + Context Governor, merge if green, validate merged main, record P4.3 COMPLETE, then freeze the next Phase 4 milestone."
+  "next_action": "Validate the final continuity-synchronized PR #79 head with hosted Build + Context Governor, verify JAR byte identity, publish immutable dev4 Preview, then run A-0245 RD32+ GPU-resident runtime + Visual PASS gates."
 }

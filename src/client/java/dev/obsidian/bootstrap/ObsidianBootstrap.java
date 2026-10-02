@@ -72,7 +72,7 @@ public final class ObsidianBootstrap {
         } catch (RuntimeException e) {
             largeSceneVisibility = null;
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 4 P4.3 hierarchy-fed visibility initialization failed; P3.10 production rendering remains active.", e);
+                    "Phase 4 P4.4 GPU-resident hierarchy-fine initialization failed; P3.10 production rendering remains active.", e);
         }
         LOG.log(System.Logger.Level.INFO, "Attached to Vulkan backend: {0}", caps.backend());
         LOG.log(System.Logger.Level.INFO, "GPU: {0} | {1} ({2})", caps.vendor(), caps.deviceName(), caps.deviceType());
@@ -85,7 +85,7 @@ public final class ObsidianBootstrap {
             LOG.log(System.Logger.Level.DEBUG, "Backend description: {0}", caps.backendDescription());
         }
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 4 P4.3 dev3.1 shadow hierarchy-fed fine visibility armed. Promoted P4.2 supplies the bounded persistent chunk-column hierarchy and conservative coarse GPU visibility, P4.1 remains the flat fine section-level shadow control, and P3.10 dev24.2 remains the only production SOLID/CUTOUT terrain draw owner. P4.3 samples completed coarse column results, enumerates only exact persistent membership from GPU-visible columns, reuses the proven fine section GPU classifier, and validates the final visible-section identity set against the CPU fine oracle. There is no production draw-list takeover, native graphics expansion, command compaction, indirect-count consumption, temporal visibility, Hi-Z, LOD, translucency change, mesher change or partial remeshing.");
+                "Obsidian Phase 4 P4.4 dev4 shadow GPU-resident hierarchy-fed fine visibility armed. Promoted P4.3 remains the sampled CPU/readback control, P4.2 supplies the persistent column hierarchy/coarse GPU visibility, P4.1 remains the flat fine section control, and P3.10 dev24.2 remains the only production SOLID/CUTOUT terrain draw owner. P4.4 uploads a snapshot-aligned GPU section table only when hierarchy membership changes, feeds coarse GPU snapshot indices directly into fine compute in the same sampled submission, and performs CPU validation only after final completion. There is no intermediate CPU readback/candidate build, production draw-list takeover, native graphics expansion, command compaction, indirect-count consumption, temporal visibility, Hi-Z, LOD, translucency change, mesher change or partial remeshing.");
     }
 
     public static void onFrameStart() {
