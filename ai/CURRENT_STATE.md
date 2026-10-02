@@ -235,103 +235,96 @@ Promotion closure:
 
 P4.2 promoted a bounded persistent chunk-column hierarchy and conservative coarse GPU visibility while remaining shadow-only. P4.1 remains the fine section-level shadow control and P3.10 remains production SOLID/CUTOUT terrain owner.
 
-## Phase 4 P4.3 — ACTIVE / DEV3.1 CORRECTION IMPLEMENTED
+## Phase 4 P4.3 — RUNTIME COMPLETE / PROMOTION IN PROGRESS
 
-Frozen base contract:
+Frozen contracts:
 
-`ai/attempts/A-0238-phase4-p4.3-hierarchy-fed-fine-visibility-contract.md`
+- `ai/attempts/A-0238-phase4-p4.3-hierarchy-fed-fine-visibility-contract.md`;
+- `ai/attempts/A-0241-phase4-p4.3-dev3.1-safe-extra-lineage-contract.md`.
 
-Runtime defect evidence:
+Final corrected runtime:
 
-`ai/attempts/A-0240-phase4-p4.3-dev3-runtime-safe-extra-oracle-defect.md`
+`ai/attempts/A-0243-phase4-p4.3-dev3.1-runtime-pass.md`
 
-Frozen correction:
-
-`ai/attempts/A-0241-phase4-p4.3-dev3.1-safe-extra-lineage-contract.md`
-
-Implementation handoff:
-
-`ai/attempts/A-0242-phase4-p4.3-dev3.1-safe-extra-lineage-implementation.md`
-
-Current target:
+Canonical version:
 
 `0.4.0-phase4-dev3.1`
 
 Active branch / PR:
 
 - `phase4/p4.3-hierarchy-fed-fine-visibility`;
-- draft PR #78.
+- draft PR #78 pending exact promotion-head CI.
 
-### Dev3 publication + runtime
+### Canonical dev3.1 package/publication authority
 
-The original dev3 package was CI-green and published:
+Exact validated source:
 
-- exact source `a61f70f895eb0416caf83605f3f12eacaad43811`;
-- Build #844 / run `37077177385` — SUCCESS;
-- Context Governor #65 / run `37077177190` — SUCCESS;
-- runtime JAR SHA-256 `d0fd48734be5ad41c9981909a6a3070612ab7ac9565bed76ca1f0c55fd3c95b9`;
-- GitHub Preview `v0.4.0-phase4-dev3` / release `402218950`;
-- Publish Preview #15 / run `37077276604` — SUCCESS;
-- Modrinth mirror job `111070060430` — SUCCESS.
+`3b38e63af1153d8ede4955da6cfc087cda5de423`
 
-The tester supplied explicit human **Visual PASS** at render distance 32.
+Hosted validation:
 
-P4.3 demonstrated substantial real candidate reduction: representative 35,273-section scenes produced roughly 9k-14k hierarchy-fed fine candidates while exact fine-visible counts matched across hundreds of samples.
+- Build #850 / run `37078070257` — SUCCESS;
+- Context Governor #71 / run `37078070123` — SUCCESS.
 
-### Dev3 validator defect
+Runtime JAR:
 
-A-0240 records two boundary cases where:
+- `Obsidian-0.4.0-phase4-dev3.1.jar`;
+- size **529,595 bytes**;
+- SHA-256 **`076dfdadea03d51fd46ea6804f492f73691c493a4c02cf8a3c84d8404f4ff6ef`**.
 
-- GPU coarse-visible columns exceeded CPU coarse-visible columns by exactly 1;
-- fine GPU output exceeded the CPU-coarse-derived baseline by exactly 1;
-- missing fine = 0;
-- duplicate fine = 0;
-- GPU hierarchical fine false culls = 0.
+Publication:
 
-The defect is in the validation oracle, not production rendering.
+- Publish Preview #16 / run `37078371213` — SUCCESS;
+- GitHub release `v0.4.0-phase4-dev3.1` / release ID `402223904`;
+- exact release target `3b38e63af1153d8ede4955da6cfc087cda5de423`;
+- Modrinth mirror job `111073415030` — SUCCESS;
+- Modrinth version ID `ImfQC3L5`.
 
-P4.2's CPU coarse oracle includes Minecraft `Frustum.isVisible(...)`, while P4.2 GPU and P4.1/P4.3 fine visibility use extracted planes + conservative epsilon. A GPU-only safe coarse column can therefore contain a section that is fine-visible under the proven plane policy.
+### Final P4.3 runtime closure
 
-Dev3 incorrectly treated that safe lineage identity as fatal `unexpectedFine`.
+A-0243 closes the corrected dev3.1 runtime and visual gates at render distance 32.
 
-### Dev3.1 correction
+Final P4.3 evidence:
 
-Dev3.1 keeps the original CPU-coarse baseline but validates the GPU fine output against the CPU fine oracle over the **actual GPU-coarse candidate set**.
+- samples started/completed: **2,747 / 2,671**;
+- snapshot lookup failures: **0**;
+- missing fine identities: **0**;
+- unexpected fine identities: **0**;
+- duplicate fine identities: **0**;
+- `gpuHierarchicalFineFalseCullCount=0`;
+- cumulative safe-extra coarse columns: **3**;
+- cumulative safe-extra lineage fine identities: **1**;
+- readback pending high-water: 1;
+- `hardFailure=false`;
+- `abandonedForDeviceShutdown=false`;
+- `cameraOnlyFullSectionScan=false`;
+- production/native ownership unchanged;
+- command compaction / temporal visibility / Hi-Z still disabled.
 
-Telemetry now separates:
+This reproduces the exact dev3 boundary condition non-zero while proving the dev3.1 lineage accounting fix: conservative GPU-only coarse lineage is tracked separately and no true fine mismatch is recorded.
 
-- baseline fine-visible identities;
-- safe-extra coarse columns;
-- safe-extra coarse lineage fine identities;
-- candidate-set expected fine identities;
-- true missing/unexpected/duplicate fine identities.
+The tester supplied explicit human **Visual PASS**.
 
-Required invariant:
+Inherited final gates remain clean:
 
-`candidateSetExpectedFine == baselineFineVisible + safeExtraLineageFine`
+- P4.2: 7,799 completed coarse samples, hierarchy audit failures 0, missing columns 0, duplicate columns 0, GPU false culls 0, hard failure false;
+- P4.1: 498 / 498 exact fine samples, missing/unexpected/duplicate/false-cull all 0, hard failure false;
+- P3.10 suppression/execution accounting coherent;
+- P3.5/P3.7 exact;
+- workers/staging/arena/resources clean;
+- normal process exit code 0.
 
-Real fine mismatches remain fatal.
+### Current handoff — promote P4.3
 
-Unchanged:
+Every frozen A-0238/A-0241 runtime and visual gate is closed.
 
-- 8,192 section probes/frame;
-- zero camera-only full Java section scan;
-- zero-timeout normal readback;
-- P4.2/P4.1 behavior;
-- production draw ownership;
-- native graphics ownership;
-- command compaction;
-- temporal visibility;
-- Hi-Z;
-- indirect-count graphics.
+Next actions:
 
-### Current handoff
+1. freeze PR #78's final continuity-synchronized promotion head;
+2. require hosted Build + Context Governor on that exact head;
+3. mark PR #78 ready and merge only if green;
+4. validate merged `main` with Build + Context Governor + Repository Hygiene;
+5. record P4.3 COMPLETE;
+6. freeze the next Phase 4 milestone separately.
 
-1. require exact-head hosted Build + Context Governor for dev3.1;
-2. if green, record package authority;
-3. publish immutable `0.4.0-phase4-dev3.1` Preview;
-4. run a short render-distance-32+ retest aimed at reproducing safe-extra coarse lineage;
-5. require zero true missing/unexpected/duplicate fine identities and `gpuHierarchicalFineFalseCullCount=0`;
-6. preserve the already-observed human Visual PASS unless a new visual regression appears.
-
-PR #78 remains **DRAFT / DO NOT MERGE** until corrected dev3.1 runtime closure.
+P4.3 remains shadow-only through promotion. P3.10 remains production SOLID/CUTOUT terrain owner. P4.2 remains the coarse hierarchy control and P4.1 remains the flat fine control. Production command compaction, temporal visibility, Hi-Z, indirect-count graphics, region hierarchy and LOD remain outside P4.3.
