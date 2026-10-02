@@ -72,7 +72,7 @@ public final class ObsidianBootstrap {
         } catch (RuntimeException e) {
             largeSceneVisibility = null;
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 4 P4.2 hierarchy/visibility initialization failed; P3.10 production rendering remains active.", e);
+                    "Phase 4 P4.3 hierarchy-fed visibility initialization failed; P3.10 production rendering remains active.", e);
         }
         LOG.log(System.Logger.Level.INFO, "Attached to Vulkan backend: {0}", caps.backend());
         LOG.log(System.Logger.Level.INFO, "GPU: {0} | {1} ({2})", caps.vendor(), caps.deviceName(), caps.deviceType());
@@ -85,7 +85,7 @@ public final class ObsidianBootstrap {
             LOG.log(System.Logger.Level.DEBUG, "Backend description: {0}", caps.backendDescription());
         }
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 4 P4.2 dev2 shadow column hierarchy + coarse GPU visibility armed. Promoted P4.1 remains the fine section-level shadow control and P3.10 dev24.2 remains the only production SOLID/CUTOUT terrain draw owner. P4.2 derives a bounded persistent chunk-column hierarchy from the same exact section lifecycle truth, validates hierarchy membership/min-max/count invariants, and classifies conservative camera-relative column AABBs on the GPU against an independent Minecraft-frustum CPU oracle. There is no production draw-list takeover, native graphics expansion, command compaction, indirect-count consumption, temporal visibility, Hi-Z, LOD, translucency change, mesher change or partial remeshing.");
+                "Obsidian Phase 4 P4.3 dev3 shadow hierarchy-fed fine visibility armed. Promoted P4.2 supplies the bounded persistent chunk-column hierarchy and conservative coarse GPU visibility, P4.1 remains the flat fine section-level shadow control, and P3.10 dev24.2 remains the only production SOLID/CUTOUT terrain draw owner. P4.3 samples completed coarse column results, enumerates only exact persistent membership from GPU-visible columns, reuses the proven fine section GPU classifier, and validates the final visible-section identity set against the CPU fine oracle. There is no production draw-list takeover, native graphics expansion, command compaction, indirect-count consumption, temporal visibility, Hi-Z, LOD, translucency change, mesher change or partial remeshing.");
     }
 
     public static void onFrameStart() {
