@@ -1,20 +1,17 @@
 {
   "schema_version": 1,
-  "active_goal": "Promote the fully validated Phase 4 P4.2 / 0.4.0-phase4-dev2.2 implementation through synchronized PR #77: exact final-head hosted CI, merge if green, then post-merge validation and final promotion continuity.",
-  "scope_boundary": "Active engineering scope is P4.2 column hierarchy/coarse GPU visibility plus required continuity/release maintenance. Do not add production GPU-driven draw ownership, real terrain command compaction, native graphics expansion, temporal occlusion, Hi-Z, indirect-count consumption, P3.9 partial remeshing, or unrelated renderer scope.",
+  "active_goal": "Validate and package Phase 4 P4.3 / 0.4.0-phase4-dev3 hierarchy-fed fine section visibility on draft PR #78, then run the frozen 32+ runtime/visual contract without changing production draw ownership.",
+  "scope_boundary": "Active engineering scope is P4.3 sampled hierarchy-fed fine section visibility plus required continuity/release maintenance. Do not add production GPU-driven draw ownership, production command compaction, native graphics expansion, temporal visibility, Hi-Z, indirect-count graphics, region hierarchy, LOD, P3.9 partial remeshing, or unrelated renderer scope.",
   "source_snapshot": {
-    "created_at": "2026-10-03T00:56:00+02:00",
+    "created_at": "2026-10-03T01:20:00+02:00",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
-      "ai/CURRENT_STATE.md@promotion/p4.2-synchronized",
-      "ai/MASTER_ROADMAP.md@promotion/p4.2-synchronized",
-      "ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md@promotion/p4.2-synchronized",
-      "ai/attempts/A-0232-recenter-liveness-contract.md@promotion/p4.2-synchronized",
-      "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md@promotion/p4.2-synchronized",
-      "ai/attempts/A-0234-phase4-p4.2-dev2.2-runtime-liveness-pass.md@promotion/p4.2-synchronized",
-      "ai/attempts/A-0235-phase4-p4.2-dev2.2-32-scale-runtime-pass.md@promotion/p4.2-synchronized",
-      "ai/attempts/A-0236-phase4-p4.2-synchronized-promotion-head.md@promotion/p4.2-synchronized",
-      "pull/77"
+      "ai/CURRENT_STATE.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "ai/MASTER_ROADMAP.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "ai/attempts/A-0237-phase4-p4.2-promotion.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "ai/attempts/A-0238-phase4-p4.3-hierarchy-fed-fine-visibility-contract.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "ai/attempts/A-0239-phase4-p4.3-dev3-implementation-handoff.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "pull/78"
     ]
   },
   "coverage_manifest": [
@@ -33,13 +30,13 @@
     },
     {
       "id": "F10",
-      "text": "All frozen P4.2 runtime and visual gates are closed on 0.4.0-phase4-dev2.2. A-0234 closed recenter liveness + human Visual PASS; A-0235 closed the corrected-package render-distance-32 scale gate.",
-      "source_ref": "ai/attempts/A-0235-phase4-p4.2-dev2.2-32-scale-runtime-pass.md"
+      "text": "P4.2 is COMPLETE. PR #77 merged as 3b50f1e0fea11ae65c3e61689db20f03c8dd4766 after exact-head Build #840 and Context Governor #62; merged main passed Build #841, Context Governor #63, and Repository Hygiene #36.",
+      "source_ref": "ai/attempts/A-0237-phase4-p4.2-promotion.md"
     },
     {
       "id": "F11",
-      "text": "The canonical public tester package is 0.4.0-phase4-dev2.2 from exact source c30c8686e65f7310ab047d88fadf2fe3b42d7415. Build #833 and Context Governor #57 passed; runtime JAR SHA-256 is 571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37. GitHub Preview #14 and Modrinth version yDBeoQge published successfully.",
-      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
+      "text": "P4.3 is ACTIVE on draft PR #78 as 0.4.0-phase4-dev3. A-0238 freezes sampled hierarchy-fed fine visibility; A-0239 records the implementation. P4.3 remains shadow-only and reuses completed conservative P4.2 samples plus the proven P4.1 fine classifier.",
+      "source_ref": "ai/attempts/A-0239-phase4-p4.3-dev3-implementation-handoff.md"
     },
     {
       "id": "F2",
@@ -48,7 +45,7 @@
     },
     {
       "id": "F3",
-      "text": "The public tester channel for development binaries is GitHub Prerelease / Preview; v0.4.0-phase4-dev2.2 is the current published Preview.",
+      "text": "The current public tester package remains GitHub Preview v0.4.0-phase4-dev2.2 until dev3 exact-head CI and package publication complete.",
       "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
     },
     {
@@ -97,35 +94,25 @@
   "open_obligations": [
     {
       "id": "O1",
-      "text": "Freeze the final synchronized PR #77 head, require hosted Build + Context Governor success (and Repository Hygiene if triggered/required), merge if green, then validate merged main and record final P4.2 promotion.",
-      "source_ref": "ai/attempts/A-0236-phase4-p4.2-synchronized-promotion-head.md"
+      "text": "Validate draft PR #78 exact head with hosted Build + Context Governor. If green, record dev3 artifact authority, publish immutable Preview, then execute A-0238 runtime + human visual gates at render distance 32+.",
+      "source_ref": "ai/attempts/A-0239-phase4-p4.3-dev3-implementation-handoff.md"
     }
   ],
   "exact_identifiers": [
     {
       "id": "I1",
-      "text": "Promotion branch promotion/p4.2-synchronized; non-draft promotion PR #77; obsolete draft PR #75 closed as superseded.",
-      "source_ref": "ai/attempts/A-0236-phase4-p4.2-synchronized-promotion-head.md"
+      "text": "Active branch phase4/p4.3-hierarchy-fed-fine-visibility; active draft PR #78; version target 0.4.0-phase4-dev3.",
+      "source_ref": "ai/CURRENT_STATE.md#Phase-4-P43-ACTIVE-DEV3-IMPLEMENTED-HOSTED-CI-REQUIRED"
     },
     {
       "id": "I7",
-      "text": "Dev2.2 exact tested source c30c8686e65f7310ab047d88fadf2fe3b42d7415 passed Build #833 run 36634634353 and Context Governor #57 run 36634634108; runtime SHA-256 571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37.",
-      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
+      "text": "P4.2 promoted merge is 3b50f1e0fea11ae65c3e61689db20f03c8dd4766; post-merge Build #841 run 37076424763, Context Governor #63 run 37076424599, and Repository Hygiene #36 run 37076424520 all succeeded.",
+      "source_ref": "ai/attempts/A-0237-phase4-p4.2-promotion.md"
     },
     {
       "id": "I8",
-      "text": "Preview v0.4.0-phase4-dev2.2 release ID 399552665 and Modrinth version yDBeoQge are published from exact tested source c30c8686e65f7310ab047d88fadf2fe3b42d7415.",
+      "text": "Canonical dev2.2 public runtime remains SHA-256 571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37 from source c30c8686e65f7310ab047d88fadf2fe3b42d7415; GitHub Preview v0.4.0-phase4-dev2.2 and Modrinth yDBeoQge are published.",
       "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
-    },
-    {
-      "id": "I9",
-      "text": "Current-main synchronization base 739ed7f734775cdbeafb63969b146951d8897a56; source-bearing synchronized commit e88dc5db19cc852069993989b13bbe80ff939d26.",
-      "source_ref": "ai/attempts/A-0236-phase4-p4.2-synchronized-promotion-head.md"
-    },
-    {
-      "id": "I6",
-      "text": "P4.1 promoted merge is 59d130e17000b07e6ed8bbe226cb2f50eb795c74.",
-      "source_ref": "ai/attempts/A-0223-phase4-p4.1-promotion.md"
     }
   ],
   "security_boundaries": [
@@ -279,16 +266,22 @@
       "locator": "Load for exact successful workflow/job/version IDs and closing evidence."
     },
     {
-      "id": "p4-p4.2-final-runtime",
-      "topic": "Final corrected-package P4.2 render-distance-32 runtime PASS",
-      "source_ref": "ai/attempts/A-0235-phase4-p4.2-dev2.2-32-scale-runtime-pass.md@promotion/p4.2-synchronized",
-      "locator": "Load for exact final scale/correctness/lifetime evidence. All frozen runtime/visual gates are closed."
+      "id": "p4-p4.2-promotion-closure",
+      "topic": "Final P4.2 promotion and post-merge validation",
+      "source_ref": "ai/attempts/A-0237-phase4-p4.2-promotion.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "locator": "Load for exact PR/CI/merge/post-merge proof and promoted ownership boundaries."
     },
     {
-      "id": "p4-p4.2-promotion",
-      "topic": "P4.2 synchronized promotion candidate and exact tested blob audit",
-      "source_ref": "ai/attempts/A-0236-phase4-p4.2-synchronized-promotion-head.md@promotion/p4.2-synchronized",
-      "locator": "Load before merging PR #77. Exact-head hosted CI is the remaining promotion obligation."
+      "id": "p4-p4.3-contract",
+      "topic": "Frozen P4.3 hierarchy-fed fine visibility contract",
+      "source_ref": "ai/attempts/A-0238-phase4-p4.3-hierarchy-fed-fine-visibility-contract.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "locator": "Load entirely before changing or evaluating dev3 behavior/gates."
+    },
+    {
+      "id": "p4-p4.3-implementation",
+      "topic": "P4.3 dev3 implementation handoff",
+      "source_ref": "ai/attempts/A-0239-phase4-p4.3-dev3-implementation-handoff.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "locator": "Load for exact source design, telemetry, scope boundary, and next CI/package step."
     }
   ],
   "discarded_ids": [
@@ -314,5 +307,5 @@
     "modrinth-secret-project-id-validation",
     "modrinth-first-success"
   ],
-  "next_action": "Validate the final PR #77 head with hosted Build + Context Governor, merge if green, then validate merged main and record P4.2 COMPLETE before freezing the next Phase 4 slice."
+  "next_action": "Freeze PR #78 exact head after continuity sync, require hosted Build + Context Governor, fix only compile/contract defects, then record and publish the immutable dev3 tester package before runtime validation."
 }
