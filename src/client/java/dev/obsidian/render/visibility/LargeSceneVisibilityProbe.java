@@ -51,6 +51,10 @@ public final class LargeSceneVisibilityProbe implements AutoCloseable {
 
     private ClientLevel configuredLevel;
     private PersistentSectionScene scene;
+    private PersistentColumnHierarchy columnHierarchy;
+    private LargeSceneColumnHierarchyProbe columnProbe;
+    private boolean columnHierarchyCapacityDisabled;
+    private boolean columnHierarchyHardFailure;
     private VulkanLargeSceneVisibilityProbe gpu;
     private GpuBuffer uploadBuffer;
     private GpuBufferSlice.MappedView uploadView;
@@ -183,6 +187,10 @@ public final class LargeSceneVisibilityProbe implements AutoCloseable {
             sceneChangedThisFrame |= processFullResync(level);
         }
 
+        if (columnProbe != null) {
+            columnProbe.afterWorldRender(renderer, frameIndex);
+        }
+
         if (scene.serial() != uploadedSceneSerial) {
             buildCandidateSnapshotBudget();
             sceneChangedThisFrame = true;
@@ -219,7 +227,9 @@ public final class LargeSceneVisibilityProbe implements AutoCloseable {
     }
 
     private void configure(ClientLevel level, int renderDistance) {
+        closeColumnHierarchy();
         closeGpuResources();
+        columnHierarchyCapacityDisabled = false;
         configuredLevel = level;
         effectiveRenderDistance = renderDistance;
         cacheRadius = Math.max(2, renderDistance) + 3; // exact ClientChunkCache.calculateStorageRange(26.2)
@@ -227,7 +237,8 @@ public final class LargeSceneVisibilityProbe implements AutoCloseable {
         maxSectionY = level.getMaxSectionY();
         sectionCount = level.getSectionsCount();
         long diameter = Math.addExact(Math.multiplyExact((long) cacheRadius, 2L), 1L);
-        long required = Math.multiplyExact(Math.multiplyExact(diameter, diameter), sectionCount);
+        long requiredColumns = Math.multiplyExact(diameter, diameter);
+        long required = Math.multiplyExact(requiredColumns, sectionCount);
         if (required <= 0L || required > PersistentSectionScene.HARD_MAX_SLOTS) {
             capacityDisabled = true;
             capacity = required > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) required;
@@ -240,6 +251,15 @@ public final class LargeSceneVisibilityProbe implements AutoCloseable {
         capacityDisabled = false;
         capacity = (int) required;
         scene = new PersistentSectionScene(capacity);
+        if (requiredColumns <= 0L || requiredColumns > PersistentColumnHierarchy.HARD_MAX_COLUMNS) {
+            columnHierarchyCapacityDisabled = true;
+            LOG.log(System.Logger.Level.WARNING,
+                    "P4.2 column hierarchy disabled by explicit hard bound: requiredColumns={0}, hardMaxColumns={1}. P4.1 fine visibility and P3.10 production rendering remain active.",
+                    requiredColumns, PersistentColumnHierarchy.HARD_MAX_COLUMNS);
+        } else {
+            columnHierarchy = new PersistentColumnHierarchy(
+                    (int) requiredColumns, minSectionY, maxSectionY);
+        }
         gpu = new VulkanLargeSceneVisibilityProbe(device, capacity);
         long candidateBytes = Math.multiplyExact((long) capacity, VulkanLargeSceneVisibilityProbe.CANDIDATE_BYTES);
         long outputBytes = Math.multiplyExact((long) capacity + 1L, Integer.BYTES);
@@ -255,6 +275,10 @@ public final class LargeSceneVisibilityProbe implements AutoCloseable {
                 outputBytes);
         readbackView = readbackBuffer.map(true, false);
         readbackData = readbackView.data();
+        if (columnHierarchy != null) {
+            columnProbe = new LargeSceneColumnHierarchyProbe(
+                    device, columnHierarchy, scene, effectiveRenderDistance);
+        }
         uploadedSceneSerial = 0L;
         uploadedCandidateCount = -1;
         snapshotBuilding = false;
@@ -278,6 +302,7 @@ public final class LargeSceneVisibilityProbe implements AutoCloseable {
                 case LargeSceneLifecycleEvents.WORLD_CHANGED -> {
                     worldChanges++;
                     scene.clear();
+                    if (columnHierarchy != null) columnHierarchy.clear();
                     startFullResync(minecraft);
                     changed = true;
                 }
@@ -289,21 +314,18 @@ public final class LargeSceneVisibilityProbe implements AutoCloseable {
                 }
                 case LargeSceneLifecycleEvents.CHUNK_UNLOADED -> {
                     chunkUnloads++;
-                    int removed = scene.removeColumn(
-                            LargeSceneLifecycleEvents.chunkX(key), LargeSceneLifecycleEvents.chunkZ(key),
-                            minSectionY, maxSectionY);
-                    changed |= removed > 0;
+                    changed |= removeColumnMembership(
+                            LargeSceneLifecycleEvents.chunkX(key), LargeSceneLifecycleEvents.chunkZ(key));
                 }
                 case LargeSceneLifecycleEvents.SECTION_BECAME_EMPTY -> {
                     sectionBecameEmpty++;
                     net.minecraft.core.SectionPos pos = net.minecraft.core.SectionPos.of(key);
-                    changed |= scene.remove(pos.x(), pos.y(), pos.z());
+                    changed |= removeSectionMembership(pos.x(), pos.y(), pos.z());
                 }
                 case LargeSceneLifecycleEvents.SECTION_BECAME_NONEMPTY -> {
                     sectionBecameNonempty++;
                     net.minecraft.core.SectionPos pos = net.minecraft.core.SectionPos.of(key);
-                    if (!scene.add(pos.x(), pos.y(), pos.z())) capacityFailure();
-                    else changed = true;
+                    changed |= addSectionMembership(pos.x(), pos.y(), pos.z());
                 }
                 default -> { }
             }
@@ -357,14 +379,75 @@ public final class LargeSceneVisibilityProbe implements AutoCloseable {
             LevelChunkSection section = sections[i];
             int y = chunk.getSectionYFromSectionIndex(i);
             if (section.hasOnlyAir()) {
-                changed |= scene.remove(chunkX, y, chunkZ);
+                changed |= removeSectionMembership(chunkX, y, chunkZ);
             } else {
-                int before = scene.liveCount();
-                if (!scene.add(chunkX, y, chunkZ)) capacityFailure();
-                changed |= scene.liveCount() != before;
+                changed |= addSectionMembership(chunkX, y, chunkZ);
             }
         }
         return changed;
+    }
+
+    private boolean addSectionMembership(int x, int y, int z) {
+        int before = scene.liveCount();
+        boolean hierarchyHadSection = false;
+        if (columnHierarchy != null) {
+            int columnSlot = columnHierarchy.columnSlot(x, z);
+            hierarchyHadSection = columnSlot >= 0 && columnHierarchy.containsSection(columnSlot, y);
+        }
+
+        if (!scene.add(x, y, z)) {
+            capacityFailure();
+            return false;
+        }
+        boolean sceneAdded = scene.liveCount() != before;
+
+        if (columnHierarchy != null) {
+            if (!columnHierarchy.addSection(x, y, z)) {
+                recordColumnMutationFailure("column capacity exhausted while adding section", x, y, z);
+            } else if (sceneAdded == hierarchyHadSection) {
+                recordColumnMutationFailure("section/column add membership disagreed", x, y, z);
+            }
+        }
+        return sceneAdded;
+    }
+
+    private boolean removeSectionMembership(int x, int y, int z) {
+        boolean sceneRemoved = scene.remove(x, y, z);
+        if (columnHierarchy != null) {
+            boolean hierarchyRemoved = columnHierarchy.removeSection(x, y, z);
+            if (sceneRemoved != hierarchyRemoved) {
+                recordColumnMutationFailure("section/column remove membership disagreed", x, y, z);
+            }
+        }
+        return sceneRemoved;
+    }
+
+    private boolean removeColumnMembership(int x, int z) {
+        int expectedColumnSections = 0;
+        if (columnHierarchy != null) {
+            int columnSlot = columnHierarchy.columnSlot(x, z);
+            if (columnSlot >= 0) expectedColumnSections = columnHierarchy.liveSectionCount(columnSlot);
+        }
+
+        int removed = scene.removeColumn(x, z, minSectionY, maxSectionY);
+        if (columnHierarchy != null) {
+            int hierarchyRemoved = columnHierarchy.removeColumn(x, z);
+            if (hierarchyRemoved != removed || expectedColumnSections != removed) {
+                columnHierarchy.recordMutationFailure();
+                LOG.log(System.Logger.Level.ERROR,
+                        "P4.2 column unload membership disagreed at ({0},{1}): sectionSceneRemoved={2}, hierarchyExpected={3}, hierarchyRemoved={4}.",
+                        x, z, removed, expectedColumnSections, hierarchyRemoved);
+            }
+        }
+        return removed > 0;
+    }
+
+    private void recordColumnMutationFailure(String reason, int x, int y, int z) {
+        if (columnHierarchy == null) return;
+        columnHierarchy.recordMutationFailure();
+        LOG.log(System.Logger.Level.ERROR,
+                "P4.2 hierarchy mutation failure: {0}; section=({1},{2},{3}).",
+                reason, x, y, z);
     }
 
     private void capacityFailure() {
@@ -627,6 +710,15 @@ public final class LargeSceneVisibilityProbe implements AutoCloseable {
         gpuVisibleIds.clear();
     }
 
+    private void closeColumnHierarchy() {
+        if (columnProbe != null) {
+            columnProbe.close();
+            columnHierarchyHardFailure |= columnProbe.hardFailure();
+            columnProbe = null;
+        }
+        columnHierarchy = null;
+    }
+
     private void closeGpuResources() {
         if (inFlightFence != null) return;
         if (readbackView != null) { readbackView.close(); readbackView = null; readbackData = null; }
@@ -639,13 +731,20 @@ public final class LargeSceneVisibilityProbe implements AutoCloseable {
         uploadedCandidateCount = -1;
     }
 
-    public boolean hardFailure() { return hardFailure; }
+    public boolean hardFailure() {
+        return hardFailure
+                || columnHierarchyHardFailure
+                || (columnProbe != null && columnProbe.hardFailure())
+                || columnHierarchyCapacityDisabled;
+    }
 
     @Override
     public void close() {
         RenderSystem.assertOnRenderThread();
         if (closed) return;
         closed = true;
+        closeColumnHierarchy();
+
         if (inFlightFence != null) {
             long remaining = SHUTDOWN_WAIT_NS;
             long start = System.nanoTime();

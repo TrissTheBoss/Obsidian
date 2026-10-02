@@ -72,7 +72,7 @@ public final class ObsidianBootstrap {
         } catch (RuntimeException e) {
             largeSceneVisibility = null;
             LOG.log(System.Logger.Level.ERROR,
-                    "Phase 4 P4.1 shadow visibility initialization failed; P3.10 production rendering remains active.", e);
+                    "Phase 4 P4.2 hierarchy/visibility initialization failed; P3.10 production rendering remains active.", e);
         }
         LOG.log(System.Logger.Level.INFO, "Attached to Vulkan backend: {0}", caps.backend());
         LOG.log(System.Logger.Level.INFO, "GPU: {0} | {1} ({2})", caps.vendor(), caps.deviceName(), caps.deviceType());
@@ -85,7 +85,7 @@ public final class ObsidianBootstrap {
             LOG.log(System.Logger.Level.DEBUG, "Backend description: {0}", caps.backendDescription());
         }
         LOG.log(System.Logger.Level.INFO,
-                "Obsidian Phase 4 P4.1 dev1 shadow large-scene visibility armed. The promoted P3.10 dev24.2 same-OPAQUE-pass SOLID/CUTOUT replacement remains the only production terrain draw owner. P4.1 maintains a bounded persistent non-empty-section metadata scene from exact Minecraft lifecycle signals, performs camera-relative GPU frustum classification/identity compaction through the existing narrow Vulkan compute seam, and validates sampled results against a budgeted independent CPU oracle. Camera-only frames do not rebuild the full Java scene; there is no native graphics expansion, indirect-count consumption, Hi-Z, LOD, translucency change, mesher change, partial remeshing or production draw-list takeover.");
+                "Obsidian Phase 4 P4.2 dev2 shadow column hierarchy + coarse GPU visibility armed. Promoted P4.1 remains the fine section-level shadow control and P3.10 dev24.2 remains the only production SOLID/CUTOUT terrain draw owner. P4.2 derives a bounded persistent chunk-column hierarchy from the same exact section lifecycle truth, validates hierarchy membership/min-max/count invariants, and classifies conservative camera-relative column AABBs on the GPU against an independent Minecraft-frustum CPU oracle. There is no production draw-list takeover, native graphics expansion, command compaction, indirect-count consumption, temporal visibility, Hi-Z, LOD, translucency change, mesher change or partial remeshing.");
     }
 
     public static void onFrameStart() {
