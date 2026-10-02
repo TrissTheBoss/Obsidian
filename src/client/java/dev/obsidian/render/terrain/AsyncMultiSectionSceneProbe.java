@@ -226,7 +226,7 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
 
         if (!centerKnown) {
             if (!tryBindCenterNearPlayer()) return;
-        } else if (state == State.LIVE && tryRecenterIfPlayerLeftWindow(frameSerial)) {
+        } else if (tryRecenterIfPlayerLeftWindow(frameSerial)) {
             return;
         }
 
@@ -284,18 +284,22 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
     }
 
     private boolean tryBindCenterNearPlayer() {
-        SectionSnapshot center = SectionSnapshot.tryCaptureNearPlayer();
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player == null) return false;
+        SectionPos playerSection = SectionPos.of(minecraft.player.blockPosition());
+        SectionSnapshot center = SectionSnapshot.tryCaptureSection(
+                playerSection.x(), playerSection.y(), playerSection.z());
         if (center == null) return false;
         centerKnown = true;
-        centerSectionX = center.sectionX();
-        centerSectionY = center.sectionY();
-        centerSectionZ = center.sectionZ();
+        centerSectionX = playerSection.x();
+        centerSectionY = playerSection.y();
+        centerSectionZ = playerSection.z();
         SectionLifecycleEvents.bindTrackedScene(true, centerSectionX, centerSectionY, centerSectionZ);
         buildEventSequence = SectionLifecycleEvents.latestSequence();
         configureRecordsForCenter();
         state = State.SCANNING;
         LOG.log(System.Logger.Level.INFO,
-                "Phase 3 P3.5 bound async 3x3 scene center {0}; immutable one-block halos participate in a conservative 5x3x5 section-dirty dependency domain and pure mesh construction uses {1} bounded worker(s).",
+                "Phase 3 P3.5 bound async 3x3 scene center {0}; exactPlayerSectionAnchor=true, immutable one-block halos participate in a conservative 5x3x5 section-dirty dependency domain and pure mesh construction uses {1} bounded worker(s).",
                 centerString(), workers.workerCount());
         return true;
     }
@@ -310,18 +314,28 @@ public final class AsyncMultiSectionSceneProbe implements AutoCloseable {
             return false;
         }
 
-        SectionSnapshot newCenter = SectionSnapshot.tryCaptureNearPlayer();
+        SectionSnapshot newCenter = SectionSnapshot.tryCaptureSection(
+                playerSection.x(), playerSection.y(), playerSection.z());
         if (newCenter == null) return false;
-        if (newCenter.sectionX() == centerSectionX
-                && newCenter.sectionY() == centerSectionY
-                && newCenter.sectionZ() == centerSectionZ) return false;
+        if (playerSection.x() == centerSectionX
+                && playerSection.y() == centerSectionY
+                && playerSection.z() == centerSectionZ) return false;
 
-        centerSectionX = newCenter.sectionX();
-        centerSectionY = newCenter.sectionY();
-        centerSectionZ = newCenter.sectionZ();
+        int previousX = centerSectionX;
+        int previousY = centerSectionY;
+        int previousZ = centerSectionZ;
+        centerSectionX = playerSection.x();
+        centerSectionY = playerSection.y();
+        centerSectionZ = playerSection.z();
         cameraRecenterEvents++;
         SectionLifecycleEvents.bindTrackedScene(true, centerSectionX, centerSectionY, centerSectionZ);
         invalidateScene(SectionLifecycleEvents.REASON_SCENE_RECENTER, frameSerial, true);
+        LOG.log(System.Logger.Level.INFO,
+                "Phase 3 P3.10 exact player-section recenter on frame {0}: previous=({1},{2},{3}), playerSection=({4},{5},{6}), center={7}.",
+                frameSerial,
+                previousX, previousY, previousZ,
+                playerSection.x(), playerSection.y(), playerSection.z(),
+                centerString());
         return true;
     }
 
