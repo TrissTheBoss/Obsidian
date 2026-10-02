@@ -42,6 +42,7 @@ public final class HierarchicalFineVisibilityProbe implements AutoCloseable {
     private final ByteBuffer readbackData;
     private final int[] gpuVisibleColumnSlots;
     private final IntOpenHashSet cpuCoarseVisibleIds = new IntOpenHashSet();
+    private final IntOpenHashSet baselineFineVisibleIds = new IntOpenHashSet();
     private final IntOpenHashSet expectedFineVisibleIds = new IntOpenHashSet();
     private final IntOpenHashSet gpuFineVisibleIds = new IntOpenHashSet();
 
@@ -59,6 +60,8 @@ public final class HierarchicalFineVisibilityProbe implements AutoCloseable {
     private int cpuFineVisible;
     private int cpuFineAmbiguous;
     private int cpuFineCulled;
+    private int sampleSafeExtraCoarseColumns;
+    private int sampleSafeExtraLineageFine;
     private int gpuFineVisibleCount = -1;
     private int gpuFineDuplicateIds;
     private int cameraSectionX;
@@ -82,12 +85,17 @@ public final class HierarchicalFineVisibilityProbe implements AutoCloseable {
     private long unexpectedFineIdentities;
     private long duplicateFineIdentities;
     private long gpuHierarchicalFineFalseCullCount;
+    private long safeExtraCoarseColumns;
+    private long safeExtraLineageFineIdentities;
     private long readbackPendingHighWater;
     private int lastGpuCoarseVisibleColumns;
     private int lastCpuCoarseVisibleColumns;
     private int lastFineCandidateCount;
     private int lastFlatCandidateCount;
     private int lastCandidateReductionPermille;
+    private int lastBaselineFineVisibleCount;
+    private int lastSafeExtraCoarseColumns;
+    private int lastSafeExtraLineageFine;
     private int lastFineVisibleCount;
     private boolean hardFailure;
     private boolean abandonedForDeviceShutdown;
@@ -176,10 +184,12 @@ public final class HierarchicalFineVisibilityProbe implements AutoCloseable {
 
         cpuCoarseVisibleIds.clear();
         cpuCoarseVisibleIds.addAll(cpuCoarseVisible);
+        baselineFineVisibleIds.clear();
         expectedFineVisibleIds.clear();
         gpuFineVisibleIds.clear();
 
         gpuVisibleColumnCount = 0;
+        sampleSafeExtraCoarseColumns = 0;
         IntIterator gpuColumns = gpuCoarseVisible.iterator();
         while (gpuColumns.hasNext()) {
             int identity = gpuColumns.nextInt();
@@ -192,6 +202,7 @@ public final class HierarchicalFineVisibilityProbe implements AutoCloseable {
                         identity, slot, snapshotLookupSerial, hierarchySerial);
                 return false;
             }
+            if (!cpuCoarseVisibleIds.contains(identity)) sampleSafeExtraCoarseColumns++;
             gpuVisibleColumnSlots[gpuVisibleColumnCount++] = slot;
         }
 
@@ -205,6 +216,7 @@ public final class HierarchicalFineVisibilityProbe implements AutoCloseable {
         cpuFineVisible = 0;
         cpuFineAmbiguous = 0;
         cpuFineCulled = 0;
+        sampleSafeExtraLineageFine = 0;
         gpuFineVisibleCount = -1;
         gpuFineDuplicateIds = 0;
         cameraSectionX = capturedCameraSectionX;
@@ -276,14 +288,18 @@ public final class HierarchicalFineVisibilityProbe implements AutoCloseable {
                 uploadData.putInt(byteOffset + 12, sections.identity(sectionSlot));
                 candidateCount++;
 
-                if (cpuCoarseVisible) {
-                    int classification = classifyCpu(chunkX, y, chunkZ);
-                    if (classification == -1) {
-                        cpuFineCulled++;
+                int classification = classifyCpu(chunkX, y, chunkZ);
+                if (classification == -1) {
+                    cpuFineCulled++;
+                } else {
+                    if (classification == 0) cpuFineAmbiguous++;
+                    else cpuFineVisible++;
+                    int sectionIdentity = sections.identity(sectionSlot);
+                    expectedFineVisibleIds.add(sectionIdentity);
+                    if (cpuCoarseVisible) {
+                        baselineFineVisibleIds.add(sectionIdentity);
                     } else {
-                        if (classification == 0) cpuFineAmbiguous++;
-                        else cpuFineVisible++;
-                        expectedFineVisibleIds.add(sections.identity(sectionSlot));
+                        sampleSafeExtraLineageFine++;
                     }
                 }
             }
@@ -425,11 +441,18 @@ public final class HierarchicalFineVisibilityProbe implements AutoCloseable {
             if (!expectedFineVisibleIds.contains(actual.nextInt())) unexpected++;
         }
 
+        int baselineExpected = baselineFineVisibleIds.size();
+        int candidateExpected = expectedFineVisibleIds.size();
+        boolean lineageAccountingCoherent =
+                candidateExpected == baselineExpected + sampleSafeExtraLineageFine;
+
         samplesCompleted++;
         missingFineIdentities += missing;
         unexpectedFineIdentities += unexpected;
         duplicateFineIdentities += gpuFineDuplicateIds;
         gpuHierarchicalFineFalseCullCount += missing;
+        safeExtraCoarseColumns += sampleSafeExtraCoarseColumns;
+        safeExtraLineageFineIdentities += sampleSafeExtraLineageFine;
 
         lastGpuCoarseVisibleColumns = gpuVisibleColumnCount;
         lastCpuCoarseVisibleColumns = cpuVisibleColumnCount;
@@ -438,26 +461,34 @@ public final class HierarchicalFineVisibilityProbe implements AutoCloseable {
         lastCandidateReductionPermille = flatCandidateCount == 0
                 ? 0
                 : (int) Math.min(1000L, (long) candidateCount * 1000L / flatCandidateCount);
+        lastBaselineFineVisibleCount = baselineExpected;
+        lastSafeExtraCoarseColumns = sampleSafeExtraCoarseColumns;
+        lastSafeExtraLineageFine = sampleSafeExtraLineageFine;
         lastFineVisibleCount = gpuFineVisibleCount;
 
-        boolean exact = missing == 0
+        boolean exact = lineageAccountingCoherent
+                && missing == 0
                 && unexpected == 0
                 && gpuFineDuplicateIds == 0
-                && gpuFineVisibleCount == expectedFineVisibleIds.size();
+                && gpuFineVisibleCount == candidateExpected;
 
         if (!exact) {
             hardFailure = true;
             LOG.log(System.Logger.Level.ERROR,
-                    "P4.3 hierarchy-fed fine visibility mismatch: gpuCoarseColumns={0}, cpuCoarseColumns={1}, flatSections={2}, fineCandidates={3}, cpuFineVisible={4}, cpuFineAmbiguous={5}, cpuFineCulled={6}, gpuFineVisible={7}, missing={8}, unexpected={9}, duplicate={10}.",
-                    gpuVisibleColumnCount, cpuVisibleColumnCount, flatCandidateCount,
-                    candidateCount, cpuFineVisible, cpuFineAmbiguous, cpuFineCulled,
-                    gpuFineVisibleCount, missing, unexpected, gpuFineDuplicateIds);
+                    "P4.3 hierarchy-fed fine visibility mismatch: gpuCoarseColumns={0}, cpuCoarseColumns={1}, safeExtraCoarseColumns={2}, flatSections={3}, fineCandidates={4}, baselineFineVisible={5}, safeExtraLineageFine={6}, candidateSetExpectedFine={7}, cpuFineVisible={8}, cpuFineAmbiguous={9}, cpuFineCulled={10}, gpuFineVisible={11}, missing={12}, unexpected={13}, duplicate={14}, lineageAccountingCoherent={15}.",
+                    gpuVisibleColumnCount, cpuVisibleColumnCount, sampleSafeExtraCoarseColumns,
+                    flatCandidateCount, candidateCount, baselineExpected,
+                    sampleSafeExtraLineageFine, candidateExpected, cpuFineVisible,
+                    cpuFineAmbiguous, cpuFineCulled, gpuFineVisibleCount,
+                    missing, unexpected, gpuFineDuplicateIds, lineageAccountingCoherent);
         } else if (samplesCompleted <= 3 || samplesCompleted % 10 == 0) {
             LOG.log(System.Logger.Level.INFO,
-                    "P4.3 hierarchy-fed fine visibility sample PASS: sample={0}, gpuCoarseColumns={1}, cpuCoarseColumns={2}, flatSections={3}, fineCandidates={4}, candidatePermille={5}, cpuFineVisible={6}, boundaryAmbiguous={7}, gpuFineVisible={8}, missing=0, unexpected=0, duplicate=0, gpuHierarchicalFineFalseCullCount=0, cameraOnlyFullSectionScan=false, productionDrawOwnershipChanged=false, nativeGraphicsExpansion=false.",
+                    "P4.3 hierarchy-fed fine visibility sample PASS: sample={0}, gpuCoarseColumns={1}, cpuCoarseColumns={2}, safeExtraCoarseColumns={3}, flatSections={4}, fineCandidates={5}, candidatePermille={6}, baselineFineVisible={7}, safeExtraLineageFine={8}, candidateSetExpectedFine={9}, gpuFineVisible={10}, boundaryAmbiguous={11}, missing=0, unexpected=0, duplicate=0, gpuHierarchicalFineFalseCullCount=0, lineageAccountingCoherent=true, cameraOnlyFullSectionScan=false, productionDrawOwnershipChanged=false, nativeGraphicsExpansion=false.",
                     samplesCompleted, gpuVisibleColumnCount, cpuVisibleColumnCount,
-                    flatCandidateCount, candidateCount, lastCandidateReductionPermille,
-                    expectedFineVisibleIds.size(), cpuFineAmbiguous, gpuFineVisibleCount);
+                    sampleSafeExtraCoarseColumns, flatCandidateCount, candidateCount,
+                    lastCandidateReductionPermille, baselineExpected,
+                    sampleSafeExtraLineageFine, candidateExpected,
+                    gpuFineVisibleCount, cpuFineAmbiguous);
         }
 
         sampleActive = false;
@@ -470,6 +501,7 @@ public final class HierarchicalFineVisibilityProbe implements AutoCloseable {
         buildActive = false;
         buildSectionY = NO_Y;
         cpuCoarseVisibleIds.clear();
+        baselineFineVisibleIds.clear();
         expectedFineVisibleIds.clear();
         gpuFineVisibleIds.clear();
     }
@@ -498,16 +530,19 @@ public final class HierarchicalFineVisibilityProbe implements AutoCloseable {
         }
 
         LOG.log(System.Logger.Level.INFO,
-                "P4.3 final hierarchy-fed fine visibility evidence: configured=true, samplesStarted={0}, samplesCompleted={1}, samplesAbortedStale={2}, samplesDeferred={3}, candidateBuildProbes={4}, candidateBuildFrames={5}, snapshotLookupFailures={6}, uploads={7}, uploadBytes={8}, missingFine={9}, unexpectedFine={10}, duplicateFine={11}, gpuHierarchicalFineFalseCullCount={12}, readbackPendingHighWater={13}, lastGpuCoarseVisibleColumns={14}, lastCpuCoarseVisibleColumns={15}, lastFineCandidateCount={16}, lastFlatFineCandidateCount={17}, lastCandidatePermille={18}, lastFineVisibleCount={19}, candidateBytes={20}, outputBytes={21}, hardFailure={22}, abandonedForDeviceShutdown={23}, cameraOnlyFullSectionScan=false, productionDrawOwnershipChanged=false, nativeGraphicsExpansion=false, commandCompactionEnabled=false, temporalVisibilityEnabled=false, hizEnabled=false.",
+                "P4.3 final hierarchy-fed fine visibility evidence: configured=true, samplesStarted={0}, samplesCompleted={1}, samplesAbortedStale={2}, samplesDeferred={3}, candidateBuildProbes={4}, candidateBuildFrames={5}, snapshotLookupFailures={6}, uploads={7}, uploadBytes={8}, missingFine={9}, unexpectedFine={10}, duplicateFine={11}, gpuHierarchicalFineFalseCullCount={12}, safeExtraCoarseColumns={13}, safeExtraLineageFine={14}, readbackPendingHighWater={15}, lastGpuCoarseVisibleColumns={16}, lastCpuCoarseVisibleColumns={17}, lastSafeExtraCoarseColumns={18}, lastFineCandidateCount={19}, lastFlatFineCandidateCount={20}, lastCandidatePermille={21}, lastBaselineFineVisible={22}, lastSafeExtraLineageFine={23}, lastFineVisibleCount={24}, candidateBytes={25}, outputBytes={26}, hardFailure={27}, abandonedForDeviceShutdown={28}, cameraOnlyFullSectionScan=false, productionDrawOwnershipChanged=false, nativeGraphicsExpansion=false, commandCompactionEnabled=false, temporalVisibilityEnabled=false, hizEnabled=false.",
                 samplesStarted, samplesCompleted, samplesAbortedStale, samplesDeferred,
                 candidateBuildProbes, candidateBuildFrames, snapshotLookupFailures,
                 uploads, uploadBytes, missingFineIdentities, unexpectedFineIdentities,
                 duplicateFineIdentities, gpuHierarchicalFineFalseCullCount,
+                safeExtraCoarseColumns, safeExtraLineageFineIdentities,
                 readbackPendingHighWater, lastGpuCoarseVisibleColumns,
-                lastCpuCoarseVisibleColumns, lastFineCandidateCount,
-                lastFlatCandidateCount, lastCandidateReductionPermille,
-                lastFineVisibleCount, gpu.candidateBytes(), gpu.outputBytes(),
-                hardFailure, abandonedForDeviceShutdown);
+                lastCpuCoarseVisibleColumns, lastSafeExtraCoarseColumns,
+                lastFineCandidateCount, lastFlatCandidateCount,
+                lastCandidateReductionPermille, lastBaselineFineVisibleCount,
+                lastSafeExtraLineageFine, lastFineVisibleCount,
+                gpu.candidateBytes(), gpu.outputBytes(), hardFailure,
+                abandonedForDeviceShutdown);
 
         if (!abandonedForDeviceShutdown) {
             readbackView.close();
