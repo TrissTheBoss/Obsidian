@@ -349,9 +349,9 @@ Promoted by A-0223 after the exact dev1 Preview passed the frozen A-0203 contrac
 
 Promoted by A-0237 after A-0234 closed exact-section recenter liveness + human Visual PASS, A-0235 closed the corrected-package render-distance-32 scale gate, synchronized PR #77 exact head passed Build #840 / Context Governor #62, and merged main passed Build #841 / Context Governor #63 / Repository Hygiene #36. P4.2 remains shadow-only: P4.1 stays the flat fine section control and P3.10 remains production terrain owner.
 
-#### P4.3 — Hierarchy-fed fine section visibility — ACTIVE
+#### P4.3 — Hierarchy-fed fine section visibility — VALIDATED / PROMOTION IN PROGRESS
 
-Frozen by A-0238 for `0.4.0-phase4-dev3`. Consume completed conservative P4.2 coarse samples, enumerate exact persistent sections only from GPU-visible columns, reuse the proven P4.1 fine GPU classifier, and require exact final fine-visible identity agreement against the CPU fine oracle. The purpose is to turn P4.2's estimated candidate reduction into measured actual fine candidate reduction before any production consumption.
+A-0243 closes P4.3 on corrected `0.4.0-phase4-dev3.1`: render-distance-32 runtime reproduced non-zero conservative safe-extra coarse/lineage activity while missing/unexpected/duplicate fine identities and hierarchical false culls remained zero, real hierarchy-fed candidate reduction remained substantial, inherited P4.2/P4.1/production/lifetime gates remained clean, and the tester supplied explicit human Visual PASS. Promotion proceeds through PR #78 after exact continuity-head CI.
 
 P4.3 remains sampled and shadow-only. It does not add production draw ownership, command compaction, temporal visibility, Hi-Z, native graphics expansion, indirect-count graphics, region hierarchy or LOD.
 
@@ -520,6 +520,15 @@ Newer durable decisions override stale roadmap text until synchronized. Always p
 ---
 
 ## 16. Roadmap revision log
+
+### 2026-10-03 — P4.3 validation closure
+
+- dev3 proved real hierarchy-fed fine candidate reduction but exposed an oracle-only safe-extra lineage accounting defect;
+- A-0241 froze the dev3.1 correction without weakening fine correctness;
+- A-0243 closed the corrected package at render distance 32 with 2,671 completed P4.3 samples, 3 safe-extra coarse columns, 1 safe-extra lineage fine identity, zero true fine mismatches/false culls, clean inherited gates and explicit human Visual PASS;
+- P4.3 is eligible for promotion through PR #78;
+- later Phase 4 scope remains separately gated.
+
 
 ### 2026-10-03 — P4.2 promoted and P4.3 activated
 
