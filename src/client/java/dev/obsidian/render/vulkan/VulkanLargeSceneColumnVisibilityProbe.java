@@ -103,7 +103,7 @@ public final class VulkanLargeSceneColumnVisibilityProbe implements AutoCloseabl
                 }
 
                 uint visibleSlot = atomicAdd(outputData.words[0], 1u);
-                outputData.words[1u + visibleSlot] = uint(metadata.x);
+                outputData.words[1u + visibleSlot] = packedIndex;
             }
             """;
 
@@ -315,6 +315,7 @@ public final class VulkanLargeSceneColumnVisibilityProbe implements AutoCloseabl
     public long outputBytes() { return output.size(); }
     public GpuBuffer candidateBuffer() { return candidates; }
     public GpuBufferSlice outputSlice() { return output.slice(0L, output.size()); }
+    public long outputVkBuffer() { return output.vkBuffer(); }
 
     @Override
     public void close() {
