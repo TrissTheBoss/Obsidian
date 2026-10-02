@@ -7,8 +7,8 @@ Last updated: 2026-10-03
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
 - Synchronized Phase 3 merge: `01547b55f68690a5d0aac8405fc0fe91cdf440f9`
-- Active branch: `promotion/p4.2-synchronized`
-- Active promotion PR: #77 `[no-release] Promote Phase 4 P4.2 column hierarchy` (non-draft)
+- Active branch: `phase4/p4.3-hierarchy-fed-fine-visibility`
+- Active draft PR: #78 `Phase 4 P4.3: hierarchy-fed fine section visibility`
 - Product phase: **Phase 4 — GPU-driven visibility at real-world scale**.
 
 
@@ -215,128 +215,93 @@ A-0223 records final promotion:
 - obsolete diverged PR #57 was closed as superseded;
 - P4.1 remains shadow-only by design and P3.10 remains the production terrain draw owner.
 
-## Phase 4 P4.2 — RUNTIME COMPLETE / PROMOTION IN PROGRESS
+## Phase 4 P4.2 — COMPLETE
+
+A-0237 records final P4.2 promotion.
+
+Promotion closure:
+
+- exact public dev2.2 runtime source: `c30c8686e65f7310ab047d88fadf2fe3b42d7415`;
+- runtime SHA-256: `571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37`;
+- A-0234: exact-section recenter liveness PASS + explicit human Visual PASS;
+- A-0235: corrected-package render-distance-32 scale PASS;
+- synchronized promotion PR #77 final head `8f2a361ffec6b2ed198b965e8f82b8b4d4ed50a8`;
+- Build #840 / run `37075530851` — SUCCESS;
+- Context Governor #62 / run `37075530618` — SUCCESS;
+- merge: `3b50f1e0fea11ae65c3e61689db20f03c8dd4766`;
+- post-merge Build #841 / run `37076424763` — SUCCESS;
+- post-merge Context Governor #63 / run `37076424599` — SUCCESS;
+- Repository Hygiene #36 / run `37076424520` — SUCCESS.
+
+P4.2 promoted a bounded persistent chunk-column hierarchy and conservative coarse GPU visibility while remaining shadow-only. P4.1 remains the fine section-level shadow control and P3.10 remains production SOLID/CUTOUT terrain owner.
+
+## Phase 4 P4.3 — ACTIVE / DEV3 IMPLEMENTED, HOSTED CI REQUIRED
 
 Frozen contract:
 
-`ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md`
+`ai/attempts/A-0238-phase4-p4.3-hierarchy-fed-fine-visibility-contract.md`
+
+Implementation handoff:
+
+`ai/attempts/A-0239-phase4-p4.3-dev3-implementation-handoff.md`
 
 Version target:
 
-`0.4.0-phase4-dev2`
+`0.4.0-phase4-dev3`
 
 Active branch / PR:
 
-- `phase4/p4.2-column-hierarchy`;
-- draft PR #75.
+- `phase4/p4.3-hierarchy-fed-fine-visibility`;
+- draft PR #78.
 
-P4.2 adds the first hierarchy level above the proven P4.1 section database: bounded persistent chunk-column metadata plus conservative coarse GPU frustum visibility.
+### P4.3 objective
 
-A-0225 records the complete dev2 implementation and exact hosted package evidence.
+P4.3 converts P4.2's measured coarse candidate reduction into an actual independently validated fine section visibility path.
 
-### P4.2 dev2 implementation
+The shadow validator:
 
-- bounded `PersistentColumnHierarchy` with hard ceiling **131,072 columns**;
-- exact active vertical range and dynamically sized occupancy bitsets;
-- stable per-column validation identities and bounded slot reuse;
-- exact live-section count and min/max live section Y;
-- section/column lifecycle updated from the same P4.1 event/resync stream;
-- explicit cross-database mutation disagreement failures;
-- budgeted structural section->column and per-column occupancy audits;
-- `VulkanLargeSceneColumnVisibilityProbe` using conservative camera-relative aggregate column AABBs;
-- atomic visible-column count + identity compaction;
-- independent Minecraft `Frustum.isVisible(AABB)` CPU oracle plus boundary ambiguity accounting;
-- scale telemetry for live columns/sections, coarse visible ratio and estimated fine-candidate upper bound;
-- async zero-timeout readback and completion-gated shutdown behavior;
-- `cameraOnlyFullHierarchyScan=false`;
-- P4.1 remains the fine section-level shadow control;
-- production draw ownership/native graphics ownership unchanged;
-- command compaction, temporal visibility, Hi-Z and indirect-count consumption remain disabled.
+- consumes only completed conservative P4.2 coarse samples;
+- maintains snapshot-scoped column identity -> slot lookup only when the column snapshot changes;
+- enumerates exact persistent occupancy only from GPU-visible columns;
+- resolves exact section identities through the existing persistent section database;
+- builds no more than **8,192 section probes per frame**;
+- reuses the promoted P4.1 Vulkan fine section classifier in a separate validation-only instance;
+- derives the CPU expected fine-visible set only from CPU-coarse-visible columns;
+- requires zero missing/unexpected/duplicate final fine identities;
+- records actual hierarchy-fed fine candidates vs the flat live section count;
+- aborts stale sampled handoffs if section/hierarchy serials move;
+- uses zero-timeout normal readback and bounded completion-gated shutdown.
 
-### Canonical dev2.2 source/package authority
+No full section-slot Java scan is added to camera-only frames.
 
-Version:
+### Ownership boundary
 
-`0.4.0-phase4-dev2.2`
+P4.3 remains shadow-only.
 
-Exact validated source:
+Still disabled:
 
-`c30c8686e65f7310ab047d88fadf2fe3b42d7415`
+- production use of P4.2/P4.3 visibility output;
+- production draw-list takeover;
+- command compaction;
+- indirect-count graphics;
+- temporal visibility;
+- Hi-Z;
+- native graphics expansion;
+- region hierarchy;
+- LOD;
+- mesher/partial-remeshing changes.
 
-Hosted validation:
+### Current handoff
 
-- Build run `36634634353` / **#833** — SUCCESS;
-- Context Governor run `36634634108` / **#57** — SUCCESS;
-- Build #833 artifact ID `11063553493`;
-- runtime JAR `Obsidian-0.4.0-phase4-dev2.2.jar`;
-- runtime size **519,994 bytes**;
-- runtime SHA-256 **`571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37`**.
-
-A-0233 records the exact hosted package authority.
-
-### Public dev2.2 Preview
-
-Publish Preview run `36635510377` / **#14** completed SUCCESS.
-
-- GitHub release ID `399552665`;
-- tag `v0.4.0-phase4-dev2.2`;
-- exact release target `c30c8686e65f7310ab047d88fadf2fe3b42d7415`;
-- published runtime JAR is byte-identical to Build #833 package authority;
-- downstream Modrinth job `109635372697` completed SUCCESS;
-- pinned publisher returned Modrinth version ID `yDBeoQge`.
-
-GitHub remains package authority; Modrinth is the mirrored distribution surface.
-
-### Dev2.2 runtime closure
-
-A-0234 closed the exact-player-section recenter/liveness defect on the exact published dev2.2 package and recorded the tester's explicit human **Visual PASS**.
-
-A-0235 closes the final corrected-package scale gate at render distance **32**:
-
-- live/high-water columns: **3,725 / 3,725**;
-- live sections / exact column membership: **35,273 / 35,273**;
-- hierarchy audit runs/failures: **115 / 0**;
-- capacity failures: **0**;
-- mutation failures: **0**;
-- completed/exact coarse samples: **3,650 / 3,639**;
-- missing coarse identities: **0**;
-- duplicate coarse identities: **0**;
-- `gpuColumnFalseCullCount=0`;
-- conservative extra visible columns: 11 accumulated;
-- `cameraOnlyFullHierarchyScan=false`;
-- `hardFailure=false`;
-- production draw ownership unchanged;
-- native graphics ownership unchanged.
-
-P4.1 remained clean at render distance 32 with **227** exact samples and zero missing/unexpected/duplicate/false-cull counts. P3.10 accounting, P3.5 border/halo proof, P3.7 differential correctness, workers, staging, arena and resources all closed cleanly; process exit code was 0.
-
-Every frozen A-0224 and A-0232 runtime/visual gate is now closed.
-
-### Synchronized promotion authority
-
-PR #75 diverged from newer `main` maintenance state while runtime validation was underway and was closed as superseded rather than force-merged.
-
-A-0236 records the clean synchronization:
-
-- current-main base: `739ed7f734775cdbeafb63969b146951d8897a56`;
-- promotion branch: `promotion/p4.2-synchronized`;
-- promotion PR: #77;
-- source-bearing synchronized commit: `e88dc5db19cc852069993989b13bbe80ff939d26`;
-- all seven renderer/version paths are exact blobs from tested source `c30c8686e65f7310ab047d88fadf2fe3b42d7415`;
-- newer main governance, including the Actions wait guard, is preserved;
-- no renderer semantic rewrite occurred during synchronization.
-
-### Current handoff — exact-head promotion CI
-
-P4.2 is runtime-complete and eligible for promotion. Do **not** add new renderer scope to PR #77.
+Exact dev3 source implementation is present on draft PR #78.
 
 Next steps:
 
-1. freeze the final PR #77 head after continuity synchronization;
-2. require hosted Build and Context Governor success on that exact head;
-3. require Repository Hygiene if triggered/required;
-4. merge PR #77 only if those exact-head checks pass;
-5. validate merged `main`;
-6. record final P4.2 promotion evidence and only then freeze the next Phase 4 slice.
+1. require exact-head hosted Build + Context Governor;
+2. fix only compile/frozen-contract defects if present;
+3. record exact CI artifact/package authority;
+4. publish immutable `0.4.0-phase4-dev3` Preview only after exact-head CI succeeds;
+5. run the frozen A-0238 render-distance-32+ hierarchy-fed fine validation;
+6. require explicit human Visual PASS before P4.3 promotion.
 
-P4.2 remains shadow-only after promotion. P3.10 remains the production SOLID/CUTOUT draw owner; P4.1 remains the fine section-level shadow control. Command compaction, temporal visibility, Hi-Z, native graphics expansion and indirect-count consumption remain outside P4.2.
+PR #78 remains **DRAFT / DO NOT MERGE** until those gates close.
