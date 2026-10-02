@@ -345,11 +345,17 @@ Persistent region/chunk-column/section hierarchy, GPU frustum culling, conservat
 
 Promoted by A-0223 after the exact dev1 Preview passed the frozen A-0203 contract: bounded persistent non-empty-section metadata, exact lifecycle membership, conservative camera-relative GPU frustum classification, identity compaction/count, independent CPU oracle, asynchronous readback, clean inherited P3.10/P3.7/lifetime evidence and explicit human visual PASS. P4.1 remains shadow-only and does not own production terrain drawing.
 
-#### P4.2 — Persistent chunk-column hierarchy + coarse GPU visibility — VALIDATED / PROMOTION IN PROGRESS
+#### P4.2 — Persistent chunk-column hierarchy + coarse GPU visibility — COMPLETE
 
-Frozen by A-0224 and validated as `0.4.0-phase4-dev2.2`. A-0234 closed the non-live exact-section recenter liveness defect plus explicit human Visual PASS; A-0235 closed the corrected-package render-distance-32 scale gate with 3,725 live columns / 35,273 live sections, zero structural failures, zero missing/duplicate identities and zero GPU false culls. Promotion proceeds through synchronized PR #77 under A-0236. P4.1 remains the fine-grained control. No production draw ownership, command compaction, temporal occlusion, Hi-Z, native graphics expansion or indirect-count consumption is added in P4.2.
+Promoted by A-0237 after A-0234 closed exact-section recenter liveness + human Visual PASS, A-0235 closed the corrected-package render-distance-32 scale gate, synchronized PR #77 exact head passed Build #840 / Context Governor #62, and merged main passed Build #841 / Context Governor #63 / Repository Hygiene #36. P4.2 remains shadow-only: P4.1 stays the flat fine section control and P3.10 remains production terrain owner.
 
-Later Phase 4 slices may feed a proven hierarchy into fine section visibility, conservative temporal visibility and real terrain command compaction. Native indirect-count graphics and Hi-Z remain evidence/capability-gated rather than baseline assumptions.
+#### P4.3 — Hierarchy-fed fine section visibility — ACTIVE
+
+Frozen by A-0238 for `0.4.0-phase4-dev3`. Consume completed conservative P4.2 coarse samples, enumerate exact persistent sections only from GPU-visible columns, reuse the proven P4.1 fine GPU classifier, and require exact final fine-visible identity agreement against the CPU fine oracle. The purpose is to turn P4.2's estimated candidate reduction into measured actual fine candidate reduction before any production consumption.
+
+P4.3 remains sampled and shadow-only. It does not add production draw ownership, command compaction, temporal visibility, Hi-Z, native graphics expansion, indirect-count graphics, region hierarchy or LOD.
+
+Later Phase 4 slices may remove the sampled CPU-readback handoff, add conservative temporal visibility, build real terrain command compaction, and only then consider capability/evidence-gated indirect-count graphics or Hi-Z.
 
 ### Phase 5 — Frame pacing, streaming and adaptive scheduling — PLANNED
 
@@ -420,7 +426,7 @@ Configuration/UI polish, presets/migration, crash diagnostics, benchmark export,
 - [COMPLETE foundation] Compute-generated commands + visibility/compaction primitive.
 - [COMPLETE foundation] Persistent multi-section real-scene validation path.
 - [COMPLETE canary] Repeat-aware large-quad terrain emission for proven-safe canonical candidates.
-- [ACTIVE] Large-scale persistent scene database/culling hierarchy — P4.1 section database COMPLETE; P4.2 column hierarchy VALIDATED / promotion in progress.
+- [ACTIVE] Large-scale persistent scene database/culling hierarchy — P4.1 section database COMPLETE; P4.2 column hierarchy COMPLETE; P4.3 hierarchy-fed fine visibility ACTIVE.
 - [PLANNED] Temporal visibility.
 - [EXPERIMENTAL] Hi-Z occlusion.
 - [EXPERIMENTAL] Native indirect-count consumption.
@@ -514,6 +520,15 @@ Newer durable decisions override stale roadmap text until synchronized. Always p
 ---
 
 ## 16. Roadmap revision log
+
+### 2026-10-03 — P4.2 promoted and P4.3 activated
+
+- PR #77 exact synchronized head passed Build #840 and Context Governor #62 and merged as `3b50f1e0fea11ae65c3e61689db20f03c8dd4766`;
+- merged main passed Build #841, Context Governor #63 and Repository Hygiene #36;
+- A-0237 marked P4.2 COMPLETE;
+- A-0238 froze P4.3 / `0.4.0-phase4-dev3` as sampled hierarchy-fed fine section visibility;
+- A-0239 implemented the validation-only coarse-to-fine handoff while keeping production ownership, temporal visibility, Hi-Z, command compaction and native graphics expansion unchanged.
+
 
 ### 2026-10-03 — P4.2 validation closure and synchronized promotion
 
@@ -634,7 +649,8 @@ Created the canonical master roadmap and formal governance model.
 - P3.10 production opaque/cutout terrain replacement: **COMPLETE**; promotion merged to `main` as `01547b55f68690a5d0aac8405fc0fe91cdf440f9` and post-merge Build #741 passed.
 - **Phase 4: ACTIVE — GPU-driven visibility at real-world scale.**
 - **P4.1: COMPLETE.** `0.4.0-phase4-dev1` passed frozen runtime + visual gates and promoted through PR #74 / merge `59d130e17000b07e6ed8bbe226cb2f50eb795c74`.
-- **P4.2: VALIDATED / PROMOTION IN PROGRESS.** `0.4.0-phase4-dev2.2` closed the frozen runtime + visual gates; synchronized PR #77 carries the exact tested renderer/version blobs onto current main while P4.1 remains the fine shadow control.
+- **P4.2: COMPLETE.** `0.4.0-phase4-dev2.2` promoted through PR #77 / merge `3b50f1e0fea11ae65c3e61689db20f03c8dd4766` with green post-merge Build/Context Governor/Hygiene.
+- **P4.3: ACTIVE.** `0.4.0-phase4-dev3` proves hierarchy-fed fine section visibility in shadow mode before temporal visibility or production command compaction.
 - Phases 5-12 retain their planned order/scope unless later evidence-driven roadmap governance changes them.
 
 Always verify live details in `ai/CURRENT_STATE.md` before acting because active milestone state changes more frequently than the long-range plan.
