@@ -1,15 +1,20 @@
 {
   "schema_version": 1,
-  "active_goal": "Validate and merge the synchronized P4.1 promotion head, then freeze and implement the next Phase 4 version. The source-bearing synchronized P4.1 commit is 3fb81bf6053cebbed7e6e4b058635d3653ddb6c3 and preserves the exact tested implementation blobs.",
-  "scope_boundary": "Active engineering scope is Phase 4 P4.1 shadow large-scene GPU visibility plus repository/AI continuity maintenance. Do not promote P4.1, expand native graphics ownership, revive P3.9 partial remeshing, or change production terrain draw ownership without new evidence and a separately frozen contract.",
+  "active_goal": "Promote the fully validated Phase 4 P4.2 / 0.4.0-phase4-dev2.2 implementation through synchronized PR #77: exact final-head hosted CI, merge if green, then post-merge validation and final promotion continuity.",
+  "scope_boundary": "Active engineering scope is P4.2 column hierarchy/coarse GPU visibility plus required continuity/release maintenance. Do not add production GPU-driven draw ownership, real terrain command compaction, native graphics expansion, temporal occlusion, Hi-Z, indirect-count consumption, P3.9 partial remeshing, or unrelated renderer scope.",
   "source_snapshot": {
-    "created_at": "2026-09-29T17:20:00Z",
+    "created_at": "2026-10-03T00:56:00+02:00",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
-      "ai/CURRENT_STATE.md@promotion/p4.1-synchronized",
-      "ai/attempts/A-0221-phase4-p4.1-dev1-human-visual-pass.md@main",
-      "ai/attempts/A-0222-phase4-p4.1-synchronized-promotion-head.md@promotion/p4.1-synchronized",
-      "ai/attempts/A-0203-phase4-p4.1-persistent-scene-gpu-visibility-contract.md@main"
+      "ai/CURRENT_STATE.md@promotion/p4.2-synchronized",
+      "ai/MASTER_ROADMAP.md@promotion/p4.2-synchronized",
+      "ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md@promotion/p4.2-synchronized",
+      "ai/attempts/A-0232-recenter-liveness-contract.md@promotion/p4.2-synchronized",
+      "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md@promotion/p4.2-synchronized",
+      "ai/attempts/A-0234-phase4-p4.2-dev2.2-runtime-liveness-pass.md@promotion/p4.2-synchronized",
+      "ai/attempts/A-0235-phase4-p4.2-dev2.2-32-scale-runtime-pass.md@promotion/p4.2-synchronized",
+      "ai/attempts/A-0236-phase4-p4.2-synchronized-promotion-head.md@promotion/p4.2-synchronized",
+      "pull/77"
     ]
   },
   "coverage_manifest": [
@@ -23,8 +28,18 @@
   "facts": [
     {
       "id": "F1",
-      "text": "Phase 3 is complete; Phase 4 P4.1 is active and intentionally shadow-only, with the validated P3.10 path still owning production terrain rendering.",
-      "source_ref": "ai/CURRENT_STATE.md#Phase-4-P4.1"
+      "text": "Phase 3 is complete. P4.1 is promoted COMPLETE and remains shadow-only; P3.10 still owns production SOLID/CUTOUT terrain rendering.",
+      "source_ref": "ai/attempts/A-0223-phase4-p4.1-promotion.md"
+    },
+    {
+      "id": "F10",
+      "text": "All frozen P4.2 runtime and visual gates are closed on 0.4.0-phase4-dev2.2. A-0234 closed recenter liveness + human Visual PASS; A-0235 closed the corrected-package render-distance-32 scale gate.",
+      "source_ref": "ai/attempts/A-0235-phase4-p4.2-dev2.2-32-scale-runtime-pass.md"
+    },
+    {
+      "id": "F11",
+      "text": "The canonical public tester package is 0.4.0-phase4-dev2.2 from exact source c30c8686e65f7310ab047d88fadf2fe3b42d7415. Build #833 and Context Governor #57 passed; runtime JAR SHA-256 is 571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37. GitHub Preview #14 and Modrinth version yDBeoQge published successfully.",
+      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
     },
     {
       "id": "F2",
@@ -33,8 +48,8 @@
     },
     {
       "id": "F3",
-      "text": "The public tester channel for development binaries is GitHub Prerelease / Preview; v0.4.0-phase4-dev1 is published as a Preview.",
-      "source_ref": "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md#Preview-release-proof"
+      "text": "The public tester channel for development binaries is GitHub Prerelease / Preview; v0.4.0-phase4-dev2.2 is the current published Preview.",
+      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
     },
     {
       "id": "F4",
@@ -48,23 +63,8 @@
     },
     {
       "id": "F6",
-      "text": "The Modrinth mirror is proven end to end. Publish Preview run #5 (36434577563) and Modrinth job 108969491205 succeeded; the 404 read fallback continued to VERSION_CREATE and published 0.4.0-phase4-dev1 as Modrinth version OhTxTs7Z from exact Preview source 6af5174f054b272c65174fbf0c37d981a66aff31.",
-      "source_ref": "ai/attempts/A-0217-first-successful-modrinth-publication.md#Hosted-result"
-    },
-    {
-      "id": "F7",
-      "text": "The first 2026-09-29 P4.1 dev1 Preview reference run produced clean automated scale/correctness/lifetime evidence (2,644/2,644 sampled comparisons, zero missing/unexpected/duplicate identities, zero GPU false culls, no capacity/lifecycle failure, clean inherited P3.10/P3.7/resource shutdown) but is PARTIAL because no post-startup in-world F3+T/recovery is evidenced and no explicit human visual PASS was supplied.",
-      "source_ref": "ai/attempts/A-0219-phase4-p4.1-dev1-runtime-partial.md"
-    },
-    {
-      "id": "F8",
-      "text": "The 2026-09-29 follow-up run of the exact P4.1 dev1 Preview closes the missing automated runtime exercise: benchmarkResourceReloadDelta=2 with READY/P4.1 recovery, a real leave/re-entry cycle, 1,836/1,836 exact sampled visibility comparisons, zero missing/unexpected/duplicate identities and GPU false culls, no capacity/lifecycle/hard failure, clean inherited P3.10/P3.5/P3.6/P3.7 and resource lifetime, and exit code 0. Only the explicit human visual verdict remains.",
-      "source_ref": "ai/attempts/A-0220-phase4-p4.1-dev1-followup-runtime.md"
-    },
-    {
-      "id": "F9",
-      "text": "The tester supplied explicit human visual PASS for the exact A-0220 follow-up run. Together A-0220 and A-0221 close every frozen A-0203 P4.1 runtime and visual gate. Promotion now requires only synchronization of the exact tested implementation onto current main plus exact-head hosted CI.",
-      "source_ref": "ai/attempts/A-0221-phase4-p4.1-dev1-human-visual-pass.md"
+      "text": "The Modrinth mirror remains proven and current; dev2.2 Preview run #14 mirrored successfully as Modrinth version yDBeoQge while GitHub remained package authority.",
+      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
     }
   ],
   "decisions": [
@@ -97,40 +97,35 @@
   "open_obligations": [
     {
       "id": "O1",
-      "text": "Run exact-head hosted Build/Context Governor/Repository Hygiene validation on the final promotion/p4.1-synchronized head and merge P4.1 only if green.",
-      "source_ref": "ai/attempts/A-0222-phase4-p4.1-synchronized-promotion-head.md"
-    },
-    {
-      "id": "O2",
-      "text": "After P4.1 promotion, freeze the next Phase 4 version separately before renderer-source changes; do not retroactively expand P4.1 beyond its shadow-only contract.",
-      "source_ref": "ai/attempts/A-0221-phase4-p4.1-dev1-human-visual-pass.md"
+      "text": "Freeze the final synchronized PR #77 head, require hosted Build + Context Governor success (and Repository Hygiene if triggered/required), merge if green, then validate merged main and record final P4.2 promotion.",
+      "source_ref": "ai/attempts/A-0236-phase4-p4.2-synchronized-promotion-head.md"
     }
   ],
   "exact_identifiers": [
     {
       "id": "I1",
-      "text": "Active P4.1 branch: phase4/p4.1-persistent-scene-visibility; active draft PR: #57; current PR continuity head: 6af5174f054b272c65174fbf0c37d981a66aff31.",
-      "source_ref": "ai/CURRENT_STATE.md#Canonical-repository"
+      "text": "Promotion branch promotion/p4.2-synchronized; non-draft promotion PR #77; obsolete draft PR #75 closed as superseded.",
+      "source_ref": "ai/attempts/A-0236-phase4-p4.2-synchronized-promotion-head.md"
     },
     {
-      "id": "I2",
-      "text": "Original A-0205 package-authority source is fd58b9f2e915462f665b7d85f5d993456d5f930e; original Actions-handoff JAR SHA-256 is 39c4bb4932bd6e7c00a4190c3514ef29eb926c337bba488f9a04bbef27120458.",
-      "source_ref": "ai/attempts/A-0205-phase4-p4.1-dev1-ci-package-runtime-handoff.md#Exact-source-package-authority"
+      "id": "I7",
+      "text": "Dev2.2 exact tested source c30c8686e65f7310ab047d88fadf2fe3b42d7415 passed Build #833 run 36634634353 and Context Governor #57 run 36634634108; runtime SHA-256 571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37.",
+      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
     },
     {
-      "id": "I3",
-      "text": "Public Preview v0.4.0-phase4-dev1 targets 6af5174f054b272c65174fbf0c37d981a66aff31; Preview runtime JAR SHA-256 is 8bf25f3aa6bfe6fb4392044ba0973692fc6a24fd9948f3fea51cf55b12e157f3.",
-      "source_ref": "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md#Preview-release-proof"
+      "id": "I8",
+      "text": "Preview v0.4.0-phase4-dev2.2 release ID 399552665 and Modrinth version yDBeoQge are published from exact tested source c30c8686e65f7310ab047d88fadf2fe3b42d7415.",
+      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
     },
     {
-      "id": "I4",
-      "text": "Modrinth mirror proof: PR #70 merged as 87c51328ab1f1587bc544a186ee5fd55bf688977; Publish Preview run #5 36434577563 succeeded; Modrinth job 108969491205 succeeded; published version ID OhTxTs7Z for 0.4.0-phase4-dev1 from source 6af5174f054b272c65174fbf0c37d981a66aff31.",
-      "source_ref": "ai/attempts/A-0217-first-successful-modrinth-publication.md#Hosted-result"
+      "id": "I9",
+      "text": "Current-main synchronization base 739ed7f734775cdbeafb63969b146951d8897a56; source-bearing synchronized commit e88dc5db19cc852069993989b13bbe80ff939d26.",
+      "source_ref": "ai/attempts/A-0236-phase4-p4.2-synchronized-promotion-head.md"
     },
     {
-      "id": "I5",
-      "text": "P4.1 synchronized promotion branch is promotion/p4.1-synchronized; source-bearing synchronized commit 3fb81bf6053cebbed7e6e4b058635d3653ddb6c3 is based on main 9ff415325c956c8f9bb678eda95343afdb209c66 and reuses the exact tested P4.1 implementation/version blobs.",
-      "source_ref": "ai/attempts/A-0222-phase4-p4.1-synchronized-promotion-head.md"
+      "id": "I6",
+      "text": "P4.1 promoted merge is 59d130e17000b07e6ed8bbe226cb2f50eb795c74.",
+      "source_ref": "ai/attempts/A-0223-phase4-p4.1-promotion.md"
     }
   ],
   "security_boundaries": [
@@ -206,6 +201,24 @@
       "locator": "Load before P4.1 promotion. All frozen runtime/visual gates are closed; remaining work is synchronized exact-head CI and promotion."
     },
     {
+      "id": "p4-promotion",
+      "topic": "P4.1 final promotion evidence",
+      "source_ref": "ai/attempts/A-0223-phase4-p4.1-promotion.md@phase4/p4.2-column-hierarchy",
+      "locator": "Load for exact PR/CI/merge proof and the shadow-only boundary carried into P4.2."
+    },
+    {
+      "id": "p4-p4.2-contract",
+      "topic": "Frozen P4.2 persistent column hierarchy and coarse GPU visibility contract",
+      "source_ref": "ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md@phase4/p4.2-column-hierarchy",
+      "locator": "Load entirely before changing or evaluating dev2 behavior/gates."
+    },
+    {
+      "id": "p4-p4.2-package",
+      "topic": "P4.2 dev2 implementation and canonical Build #821 package handoff",
+      "source_ref": "ai/attempts/A-0225-phase4-p4.2-dev2-ci-package-runtime-handoff.md@phase4/p4.2-column-hierarchy",
+      "locator": "Load for implementation summary, exact source head, hosted CI/artifact IDs, JAR hashes, and frozen runtime handoff."
+    },
+    {
       "id": "repo-hygiene-evidence",
       "topic": "Repository cleanup and Preview release evidence",
       "source_ref": "ai/attempts/A-0207-repository-hygiene-activation-and-cleanup.md@main",
@@ -264,6 +277,18 @@
       "topic": "First successful end-to-end Modrinth mirror publication",
       "source_ref": "ai/attempts/A-0217-first-successful-modrinth-publication.md@maintenance/modrinth-publication-evidence",
       "locator": "Load for exact successful workflow/job/version IDs and closing evidence."
+    },
+    {
+      "id": "p4-p4.2-final-runtime",
+      "topic": "Final corrected-package P4.2 render-distance-32 runtime PASS",
+      "source_ref": "ai/attempts/A-0235-phase4-p4.2-dev2.2-32-scale-runtime-pass.md@promotion/p4.2-synchronized",
+      "locator": "Load for exact final scale/correctness/lifetime evidence. All frozen runtime/visual gates are closed."
+    },
+    {
+      "id": "p4-p4.2-promotion",
+      "topic": "P4.2 synchronized promotion candidate and exact tested blob audit",
+      "source_ref": "ai/attempts/A-0236-phase4-p4.2-synchronized-promotion-head.md@promotion/p4.2-synchronized",
+      "locator": "Load before merging PR #77. Exact-head hosted CI is the remaining promotion obligation."
     }
   ],
   "discarded_ids": [
@@ -276,6 +301,9 @@
     "p4-first-runtime",
     "p4-followup-runtime",
     "p4-visual-pass",
+    "p4-p4.2-contract",
+    "p4-p4.2-package",
+    "p4-promotion",
     "repo-hygiene-evidence",
     "history-cold",
     "context-governor-design",
@@ -286,5 +314,5 @@
     "modrinth-secret-project-id-validation",
     "modrinth-first-success"
   ],
-  "next_action": "Open the synchronized P4.1 promotion PR, close obsolete draft PR #57 as superseded, validate the exact final promotion head, merge if green, then freeze/start the next Phase 4 version."
+  "next_action": "Validate the final PR #77 head with hosted Build + Context Governor, merge if green, then validate merged main and record P4.2 COMPLETE before freezing the next Phase 4 slice."
 }
