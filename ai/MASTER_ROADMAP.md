@@ -1,6 +1,6 @@
 # Obsidian Master Roadmap and Product Plan
 
-Last materially revised: 2026-09-28  
+Last materially revised: 2026-09-29  
 Roadmap schema: v1  
 Canonical repository: `TrissTheBoss/Obsidian`
 
@@ -337,9 +337,19 @@ Only after full-section greedy meshing is stable and measured. Partial slice/sub
 
 Phase 3 exits only when the greedy mesher is default for supported terrain, permanent differential correctness passes, the worker system remains bounded/cancellation-safe, hot paths avoid routine allocation and throughput supports large-scale scene testing.
 
-### Phase 4 — GPU-driven visibility at real-world scale — PLANNED
+### Phase 4 — GPU-driven visibility at real-world scale — ACTIVE
 
 Persistent region/chunk-column/section hierarchy, GPU frustum culling, conservative temporal visibility, optional Hi-Z, real command compaction, capability/evidence-gated indirect-count consumption and hierarchy suited to 32/64/96/128+ distances.
+
+#### P4.1 — Persistent section scene + GPU frustum visibility — COMPLETE
+
+Promoted by A-0223 after the exact dev1 Preview passed the frozen A-0203 contract: bounded persistent non-empty-section metadata, exact lifecycle membership, conservative camera-relative GPU frustum classification, identity compaction/count, independent CPU oracle, asynchronous readback, clean inherited P3.10/P3.7/lifetime evidence and explicit human visual PASS. P4.1 remains shadow-only and does not own production terrain drawing.
+
+#### P4.2 — Persistent chunk-column hierarchy + coarse GPU visibility — VALIDATED / PROMOTION IN PROGRESS
+
+Frozen by A-0224 and validated as `0.4.0-phase4-dev2.2`. A-0234 closed the non-live exact-section recenter liveness defect plus explicit human Visual PASS; A-0235 closed the corrected-package render-distance-32 scale gate with 3,725 live columns / 35,273 live sections, zero structural failures, zero missing/duplicate identities and zero GPU false culls. Promotion proceeds through synchronized PR #77 under A-0236. P4.1 remains the fine-grained control. No production draw ownership, command compaction, temporal occlusion, Hi-Z, native graphics expansion or indirect-count consumption is added in P4.2.
+
+Later Phase 4 slices may feed a proven hierarchy into fine section visibility, conservative temporal visibility and real terrain command compaction. Native indirect-count graphics and Hi-Z remain evidence/capability-gated rather than baseline assumptions.
 
 ### Phase 5 — Frame pacing, streaming and adaptive scheduling — PLANNED
 
@@ -410,7 +420,7 @@ Configuration/UI polish, presets/migration, crash diagnostics, benchmark export,
 - [COMPLETE foundation] Compute-generated commands + visibility/compaction primitive.
 - [COMPLETE foundation] Persistent multi-section real-scene validation path.
 - [COMPLETE canary] Repeat-aware large-quad terrain emission for proven-safe canonical candidates.
-- [PLANNED] Large-scale persistent scene database/culling hierarchy.
+- [ACTIVE] Large-scale persistent scene database/culling hierarchy — P4.1 section database COMPLETE; P4.2 column hierarchy VALIDATED / promotion in progress.
 - [PLANNED] Temporal visibility.
 - [EXPERIMENTAL] Hi-Z occlusion.
 - [EXPERIMENTAL] Native indirect-count consumption.
@@ -504,6 +514,24 @@ Newer durable decisions override stale roadmap text until synchronized. Always p
 ---
 
 ## 16. Roadmap revision log
+
+### 2026-10-03 — P4.2 validation closure and synchronized promotion
+
+- A-0234 closed the dev2.2 exact-section recenter liveness defect and recorded explicit human Visual PASS;
+- A-0235 closed the final corrected-package render-distance-32 scale gate with clean P4.2/P4.1/inherited lifetime evidence and exit code 0;
+- A-0236 synchronized the exact tested dev2.2 renderer/version blobs onto current main base `739ed7f734775cdbeafb63969b146951d8897a56` without renderer semantic conflict resolution;
+- obsolete diverged draft PR #75 was closed as superseded; non-draft promotion PR #77 is the only merge vehicle;
+- P4.2 remains shadow-only and later command compaction/temporal/Hi-Z/indirect-count scope remains separately gated.
+
+
+### 2026-09-29 — P4.1 promotion and P4.2 hierarchy activation
+
+- A-0220/A-0221 closed every frozen P4.1 automated and human visual gate on the exact dev1 Preview;
+- A-0222 synchronized the tested implementation byte-for-byte onto current main without overwriting newer maintenance/continuity state;
+- promotion PR #74 exact head passed Build #809 and Context Governor #37, merged as `59d130e17000b07e6ed8bbe226cb2f50eb795c74`, then merged main passed Build #810, Context Governor #38 and Repository Hygiene #31;
+- marked P4.1 COMPLETE while retaining its shadow-only ownership boundary;
+- A-0224 activated P4.2 / `0.4.0-phase4-dev2` as the first persistent chunk-column hierarchy + conservative coarse GPU visibility slice;
+- kept production terrain ownership on P3.10 and deferred command compaction, temporal visibility, Hi-Z and indirect-count work to later separately frozen Phase 4 slices.
 
 ### 2026-09-28 — repository hygiene, public README and release-channel governance
 
@@ -605,7 +633,8 @@ Created the canonical master roadmap and formal governance model.
 - P3.9 fixed four-Y-slice partial remeshing: **REJECTED / DEFERRED** by A-0188; do not revive the same strategy as baseline.
 - P3.10 production opaque/cutout terrain replacement: **COMPLETE**; promotion merged to `main` as `01547b55f68690a5d0aac8405fc0fe91cdf440f9` and post-merge Build #741 passed.
 - **Phase 4: ACTIVE — GPU-driven visibility at real-world scale.**
-- **P4.1: ACTIVE / first runtime canary packaged.** `0.4.0-phase4-dev1` is shadow-only large-scene visibility and requires the frozen reference runtime/visual test before promotion.
+- **P4.1: COMPLETE.** `0.4.0-phase4-dev1` passed frozen runtime + visual gates and promoted through PR #74 / merge `59d130e17000b07e6ed8bbe226cb2f50eb795c74`.
+- **P4.2: VALIDATED / PROMOTION IN PROGRESS.** `0.4.0-phase4-dev2.2` closed the frozen runtime + visual gates; synchronized PR #77 carries the exact tested renderer/version blobs onto current main while P4.1 remains the fine shadow control.
 - Phases 5-12 retain their planned order/scope unless later evidence-driven roadmap governance changes them.
 
 Always verify live details in `ai/CURRENT_STATE.md` before acting because active milestone state changes more frequently than the long-range plan.
