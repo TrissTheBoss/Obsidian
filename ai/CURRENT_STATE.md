@@ -7,8 +7,8 @@ Last updated: 2026-10-03
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
 - Synchronized Phase 3 merge: `01547b55f68690a5d0aac8405fc0fe91cdf440f9`
-- Active branch: `promotion/p4.2-synchronized`
-- Active promotion PR: #77 `[no-release] Promote Phase 4 P4.2 column hierarchy` (non-draft)
+- Active branch: `phase4/p4.3-hierarchy-fed-fine-visibility`
+- Active draft PR: #78 `Phase 4 P4.3: hierarchy-fed fine section visibility`
 - Product phase: **Phase 4 — GPU-driven visibility at real-world scale**.
 
 
@@ -215,128 +215,116 @@ A-0223 records final promotion:
 - obsolete diverged PR #57 was closed as superseded;
 - P4.1 remains shadow-only by design and P3.10 remains the production terrain draw owner.
 
-## Phase 4 P4.2 — RUNTIME COMPLETE / PROMOTION IN PROGRESS
+## Phase 4 P4.2 — COMPLETE
 
-Frozen contract:
+A-0237 records final P4.2 promotion.
 
-`ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md`
+Promotion closure:
 
-Version target:
+- exact public dev2.2 runtime source: `c30c8686e65f7310ab047d88fadf2fe3b42d7415`;
+- runtime SHA-256: `571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37`;
+- A-0234: exact-section recenter liveness PASS + explicit human Visual PASS;
+- A-0235: corrected-package render-distance-32 scale PASS;
+- synchronized promotion PR #77 final head `8f2a361ffec6b2ed198b965e8f82b8b4d4ed50a8`;
+- Build #840 / run `37075530851` — SUCCESS;
+- Context Governor #62 / run `37075530618` — SUCCESS;
+- merge: `3b50f1e0fea11ae65c3e61689db20f03c8dd4766`;
+- post-merge Build #841 / run `37076424763` — SUCCESS;
+- post-merge Context Governor #63 / run `37076424599` — SUCCESS;
+- Repository Hygiene #36 / run `37076424520` — SUCCESS.
 
-`0.4.0-phase4-dev2`
+P4.2 promoted a bounded persistent chunk-column hierarchy and conservative coarse GPU visibility while remaining shadow-only. P4.1 remains the fine section-level shadow control and P3.10 remains production SOLID/CUTOUT terrain owner.
+
+## Phase 4 P4.3 — RUNTIME COMPLETE / PROMOTION IN PROGRESS
+
+Frozen contracts:
+
+- `ai/attempts/A-0238-phase4-p4.3-hierarchy-fed-fine-visibility-contract.md`;
+- `ai/attempts/A-0241-phase4-p4.3-dev3.1-safe-extra-lineage-contract.md`.
+
+Final corrected runtime:
+
+`ai/attempts/A-0243-phase4-p4.3-dev3.1-runtime-pass.md`
+
+Canonical version:
+
+`0.4.0-phase4-dev3.1`
 
 Active branch / PR:
 
-- `phase4/p4.2-column-hierarchy`;
-- draft PR #75.
+- `phase4/p4.3-hierarchy-fed-fine-visibility`;
+- draft PR #78 pending exact promotion-head CI.
 
-P4.2 adds the first hierarchy level above the proven P4.1 section database: bounded persistent chunk-column metadata plus conservative coarse GPU frustum visibility.
-
-A-0225 records the complete dev2 implementation and exact hosted package evidence.
-
-### P4.2 dev2 implementation
-
-- bounded `PersistentColumnHierarchy` with hard ceiling **131,072 columns**;
-- exact active vertical range and dynamically sized occupancy bitsets;
-- stable per-column validation identities and bounded slot reuse;
-- exact live-section count and min/max live section Y;
-- section/column lifecycle updated from the same P4.1 event/resync stream;
-- explicit cross-database mutation disagreement failures;
-- budgeted structural section->column and per-column occupancy audits;
-- `VulkanLargeSceneColumnVisibilityProbe` using conservative camera-relative aggregate column AABBs;
-- atomic visible-column count + identity compaction;
-- independent Minecraft `Frustum.isVisible(AABB)` CPU oracle plus boundary ambiguity accounting;
-- scale telemetry for live columns/sections, coarse visible ratio and estimated fine-candidate upper bound;
-- async zero-timeout readback and completion-gated shutdown behavior;
-- `cameraOnlyFullHierarchyScan=false`;
-- P4.1 remains the fine section-level shadow control;
-- production draw ownership/native graphics ownership unchanged;
-- command compaction, temporal visibility, Hi-Z and indirect-count consumption remain disabled.
-
-### Canonical dev2.2 source/package authority
-
-Version:
-
-`0.4.0-phase4-dev2.2`
+### Canonical dev3.1 package/publication authority
 
 Exact validated source:
 
-`c30c8686e65f7310ab047d88fadf2fe3b42d7415`
+`3b38e63af1153d8ede4955da6cfc087cda5de423`
 
 Hosted validation:
 
-- Build run `36634634353` / **#833** — SUCCESS;
-- Context Governor run `36634634108` / **#57** — SUCCESS;
-- Build #833 artifact ID `11063553493`;
-- runtime JAR `Obsidian-0.4.0-phase4-dev2.2.jar`;
-- runtime size **519,994 bytes**;
-- runtime SHA-256 **`571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37`**.
+- Build #850 / run `37078070257` — SUCCESS;
+- Context Governor #71 / run `37078070123` — SUCCESS.
 
-A-0233 records the exact hosted package authority.
+Runtime JAR:
 
-### Public dev2.2 Preview
+- `Obsidian-0.4.0-phase4-dev3.1.jar`;
+- size **529,595 bytes**;
+- SHA-256 **`076dfdadea03d51fd46ea6804f492f73691c493a4c02cf8a3c84d8404f4ff6ef`**.
 
-Publish Preview run `36635510377` / **#14** completed SUCCESS.
+Publication:
 
-- GitHub release ID `399552665`;
-- tag `v0.4.0-phase4-dev2.2`;
-- exact release target `c30c8686e65f7310ab047d88fadf2fe3b42d7415`;
-- published runtime JAR is byte-identical to Build #833 package authority;
-- downstream Modrinth job `109635372697` completed SUCCESS;
-- pinned publisher returned Modrinth version ID `yDBeoQge`.
+- Publish Preview #16 / run `37078371213` — SUCCESS;
+- GitHub release `v0.4.0-phase4-dev3.1` / release ID `402223904`;
+- exact release target `3b38e63af1153d8ede4955da6cfc087cda5de423`;
+- Modrinth mirror job `111073415030` — SUCCESS;
+- Modrinth version ID `ImfQC3L5`.
 
-GitHub remains package authority; Modrinth is the mirrored distribution surface.
+### Final P4.3 runtime closure
 
-### Dev2.2 runtime closure
+A-0243 closes the corrected dev3.1 runtime and visual gates at render distance 32.
 
-A-0234 closed the exact-player-section recenter/liveness defect on the exact published dev2.2 package and recorded the tester's explicit human **Visual PASS**.
+Final P4.3 evidence:
 
-A-0235 closes the final corrected-package scale gate at render distance **32**:
-
-- live/high-water columns: **3,725 / 3,725**;
-- live sections / exact column membership: **35,273 / 35,273**;
-- hierarchy audit runs/failures: **115 / 0**;
-- capacity failures: **0**;
-- mutation failures: **0**;
-- completed/exact coarse samples: **3,650 / 3,639**;
-- missing coarse identities: **0**;
-- duplicate coarse identities: **0**;
-- `gpuColumnFalseCullCount=0`;
-- conservative extra visible columns: 11 accumulated;
-- `cameraOnlyFullHierarchyScan=false`;
+- samples started/completed: **2,747 / 2,671**;
+- snapshot lookup failures: **0**;
+- missing fine identities: **0**;
+- unexpected fine identities: **0**;
+- duplicate fine identities: **0**;
+- `gpuHierarchicalFineFalseCullCount=0`;
+- cumulative safe-extra coarse columns: **3**;
+- cumulative safe-extra lineage fine identities: **1**;
+- readback pending high-water: 1;
 - `hardFailure=false`;
-- production draw ownership unchanged;
-- native graphics ownership unchanged.
+- `abandonedForDeviceShutdown=false`;
+- `cameraOnlyFullSectionScan=false`;
+- production/native ownership unchanged;
+- command compaction / temporal visibility / Hi-Z still disabled.
 
-P4.1 remained clean at render distance 32 with **227** exact samples and zero missing/unexpected/duplicate/false-cull counts. P3.10 accounting, P3.5 border/halo proof, P3.7 differential correctness, workers, staging, arena and resources all closed cleanly; process exit code was 0.
+This reproduces the exact dev3 boundary condition non-zero while proving the dev3.1 lineage accounting fix: conservative GPU-only coarse lineage is tracked separately and no true fine mismatch is recorded.
 
-Every frozen A-0224 and A-0232 runtime/visual gate is now closed.
+The tester supplied explicit human **Visual PASS**.
 
-### Synchronized promotion authority
+Inherited final gates remain clean:
 
-PR #75 diverged from newer `main` maintenance state while runtime validation was underway and was closed as superseded rather than force-merged.
+- P4.2: 7,799 completed coarse samples, hierarchy audit failures 0, missing columns 0, duplicate columns 0, GPU false culls 0, hard failure false;
+- P4.1: 498 / 498 exact fine samples, missing/unexpected/duplicate/false-cull all 0, hard failure false;
+- P3.10 suppression/execution accounting coherent;
+- P3.5/P3.7 exact;
+- workers/staging/arena/resources clean;
+- normal process exit code 0.
 
-A-0236 records the clean synchronization:
+### Current handoff — promote P4.3
 
-- current-main base: `739ed7f734775cdbeafb63969b146951d8897a56`;
-- promotion branch: `promotion/p4.2-synchronized`;
-- promotion PR: #77;
-- source-bearing synchronized commit: `e88dc5db19cc852069993989b13bbe80ff939d26`;
-- all seven renderer/version paths are exact blobs from tested source `c30c8686e65f7310ab047d88fadf2fe3b42d7415`;
-- newer main governance, including the Actions wait guard, is preserved;
-- no renderer semantic rewrite occurred during synchronization.
+Every frozen A-0238/A-0241 runtime and visual gate is closed.
 
-### Current handoff — exact-head promotion CI
+Next actions:
 
-P4.2 is runtime-complete and eligible for promotion. Do **not** add new renderer scope to PR #77.
+1. freeze PR #78's final continuity-synchronized promotion head;
+2. require hosted Build + Context Governor on that exact head;
+3. mark PR #78 ready and merge only if green;
+4. validate merged `main` with Build + Context Governor + Repository Hygiene;
+5. record P4.3 COMPLETE;
+6. freeze the next Phase 4 milestone separately.
 
-Next steps:
-
-1. freeze the final PR #77 head after continuity synchronization;
-2. require hosted Build and Context Governor success on that exact head;
-3. require Repository Hygiene if triggered/required;
-4. merge PR #77 only if those exact-head checks pass;
-5. validate merged `main`;
-6. record final P4.2 promotion evidence and only then freeze the next Phase 4 slice.
-
-P4.2 remains shadow-only after promotion. P3.10 remains the production SOLID/CUTOUT draw owner; P4.1 remains the fine section-level shadow control. Command compaction, temporal visibility, Hi-Z, native graphics expansion and indirect-count consumption remain outside P4.2.
+P4.3 remains shadow-only through promotion. P3.10 remains production SOLID/CUTOUT terrain owner. P4.2 remains the coarse hierarchy control and P4.1 remains the flat fine control. Production command compaction, temporal visibility, Hi-Z, indirect-count graphics, region hierarchy and LOD remain outside P4.3.

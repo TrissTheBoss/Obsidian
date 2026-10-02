@@ -46,7 +46,7 @@ flowchart LR
 | **1** | GPU memory, synchronization, indirect drawing, compute visibility foundations | ✅ Complete |
 | **2** | Real Minecraft section semantics, materials, light/AO, lifecycle and correctness oracle | ✅ Complete |
 | **3** | Async CPU meshing, greedy geometry, differential correctness, production opaque/cutout replacement | ✅ Complete |
-| **4** | Persistent large-scene GPU visibility and scalable draw generation | 🟡 **Active — P4.2 validated / promotion in progress** |
+| **4** | Persistent large-scene GPU visibility and scalable draw generation | 🟡 **Active — P4.3 validated / promotion in progress** |
 | **5** | Frame pacing, streaming and adaptive scheduling | ⏳ Planned |
 | **6–12** | Transparency/fluids, entities, block entities, particles/weather, UI/text, optional advanced renderer features, stabilization | ⏳ Planned |
 
@@ -67,7 +67,7 @@ flowchart TD
     K["2026-09-28<br/><b>Repository/public surface overhaul</b><br/>Preview channel, branch hygiene, maintained README"]
     L["2026-09-28<br/><b>Context Governor active + proven</b><br/>Recoverable LLM context + least-data API/OAuth calls"]
     M["2026-09-29<br/><b>P4.1 promoted</b><br/>Runtime + F3+T + re-entry + visual gates all passed"]
-    N["NOW<br/><b>P4.2 validated</b><br/>Synchronized promotion PR #77 in progress"]
+    N["NOW<br/><b>P4.3 validated</b><br/>Promotion PR #78 in progress"]
     O["FUTURE<br/><b>Phases 5-12</b><br/>Streaming, transparency, entities, UI, experiments, stabilization"]
 
     A --> B --> C --> D --> E --> F --> G --> H --> I --> J --> K --> L --> M --> N --> O
@@ -104,6 +104,8 @@ flowchart TD
 | **2026-09-29** | **P4.2 activated** | Dev2 freezes the first persistent chunk-column hierarchy and conservative coarse GPU visibility layer above P4.1's fine section classifier. | [PR #75](https://github.com/TrissTheBoss/Obsidian/pull/75) · [A-0224](ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md) |
 | **2026-09-29** | P4.2 dev2.2 Preview | Exact-section recenter + non-live recenter liveness corrections were CI-proven and published to GitHub Preview/Modrinth; runtime Visual PASS closed the liveness defect, leaving only the corrected-package 32+ scale sample. | [PR #75](https://github.com/TrissTheBoss/Obsidian/pull/75) · [A-0233](ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md) · [A-0234](ai/attempts/A-0234-phase4-p4.2-dev2.2-runtime-liveness-pass.md) |
 | **2026-10-03** | **P4.2 validation closed** | Exact dev2.2 passed the final corrected-package render-distance-32 scale gate; all frozen runtime/visual gates are closed and promotion moved to synchronized PR #77. | [PR #77](https://github.com/TrissTheBoss/Obsidian/pull/77) · [A-0235](ai/attempts/A-0235-phase4-p4.2-dev2.2-32-scale-runtime-pass.md) · [A-0236](ai/attempts/A-0236-phase4-p4.2-synchronized-promotion-head.md) |
+| **2026-10-03** | **P4.2 promoted / P4.3 activated** | Synchronized P4.2 promotion merged with green post-merge CI; dev3 freezes and implements sampled hierarchy-fed fine section visibility before production compaction. | [PR #77](https://github.com/TrissTheBoss/Obsidian/pull/77) · [PR #78](https://github.com/TrissTheBoss/Obsidian/pull/78) · [A-0237](ai/attempts/A-0237-phase4-p4.2-promotion.md) · [A-0238](ai/attempts/A-0238-phase4-p4.3-hierarchy-fed-fine-visibility-contract.md) |
+| **2026-10-03** | **P4.3 validation closed** | Dev3.1 reproduced conservative safe-extra lineage with zero true fine mismatches/false culls at RD32 and explicit Visual PASS; PR #78 moved to promotion. | [PR #78](https://github.com/TrissTheBoss/Obsidian/pull/78) · [A-0243](ai/attempts/A-0243-phase4-p4.3-dev3.1-runtime-pass.md) |
 | **2026-09-28** | Repository/public surface cleanup | `main` became the only permanent branch, Preview prereleases became the tester channel, and the public README/release flow was formalized. | A-0207 · [Repository hygiene](ai/REPOSITORY_HYGIENE.md) |
 | **2026-09-28** | Context Governor activated | Tiered recoverable context, automatic fail-closed compression, call-specific API/MCP minimization, and least-privilege OAuth policy were integrated and CI-proven. | [PR #61](https://github.com/TrissTheBoss/Obsidian/pull/61) · A-0208/A-0209 |
 | **2026-09-28** | Context Governor continuity closed | Final activation evidence, current-state synchronization and active-capsule refresh merged to `main`. | [PR #62](https://github.com/TrissTheBoss/Obsidian/pull/62) · merge `dcfe73eb` |
@@ -111,11 +113,11 @@ flowchart TD
 
 ## Where the project is now
 
-### Phase 4 / P4.2 — validated / promotion in progress
+### Phase 4 / P4.3 — validated / promotion in progress
 
 P4.1 is **promoted and complete**. The current public tester build is `0.4.0-phase4-dev2.2`, while P4.1 remains the promoted fine section-level shadow control.
 
-P4.2 / `0.4.0-phase4-dev2.2` has now closed every frozen runtime and visual gate, including the corrected-package render-distance-32 scale sample. Promotion is proceeding through synchronized PR #77, which preserves newer main governance while carrying the exact tested renderer/version blobs.
+P4.2 / `0.4.0-phase4-dev2.2` is promoted and complete. **P4.3 / `0.4.0-phase4-dev3.1`** has now closed its corrected runtime + visual gates, including non-zero safe-extra lineage with zero true fine mismatch counters. Promotion is in progress through PR #78.
 
 P4.2 does **not** change production terrain draw ownership. P3.10 still owns production SOLID/CUTOUT replacement, and P4.1 remains the fine section-level shadow control. Real command compaction, temporal visibility, Hi-Z and native indirect-count graphics stay for later separately frozen Phase 4 slices.
 

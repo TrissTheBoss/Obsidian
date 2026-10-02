@@ -7,6 +7,7 @@ import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import dev.obsidian.render.vulkan.VulkanLargeSceneColumnVisibilityProbe;
+import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntIterator;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import net.minecraft.client.renderer.GameRenderer;
@@ -50,6 +51,8 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
     private final Vector4f planeScratch = new Vector4f();
     private final IntOpenHashSet expectedVisibleIds = new IntOpenHashSet();
     private final IntOpenHashSet gpuVisibleIds = new IntOpenHashSet();
+    private final Int2IntOpenHashMap snapshotSlotByIdentity;
+    private final HierarchicalFineVisibilityProbe fineVisibility;
 
     private GpuFence inFlightFence;
 
@@ -59,6 +62,7 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
     private long snapshotBuildSerial;
     private int snapshotSlotCursor;
     private int snapshotCandidateCount;
+    private long snapshotLookupSerial;
 
     private long auditHierarchySerial;
     private long auditSectionSerial;
@@ -148,6 +152,9 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
                 outputBytes);
         this.readbackView = readbackBuffer.map(true, false);
         this.readbackData = readbackView.data();
+        this.snapshotSlotByIdentity = new Int2IntOpenHashMap(hierarchy.capacity(), 0.75f);
+        this.snapshotSlotByIdentity.defaultReturnValue(-1);
+        this.fineVisibility = new HierarchicalFineVisibilityProbe(device, hierarchy, sections);
         this.nextSampleFrame = 0L;
 
         LOG.log(System.Logger.Level.INFO,
@@ -161,6 +168,12 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
         RenderSystem.assertOnRenderThread();
         if (closed || hardFailure) return;
         long startNs = System.nanoTime();
+
+        fineVisibility.afterWorldRender();
+        if (fineVisibility.hardFailure()) {
+            hardFailure = true;
+            return;
+        }
 
         pollReadback();
         if (hardFailure) return;
@@ -291,6 +304,8 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
             snapshotBuildSerial = serial;
             snapshotSlotCursor = 0;
             snapshotCandidateCount = 0;
+            snapshotLookupSerial = 0L;
+            snapshotSlotByIdentity.clear();
         }
 
         int budget = SNAPSHOT_COLUMN_BUDGET;
@@ -311,15 +326,25 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
             uploadData.putInt(byteOffset + 4, hierarchy.minLiveSectionY(slot));
             uploadData.putInt(byteOffset + 8, hierarchy.chunkZ(slot));
             uploadData.putInt(byteOffset + 12, hierarchy.maxLiveSectionY(slot));
-            uploadData.putInt(byteOffset + 16, hierarchy.identity(slot));
+            int columnIdentity = hierarchy.identity(slot);
+            uploadData.putInt(byteOffset + 16, columnIdentity);
             uploadData.putInt(byteOffset + 20, hierarchy.liveSectionCount(slot));
             uploadData.putInt(byteOffset + 24, 0);
             uploadData.putInt(byteOffset + 28, 0);
+            if (snapshotSlotByIdentity.put(columnIdentity, slot) >= 0) {
+                hierarchyAuditFailures++;
+                hardFailure = true;
+                LOG.log(System.Logger.Level.ERROR,
+                        "P4.3 snapshot identity lookup found duplicate column identity {0}.",
+                        columnIdentity);
+                return;
+            }
             snapshotCandidateCount++;
         }
 
         if (snapshotSlotCursor >= hierarchy.capacity()) {
             snapshotBuilding = false;
+            snapshotLookupSerial = snapshotBuildSerial;
         }
     }
 
@@ -572,6 +597,25 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
                         sections.liveCount(), sampleEstimatedFineCandidateUpperBound,
                         sampleFlatFineCandidates, lastCoarseVisiblePermille);
             }
+
+            fineVisibility.beginSample(
+                    expectedVisibleIds,
+                    gpuVisibleIds,
+                    snapshotSlotByIdentity,
+                    snapshotLookupSerial,
+                    sampleHierarchySerial,
+                    sampleSectionSerial,
+                    sampleCameraSectionX,
+                    sampleCameraSectionY,
+                    sampleCameraSectionZ,
+                    sampleCameraLocalX,
+                    sampleCameraLocalY,
+                    sampleCameraLocalZ,
+                    samplePlanes,
+                    sampleFlatFineCandidates);
+            if (fineVisibility.hardFailure()) {
+                hardFailure = true;
+            }
         }
         sampleActive = false;
         sampleFrustum = null;
@@ -608,6 +652,9 @@ public final class LargeSceneColumnHierarchyProbe implements AutoCloseable {
                 abandonedForDeviceShutdown = true;
             }
         }
+
+        fineVisibility.close();
+        if (fineVisibility.hardFailure()) hardFailure = true;
 
         LOG.log(System.Logger.Level.INFO,
                 "P4.2 final column hierarchy evidence: configured=true, renderDistance={0}, columnCapacity={1}, liveColumns={2}, highWaterColumns={3}, liveSections={4}, columnMembership={5}, sectionsPerLiveColumnPermille={6}, columnMetadataBytes={7}, occupancyBytes={8}, wordsPerColumn={9}, columnInstalls={10}, columnRemovals={11}, slotReuses={12}, membershipAdds={13}, membershipRemovals={14}, capacityFailures={15}, mutationFailures={16}, hierarchyAuditRuns={17}, hierarchyAuditFailures={18}, snapshotBuildRestarts={19}, snapshotUploads={20}, snapshotUploadBytes={21}, dispatches={22}, columnCandidatesTested={23}, samplesCompleted={24}, samplesAbortedStale={25}, conservativeSamples={26}, exactSamples={27}, missingVisibleColumns={28}, unexpectedVisibleColumns={29}, duplicateVisibleColumns={30}, gpuColumnFalseCullCount={31}, readbackPendingHighWater={32}, lastVisibleColumns={33}, lastCoarseVisiblePermille={34}, lastEstimatedFineCandidateUpperBound={35}, lastFlatFineCandidateCount={36}, hierarchyMutationCalls={37}, hierarchyMutationNs={38}, hierarchyUpdateFrames={39}, cameraOnlyFrames={40}, hierarchyMaintenanceNs={41}, cameraOnlyHierarchyMaintenanceNs={42}, hardFailure={43}, abandonedForDeviceShutdown={44}, cameraOnlyFullHierarchyScan=false, productionDrawOwnershipChanged=false, nativeGraphicsExpansion=false, commandCompactionEnabled=false, temporalVisibilityEnabled=false, hizEnabled=false.",

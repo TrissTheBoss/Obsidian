@@ -38,13 +38,13 @@
 | --- | --- |
 | **Product phase** | **Phase 4 — GPU-driven visibility at real-world scale** |
 | **Validated production baseline** | Phase 3 P3.10 opaque/cutout terrain replacement |
-| **Current tester build** | `0.4.0-phase4-dev2.2` — validated P4.2 Preview; synchronized promotion in progress |
+| **Current tester build** | `0.4.0-phase4-dev3.1` — validated P4.3 Preview; promotion in progress |
 | **Minecraft** | 26.2 |
 | **Fabric Loader baseline** | 0.19.3 |
 | **Java** | 25 |
 | **Graphics backend** | Vulkan only |
 
-P4.1 is promoted and remains the fine section-level shadow control. P4.2/dev2.2 has closed its frozen runtime and visual gates and is in synchronized promotion through PR #77. The proven Phase 3 P3.10 terrain path still owns production terrain rendering; P4.2 does not change production draw ownership.
+P4.2/dev2.2 is promoted and complete. P4.3/dev3.1 has now closed its corrected render-distance-32 runtime and human visual gates, including non-zero conservative safe-extra lineage with zero true fine mismatch/false-cull counters. Promotion is in progress through PR #78. P3.10 still owns production terrain rendering and P4.3 remains shadow-only.
 
 For exact source SHAs, CI authority, test gates, and the current handoff, read [`ai/CURRENT_STATE.md`](ai/CURRENT_STATE.md).
 
