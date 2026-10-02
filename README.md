@@ -38,13 +38,13 @@
 | --- | --- |
 | **Product phase** | **Phase 4 — GPU-driven visibility at real-world scale** |
 | **Validated production baseline** | Phase 3 P3.10 opaque/cutout terrain replacement |
-| **Current tester build** | `0.4.0-phase4-dev2.2` — promoted P4.2 Preview (P4.3/dev3 is in development) |
+| **Current tester build** | `0.4.0-phase4-dev3` — P4.3 Preview with a known shadow-validator safe-extra lineage issue; dev3.1 correction is in validation |
 | **Minecraft** | 26.2 |
 | **Fabric Loader baseline** | 0.19.3 |
 | **Java** | 25 |
 | **Graphics backend** | Vulkan only |
 
-P4.2/dev2.2 is promoted and complete. Active P4.3/dev3 work feeds the proven coarse column hierarchy into a validation-only fine section classifier to measure real candidate reduction while preserving exact visibility. The proven Phase 3 P3.10 terrain path still owns production terrain rendering; P4.3 remains shadow-only.
+P4.2/dev2.2 is promoted and complete. P4.3/dev3 proved real hierarchy-fed fine candidate reduction and received a human Visual PASS, but its shadow validator misclassified a conservative GPU-only coarse lineage identity as a fatal fine mismatch. Dev3.1 corrects that oracle accounting while leaving production rendering unchanged. P3.10 still owns production terrain rendering and P4.3 remains shadow-only.
 
 For exact source SHAs, CI authority, test gates, and the current handoff, read [`ai/CURRENT_STATE.md`](ai/CURRENT_STATE.md).
 
