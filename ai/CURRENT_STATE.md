@@ -1,14 +1,14 @@
 # Obsidian Current State
 
-Last updated: 2026-09-29
+Last updated: 2026-10-03
 
 ## Canonical repository
 
 - Repository: `TrissTheBoss/Obsidian`
 - Default branch: `main`
 - Synchronized Phase 3 merge: `01547b55f68690a5d0aac8405fc0fe91cdf440f9`
-- Active branch: `phase4/p4.1-persistent-scene-visibility`
-- Active draft PR: #57 `Phase 4 P4.1: persistent large-scene GPU visibility`
+- Active branch: `promotion/p4.2-synchronized`
+- Active promotion PR: #77 `[no-release] Promote Phase 4 P4.2 column hierarchy` (non-draft)
 - Product phase: **Phase 4 — GPU-driven visibility at real-world scale**.
 
 
@@ -23,7 +23,7 @@ Last updated: 2026-09-29
 - Tester-facing CI-green development JARs use GitHub **Prereleases / Preview**; validated public checkpoints use normal Releases; Actions artifacts remain short-lived engineering evidence.
 - Publish Preview run `36400684893` / #1 passed from audited `/publish-preview` on PR #57 and published `v0.4.0-phase4-dev1` as a GitHub prerelease targeting `6af5174f054b272c65174fbf0c37d981a66aff31`.
 - Preview runtime JAR: 493,355 bytes, SHA-256 `8bf25f3aa6bfe6fb4392044ba0973692fc6a24fd9948f3fea51cf55b12e157f3`. Its target differs from A-0205 package authority only by `/ai` continuity files; no renderer/source/resource file changed. Keep this Preview binary identity separate from the original A-0205 Actions-handoff hash.
-- A-0207 records final cleanup/build/release evidence. P4.1 runtime validation remains pending and PR #57 stays draft.
+- A-0207 records final cleanup/build/release evidence. P4.1 later closed all frozen runtime/visual gates and promoted via A-0223; `0.4.0-phase4-dev1` remains the current public Preview until a later dev2 package is published.
 ## Modrinth distribution mirror — ACTIVE AND PROVEN
 
 - D-0031 keeps GitHub CI/releases authoritative while allowing the same versioned builds to be mirrored to Modrinth for ordinary users.
@@ -37,7 +37,7 @@ Last updated: 2026-09-29
 - Publication performs an authenticated existing-version lookup and leaves an already-published matching version number untouched.
 - PR #67 merged `[no-release]` as `7323626f7d8f556f5ae81735ecc0e6a4da9bc85f`; post-merge Context Governor #14, Repository Hygiene #15, and Build #783 all passed.
 - A-0212 records the reviewed action pin, workflow behavior, security boundary, release-policy synchronization, and exact hosted evidence.
-- PR #68 `Allow idempotent Modrinth backfill` merged `[no-release]` as `67e5a19d92e9e4f746ee5632b95e6aef6fb12c0b`; PR #69 added secret-backed project-ID support and merged as `dc4fdec81cc389fb0cee300d982d7da61015ad1b`; A-0214/A-0215 record those first-live integration steps. Publish Preview run `36433438631` / #4 then reached Modrinth but its list-versions preflight returned HTTP 404; A-0216 records that failure and the safe 404 fallback. PR #70 `Allow Modrinth create after hidden-project 404` merged `[no-release]` as `87c51328ab1f1587bc544a186ee5fd55bf688977` after exact-head Build #794, Context Governor #24 and Repository Hygiene #22 passed; merged `main` then passed Build #795, Context Governor #25 and Repository Hygiene #21. Publish Preview run `36434577563` / #5 completed SUCCESS and downstream Modrinth job `108969491205` completed SUCCESS. The list-versions request again returned HTTP 404, the workflow correctly continued to VERSION_CREATE, and the pinned publisher reported a successful upload for `0.4.0-phase4-dev1`, Modrinth version ID `OhTxTs7Z`, source `6af5174f054b272c65174fbf0c37d981a66aff31`, Minecraft 26.2, Fabric, client-only, `alpha`. A-0217 records the closing evidence. The first-live-publication obligation is closed; P4.1 runtime validation remains the active engineering mission.
+- PR #68 `Allow idempotent Modrinth backfill` merged `[no-release]` as `67e5a19d92e9e4f746ee5632b95e6aef6fb12c0b`; PR #69 added secret-backed project-ID support and merged as `dc4fdec81cc389fb0cee300d982d7da61015ad1b`; A-0214/A-0215 record those first-live integration steps. Publish Preview run `36433438631` / #4 then reached Modrinth but its list-versions preflight returned HTTP 404; A-0216 records that failure and the safe 404 fallback. PR #70 `Allow Modrinth create after hidden-project 404` merged `[no-release]` as `87c51328ab1f1587bc544a186ee5fd55bf688977` after exact-head Build #794, Context Governor #24 and Repository Hygiene #22 passed; merged `main` then passed Build #795, Context Governor #25 and Repository Hygiene #21. Publish Preview run `36434577563` / #5 completed SUCCESS and downstream Modrinth job `108969491205` completed SUCCESS. The list-versions request again returned HTTP 404, the workflow correctly continued to VERSION_CREATE, and the pinned publisher reported a successful upload for `0.4.0-phase4-dev1`, Modrinth version ID `OhTxTs7Z`, source `6af5174f054b272c65174fbf0c37d981a66aff31`, Minecraft 26.2, Fabric, client-only, `alpha`. A-0217 records the closing evidence. The first-live-publication obligation is closed; P4.1 is promoted and P4.2 is now the active engineering mission.
 
 ## LLM Context Governor — ACTIVE AND PROVEN
 
@@ -82,7 +82,7 @@ Canonical direct runtime JAR:
 
 Do not treat later continuity/Phase 4 commits as the source authority for that package.
 
-## Phase 4 P4.1 — RUNTIME + VISUAL GATES PASSED / PROMOTION CI ACTIVE
+## Phase 4 P4.1 — COMPLETE
 
 Immutable contract:
 
@@ -205,21 +205,138 @@ A-0221 records the tester's explicit human **PASS** for the exact A-0220 follow-
 
 All frozen A-0203 runtime and visual gates are now closed. No additional dev1 renderer change or runtime exercise is required.
 
-## Current handoff — synchronized promotion CI
+## P4.1 promotion closure
 
-A-0222 created a clean synchronized promotion branch from current `main` and copied the exact tested P4.1 implementation/version blobs byte-for-byte. The source-bearing synchronized commit is `3fb81bf6053cebbed7e6e4b058635d3653ddb6c3`.
+A-0223 records final promotion:
 
-Do **not** merge the stale branch continuity snapshot over newer `main` state.
+- synchronized promotion PR #74 exact head `8be121eaf473423b8fc0766be37e48bb8fa2af16` passed Build #809 and Context Governor #37;
+- PR #74 merged `[no-release]` as `59d130e17000b07e6ed8bbe226cb2f50eb795c74`;
+- merged `main` passed Build #810, Context Governor #38 and Repository Hygiene #31;
+- obsolete diverged PR #57 was closed as superseded;
+- P4.1 remains shadow-only by design and P3.10 remains the production terrain draw owner.
 
-Required next actions:
+## Phase 4 P4.2 — RUNTIME COMPLETE / PROMOTION IN PROGRESS
 
-1. open/use a non-draft promotion PR from `promotion/p4.1-synchronized`;
-2. run hosted Build/Context Governor/Repository Hygiene validation on the exact final promotion head;
-3. promote/merge P4.1 only after that head is green;
-4. freeze the next Phase 4 slice separately.
+Frozen contract:
 
-P4.1 remains shadow-only through promotion; production terrain draw ownership stays with P3.10.
+`ai/attempts/A-0224-phase4-p4.2-column-hierarchy-contract.md`
 
-## After synchronized P4.1 promotion
+Version target:
 
-Choose the next Phase 4 slice from measured P4.1 evidence and freeze it before renderer-source changes. Do not retroactively expand P4.1 itself into production GPU-driven terrain ownership.
+`0.4.0-phase4-dev2`
+
+Active branch / PR:
+
+- `phase4/p4.2-column-hierarchy`;
+- draft PR #75.
+
+P4.2 adds the first hierarchy level above the proven P4.1 section database: bounded persistent chunk-column metadata plus conservative coarse GPU frustum visibility.
+
+A-0225 records the complete dev2 implementation and exact hosted package evidence.
+
+### P4.2 dev2 implementation
+
+- bounded `PersistentColumnHierarchy` with hard ceiling **131,072 columns**;
+- exact active vertical range and dynamically sized occupancy bitsets;
+- stable per-column validation identities and bounded slot reuse;
+- exact live-section count and min/max live section Y;
+- section/column lifecycle updated from the same P4.1 event/resync stream;
+- explicit cross-database mutation disagreement failures;
+- budgeted structural section->column and per-column occupancy audits;
+- `VulkanLargeSceneColumnVisibilityProbe` using conservative camera-relative aggregate column AABBs;
+- atomic visible-column count + identity compaction;
+- independent Minecraft `Frustum.isVisible(AABB)` CPU oracle plus boundary ambiguity accounting;
+- scale telemetry for live columns/sections, coarse visible ratio and estimated fine-candidate upper bound;
+- async zero-timeout readback and completion-gated shutdown behavior;
+- `cameraOnlyFullHierarchyScan=false`;
+- P4.1 remains the fine section-level shadow control;
+- production draw ownership/native graphics ownership unchanged;
+- command compaction, temporal visibility, Hi-Z and indirect-count consumption remain disabled.
+
+### Canonical dev2.2 source/package authority
+
+Version:
+
+`0.4.0-phase4-dev2.2`
+
+Exact validated source:
+
+`c30c8686e65f7310ab047d88fadf2fe3b42d7415`
+
+Hosted validation:
+
+- Build run `36634634353` / **#833** — SUCCESS;
+- Context Governor run `36634634108` / **#57** — SUCCESS;
+- Build #833 artifact ID `11063553493`;
+- runtime JAR `Obsidian-0.4.0-phase4-dev2.2.jar`;
+- runtime size **519,994 bytes**;
+- runtime SHA-256 **`571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37`**.
+
+A-0233 records the exact hosted package authority.
+
+### Public dev2.2 Preview
+
+Publish Preview run `36635510377` / **#14** completed SUCCESS.
+
+- GitHub release ID `399552665`;
+- tag `v0.4.0-phase4-dev2.2`;
+- exact release target `c30c8686e65f7310ab047d88fadf2fe3b42d7415`;
+- published runtime JAR is byte-identical to Build #833 package authority;
+- downstream Modrinth job `109635372697` completed SUCCESS;
+- pinned publisher returned Modrinth version ID `yDBeoQge`.
+
+GitHub remains package authority; Modrinth is the mirrored distribution surface.
+
+### Dev2.2 runtime closure
+
+A-0234 closed the exact-player-section recenter/liveness defect on the exact published dev2.2 package and recorded the tester's explicit human **Visual PASS**.
+
+A-0235 closes the final corrected-package scale gate at render distance **32**:
+
+- live/high-water columns: **3,725 / 3,725**;
+- live sections / exact column membership: **35,273 / 35,273**;
+- hierarchy audit runs/failures: **115 / 0**;
+- capacity failures: **0**;
+- mutation failures: **0**;
+- completed/exact coarse samples: **3,650 / 3,639**;
+- missing coarse identities: **0**;
+- duplicate coarse identities: **0**;
+- `gpuColumnFalseCullCount=0`;
+- conservative extra visible columns: 11 accumulated;
+- `cameraOnlyFullHierarchyScan=false`;
+- `hardFailure=false`;
+- production draw ownership unchanged;
+- native graphics ownership unchanged.
+
+P4.1 remained clean at render distance 32 with **227** exact samples and zero missing/unexpected/duplicate/false-cull counts. P3.10 accounting, P3.5 border/halo proof, P3.7 differential correctness, workers, staging, arena and resources all closed cleanly; process exit code was 0.
+
+Every frozen A-0224 and A-0232 runtime/visual gate is now closed.
+
+### Synchronized promotion authority
+
+PR #75 diverged from newer `main` maintenance state while runtime validation was underway and was closed as superseded rather than force-merged.
+
+A-0236 records the clean synchronization:
+
+- current-main base: `739ed7f734775cdbeafb63969b146951d8897a56`;
+- promotion branch: `promotion/p4.2-synchronized`;
+- promotion PR: #77;
+- source-bearing synchronized commit: `e88dc5db19cc852069993989b13bbe80ff939d26`;
+- all seven renderer/version paths are exact blobs from tested source `c30c8686e65f7310ab047d88fadf2fe3b42d7415`;
+- newer main governance, including the Actions wait guard, is preserved;
+- no renderer semantic rewrite occurred during synchronization.
+
+### Current handoff — exact-head promotion CI
+
+P4.2 is runtime-complete and eligible for promotion. Do **not** add new renderer scope to PR #77.
+
+Next steps:
+
+1. freeze the final PR #77 head after continuity synchronization;
+2. require hosted Build and Context Governor success on that exact head;
+3. require Repository Hygiene if triggered/required;
+4. merge PR #77 only if those exact-head checks pass;
+5. validate merged `main`;
+6. record final P4.2 promotion evidence and only then freeze the next Phase 4 slice.
+
+P4.2 remains shadow-only after promotion. P3.10 remains the production SOLID/CUTOUT draw owner; P4.1 remains the fine section-level shadow control. Command compaction, temporal visibility, Hi-Z, native graphics expansion and indirect-count consumption remain outside P4.2.
