@@ -1,16 +1,17 @@
 {
   "schema_version": 1,
-  "active_goal": "Validate and package Phase 4 P4.3 / 0.4.0-phase4-dev3 hierarchy-fed fine section visibility on draft PR #78, then run the frozen 32+ runtime/visual contract without changing production draw ownership.",
+  "active_goal": "Validate, publish, and runtime-close Phase 4 P4.3 dev3.1 safe-extra lineage correction on draft PR #78, then promote P4.3 before freezing the next Phase 4 milestone.",
   "scope_boundary": "Active engineering scope is P4.3 sampled hierarchy-fed fine section visibility plus required continuity/release maintenance. Do not add production GPU-driven draw ownership, production command compaction, native graphics expansion, temporal visibility, Hi-Z, indirect-count graphics, region hierarchy, LOD, P3.9 partial remeshing, or unrelated renderer scope.",
   "source_snapshot": {
-    "created_at": "2026-10-03T01:20:00+02:00",
+    "created_at": "2026-10-03T01:35:00+02:00",
     "repo_or_system": "TrissTheBoss/Obsidian",
     "authority_refs": [
       "ai/CURRENT_STATE.md@phase4/p4.3-hierarchy-fed-fine-visibility",
       "ai/MASTER_ROADMAP.md@phase4/p4.3-hierarchy-fed-fine-visibility",
-      "ai/attempts/A-0237-phase4-p4.2-promotion.md@phase4/p4.3-hierarchy-fed-fine-visibility",
       "ai/attempts/A-0238-phase4-p4.3-hierarchy-fed-fine-visibility-contract.md@phase4/p4.3-hierarchy-fed-fine-visibility",
-      "ai/attempts/A-0239-phase4-p4.3-dev3-implementation-handoff.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "ai/attempts/A-0240-phase4-p4.3-dev3-runtime-safe-extra-oracle-defect.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "ai/attempts/A-0241-phase4-p4.3-dev3.1-safe-extra-lineage-contract.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "ai/attempts/A-0242-phase4-p4.3-dev3.1-safe-extra-lineage-implementation.md@phase4/p4.3-hierarchy-fed-fine-visibility",
       "pull/78"
     ]
   },
@@ -35,8 +36,8 @@
     },
     {
       "id": "F11",
-      "text": "P4.3 is ACTIVE on draft PR #78 as 0.4.0-phase4-dev3. A-0238 freezes sampled hierarchy-fed fine visibility; A-0239 records the implementation. P4.3 remains shadow-only and reuses completed conservative P4.2 samples plus the proven P4.1 fine classifier.",
-      "source_ref": "ai/attempts/A-0239-phase4-p4.3-dev3-implementation-handoff.md"
+      "text": "P4.3 is ACTIVE on draft PR #78. Dev3 published successfully and received human Visual PASS at RD32 but exposed a validator-only safe-extra lineage defect; A-0241 freezes and A-0242 implements the dev3.1 correction without changing production rendering.",
+      "source_ref": "ai/attempts/A-0242-phase4-p4.3-dev3.1-safe-extra-lineage-implementation.md"
     },
     {
       "id": "F2",
@@ -45,8 +46,8 @@
     },
     {
       "id": "F3",
-      "text": "The current public tester package remains GitHub Preview v0.4.0-phase4-dev2.2 until dev3 exact-head CI and package publication complete.",
-      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
+      "text": "GitHub Preview v0.4.0-phase4-dev3 is published from exact source a61f70f895eb0416caf83605f3f12eacaad43811; it has a known P4.3 shadow-validator safe-extra lineage defect and is being superseded by dev3.1.",
+      "source_ref": "ai/attempts/A-0240-phase4-p4.3-dev3-runtime-safe-extra-oracle-defect.md"
     },
     {
       "id": "F4",
@@ -94,25 +95,25 @@
   "open_obligations": [
     {
       "id": "O1",
-      "text": "Validate draft PR #78 exact head with hosted Build + Context Governor. If green, record dev3 artifact authority, publish immutable Preview, then execute A-0238 runtime + human visual gates at render distance 32+.",
-      "source_ref": "ai/attempts/A-0239-phase4-p4.3-dev3-implementation-handoff.md"
+      "text": "Require exact-head Build + Context Governor for dev3.1, publish immutable Preview if green, then run the narrow A-0241 RD32+ safe-extra-lineage retest. Promote P4.3 only if true fine mismatch counters remain zero.",
+      "source_ref": "ai/attempts/A-0242-phase4-p4.3-dev3.1-safe-extra-lineage-implementation.md"
     }
   ],
   "exact_identifiers": [
     {
       "id": "I1",
-      "text": "Active branch phase4/p4.3-hierarchy-fed-fine-visibility; active draft PR #78; version target 0.4.0-phase4-dev3.",
-      "source_ref": "ai/CURRENT_STATE.md#Phase-4-P43-ACTIVE-DEV3-IMPLEMENTED-HOSTED-CI-REQUIRED"
+      "text": "Active branch phase4/p4.3-hierarchy-fed-fine-visibility; active draft PR #78; current target 0.4.0-phase4-dev3.1.",
+      "source_ref": "ai/CURRENT_STATE.md"
     },
     {
       "id": "I7",
-      "text": "P4.2 promoted merge is 3b50f1e0fea11ae65c3e61689db20f03c8dd4766; post-merge Build #841 run 37076424763, Context Governor #63 run 37076424599, and Repository Hygiene #36 run 37076424520 all succeeded.",
+      "text": "P4.2 promoted merge is 3b50f1e0fea11ae65c3e61689db20f03c8dd4766; post-merge Build #841, Context Governor #63, and Repository Hygiene #36 all succeeded.",
       "source_ref": "ai/attempts/A-0237-phase4-p4.2-promotion.md"
     },
     {
-      "id": "I8",
-      "text": "Canonical dev2.2 public runtime remains SHA-256 571da7ea710d7e5376488b98b5e19e1edf005dd924a87b1db661948c79753d37 from source c30c8686e65f7310ab047d88fadf2fe3b42d7415; GitHub Preview v0.4.0-phase4-dev2.2 and Modrinth yDBeoQge are published.",
-      "source_ref": "ai/attempts/A-0233-phase4-p4.2-dev2.2-package-publication.md"
+      "id": "I9",
+      "text": "Dev3 exact source a61f70f895eb0416caf83605f3f12eacaad43811 passed Build #844 / Context Governor #65 and published via Preview #15; runtime SHA-256 d0fd48734be5ad41c9981909a6a3070612ab7ac9565bed76ca1f0c55fd3c95b9.",
+      "source_ref": "ai/attempts/A-0240-phase4-p4.3-dev3-runtime-safe-extra-oracle-defect.md"
     }
   ],
   "security_boundaries": [
@@ -272,16 +273,22 @@
       "locator": "Load for exact PR/CI/merge/post-merge proof and promoted ownership boundaries."
     },
     {
-      "id": "p4-p4.3-contract",
-      "topic": "Frozen P4.3 hierarchy-fed fine visibility contract",
-      "source_ref": "ai/attempts/A-0238-phase4-p4.3-hierarchy-fed-fine-visibility-contract.md@phase4/p4.3-hierarchy-fed-fine-visibility",
-      "locator": "Load entirely before changing or evaluating dev3 behavior/gates."
+      "id": "p4-p4.3-dev3-runtime",
+      "topic": "P4.3 dev3 runtime visual PASS and safe-extra oracle defect",
+      "source_ref": "ai/attempts/A-0240-phase4-p4.3-dev3-runtime-safe-extra-oracle-defect.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "locator": "Load before evaluating dev3.1; contains exact mismatch shape and inherited clean gates."
     },
     {
-      "id": "p4-p4.3-implementation",
-      "topic": "P4.3 dev3 implementation handoff",
-      "source_ref": "ai/attempts/A-0239-phase4-p4.3-dev3-implementation-handoff.md@phase4/p4.3-hierarchy-fed-fine-visibility",
-      "locator": "Load for exact source design, telemetry, scope boundary, and next CI/package step."
+      "id": "p4-p4.3-dev3.1-contract",
+      "topic": "Frozen P4.3 dev3.1 safe-extra lineage correction",
+      "source_ref": "ai/attempts/A-0241-phase4-p4.3-dev3.1-safe-extra-lineage-contract.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "locator": "Load entirely before changing or evaluating dev3.1 behavior/gates."
+    },
+    {
+      "id": "p4-p4.3-dev3.1-implementation",
+      "topic": "P4.3 dev3.1 implementation handoff",
+      "source_ref": "ai/attempts/A-0242-phase4-p4.3-dev3.1-safe-extra-lineage-implementation.md@phase4/p4.3-hierarchy-fed-fine-visibility",
+      "locator": "Load for exact correction design, preserved failure semantics, telemetry and next CI/package step."
     }
   ],
   "discarded_ids": [
@@ -307,5 +314,5 @@
     "modrinth-secret-project-id-validation",
     "modrinth-first-success"
   ],
-  "next_action": "Freeze PR #78 exact head after continuity sync, require hosted Build + Context Governor, fix only compile/contract defects, then record and publish the immutable dev3 tester package before runtime validation."
+  "next_action": "Freeze the final dev3.1 PR #78 head, require hosted Build + Context Governor, publish immutable dev3.1 if green, then run the narrow RD32+ safe-extra-lineage runtime closure."
 }
