@@ -117,6 +117,8 @@ public final class PersistentSectionScene {
         return (long) capacity * (Integer.BYTES * 5L + 2L);
     }
 
+    public int sectionSlot(int x, int y, int z) { return slotBySection.get(SectionPos.asLong(x, y, z)); }
+
     public boolean isLive(int slot) { return slot >= 0 && slot < capacity && live[slot] != 0; }
     public int sectionX(int slot) { return sectionX[slot]; }
     public int sectionY(int slot) { return sectionY[slot]; }
