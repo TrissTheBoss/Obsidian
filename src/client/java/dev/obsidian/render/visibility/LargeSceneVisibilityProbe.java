@@ -602,27 +602,11 @@ public final class LargeSceneVisibilityProbe implements AutoCloseable {
 
     /** -1 culled, 0 boundary-ambiguous/conservatively visible, 1 clearly visible. */
     private int classifyCpu(int sectionX, int sectionY, int sectionZ) {
-        float minX = (sectionX - sampleCameraSectionX) * 16.0f - sampleCameraLocalX;
-        float minY = (sectionY - sampleCameraSectionY) * 16.0f - sampleCameraLocalY;
-        float minZ = (sectionZ - sampleCameraSectionZ) * 16.0f - sampleCameraLocalZ;
-        float maxX = minX + 16.0f;
-        float maxY = minY + 16.0f;
-        float maxZ = minZ + 16.0f;
-        boolean ambiguous = false;
-        for (int i = 0; i < 6; i++) {
-            int p = i * 4;
-            float a = samplePlanes[p];
-            float b = samplePlanes[p + 1];
-            float c = samplePlanes[p + 2];
-            float d = samplePlanes[p + 3];
-            float x = a >= 0.0f ? maxX : minX;
-            float y = b >= 0.0f ? maxY : minY;
-            float z = c >= 0.0f ? maxZ : minZ;
-            float maxDistance = a * x + b * y + c * z + d;
-            if (maxDistance < -FRUSTUM_EPSILON) return -1;
-            if (maxDistance <= FRUSTUM_EPSILON) ambiguous = true;
-        }
-        return ambiguous ? 0 : 1;
+        return SectionFrustumClassifier.classifySection(
+                sectionX, sectionY, sectionZ,
+                sampleCameraSectionX, sampleCameraSectionY, sampleCameraSectionZ,
+                sampleCameraLocalX, sampleCameraLocalY, sampleCameraLocalZ,
+                samplePlanes, FRUSTUM_EPSILON);
     }
 
     private void pollReadback() {
