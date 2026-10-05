@@ -1,4 +1,5 @@
 plugins {
+    id 'checkstyle'
     id 'net.fabricmc.fabric-loom' version "${loom_version}"
     id 'maven-publish'
 }
@@ -23,6 +24,32 @@ loom {
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    testImplementation "org.junit.jupiter:junit-jupiter:6.1.3"
+}
+
+sourceSets {
+    test {
+        compileClasspath += sourceSets.client.output + sourceSets.client.compileClasspath
+        runtimeClasspath += sourceSets.client.output + sourceSets.client.runtimeClasspath
+    }
+}
+
+tasks.named('test') {
+    dependsOn tasks.named('clientClasses')
+    useJUnitPlatform()
+}
+
+checkstyle {
+    toolVersion = '14.3.0'
+    ignoreFailures = false
+    maxWarnings = 0
+}
+
+tasks.withType(org.gradle.api.plugins.quality.Checkstyle).configureEach {
+    reports {
+        xml.required = true
+        html.required = true
+    }
 }
 
 processResources {
