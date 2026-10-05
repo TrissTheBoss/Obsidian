@@ -19,14 +19,7 @@ public final class LargeSceneLifecycleEvents {
     public static final byte SECTION_BECAME_NONEMPTY = 6;
 
     private static final int CAPACITY = 32 * 1024;
-    private static final byte[] TYPES = new byte[CAPACITY];
-    private static final long[] KEYS = new long[CAPACITY];
-
-    private static int head;
-    private static int count;
-    private static boolean overflowed;
-    private static long overflowEvents;
-    private static long recordedEvents;
+    private static final BoundedLifecycleEventRing RING = new BoundedLifecycleEventRing(CAPACITY);
 
     private LargeSceneLifecycleEvents() {}
 
@@ -50,34 +43,20 @@ public final class LargeSceneLifecycleEvents {
         record(hasOnlyAir ? SECTION_BECAME_EMPTY : SECTION_BECAME_NONEMPTY, SectionPos.asLong(x, y, z));
     }
 
-    public static synchronized int drainTo(byte[] types, long[] keys, int maxEvents) {
-        if (types == null || keys == null || maxEvents <= 0) return 0;
-        int limit = Math.min(maxEvents, Math.min(types.length, keys.length));
-        int drained = Math.min(count, limit);
-        for (int i = 0; i < drained; i++) {
-            types[i] = TYPES[head];
-            keys[i] = KEYS[head];
-            TYPES[head] = 0;
-            KEYS[head] = 0L;
-            head++;
-            if (head == CAPACITY) head = 0;
-        }
-        count -= drained;
-        return drained;
+    public static int drainTo(byte[] types, long[] keys, int maxEvents) {
+        return RING.drainTo(types, keys, maxEvents);
     }
 
-    public static synchronized boolean consumeOverflowed() {
-        boolean value = overflowed;
-        overflowed = false;
-        return value;
+    public static boolean consumeOverflowed() {
+        return RING.consumeOverflowed();
     }
 
-    public static synchronized long overflowEvents() {
-        return overflowEvents;
+    public static long overflowEvents() {
+        return RING.overflowEvents();
     }
 
-    public static synchronized long recordedEvents() {
-        return recordedEvents;
+    public static long recordedEvents() {
+        return RING.recordedEvents();
     }
 
     public static int chunkX(long packed) {
@@ -88,18 +67,8 @@ public final class LargeSceneLifecycleEvents {
         return (int) packed;
     }
 
-    private static synchronized void record(byte type, long key) {
-        recordedEvents++;
-        if (count == CAPACITY) {
-            overflowed = true;
-            overflowEvents++;
-            return;
-        }
-        int tail = head + count;
-        if (tail >= CAPACITY) tail -= CAPACITY;
-        TYPES[tail] = type;
-        KEYS[tail] = key;
-        count++;
+    private static void record(byte type, long key) {
+        RING.record(type, key);
     }
 
     private static long packChunk(int x, int z) {
